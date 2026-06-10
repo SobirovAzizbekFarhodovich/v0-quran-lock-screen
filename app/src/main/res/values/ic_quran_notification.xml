@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Notification icon definition - references the notification icon drawable -->
+<resources>
+    <!-- This will be used as the small icon for notifications -->
+    <!-- In production, replace with an actual drawable resource -->
+</resources>
