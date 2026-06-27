@@ -51,3 +51,15 @@
     public static *** v(...);
     public static *** i(...);
 }
+
+# Gson serialization
+-keepattributes Signature
+-keepattributes *Annotation*
+-keep class com.google.gson.** { *; }
+-keep class com.quranreminder.app.tadabbur.TadabburApiClient$* { *; }
+-keep class com.quranreminder.app.tadabbur.TadabburModels { *; }
+-keep class com.quranreminder.app.tadabbur.SourceHighlight { *; }
+-keep class com.quranreminder.app.tadabbur.HadithEntry { *; }
+-keepclassmembers class * {
+    @com.google.gson.annotations.SerializedName <fields>;
+}

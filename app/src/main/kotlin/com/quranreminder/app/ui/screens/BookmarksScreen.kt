@@ -14,7 +14,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -22,17 +22,13 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
 import com.quranreminder.app.database.Bookmark
-import com.quranreminder.app.database.QuranVerse
 import com.quranreminder.app.ui.viewmodel.QuranViewModel
 
 @Composable
@@ -40,7 +36,7 @@ fun BookmarksScreen(
     navController: NavHostController,
     quranViewModel: QuranViewModel
 ) {
-    val bookmarks = remember { mutableStateOf<List<Bookmark>>(emptyList()) }
+    val bookmarks = quranViewModel.bookmarks.collectAsState().value
 
     Column(
         modifier = Modifier
@@ -57,7 +53,7 @@ fun BookmarksScreen(
         ) {
             IconButton(onClick = { navController.popBackStack() }) {
                 Icon(
-                    Icons.AutoMirrored.Filled.ArrowBack,
+                    Icons.Default.ArrowBack,
                     contentDescription = "Back",
                     tint = MaterialTheme.colorScheme.primary
                 )
@@ -72,7 +68,7 @@ fun BookmarksScreen(
             Spacer(modifier = Modifier.padding(40.dp))
         }
 
-        if (bookmarks.value.isEmpty()) {
+        if (bookmarks.isEmpty()) {
             Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -81,12 +77,12 @@ fun BookmarksScreen(
                 verticalArrangement = Arrangement.Center
             ) {
                 Text(
-                    text = "No bookmarks yet",
+                    text = "Hali saqlangan oyatlar yo'q",
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onBackground
                 )
                 Text(
-                    text = "Bookmark your favorite verses",
+                    text = "Sura ichidan kerakli oyatni saqlang",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
                 )
@@ -98,7 +94,7 @@ fun BookmarksScreen(
                     .padding(horizontal = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                items(bookmarks.value) { bookmark ->
+                items(bookmarks) { bookmark ->
                     BookmarkCard(
                         bookmark = bookmark,
                         onClick = {

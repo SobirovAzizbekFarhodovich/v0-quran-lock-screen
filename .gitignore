@@ -14,3 +14,10 @@ node_modules
 .next/
 .DS_Store
 .vercel
+.gradle/
+build/
+**/build/
+
+# Local Android build tooling installed by Codex/run setup
+.local/
+local.properties

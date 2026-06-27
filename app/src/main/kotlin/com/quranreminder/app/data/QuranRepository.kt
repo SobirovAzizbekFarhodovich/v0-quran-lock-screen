@@ -33,6 +33,8 @@ class QuranRepository(
 
     suspend fun getVerseCount(): Int = quranVerseDao.getVerseCount()
 
+    suspend fun getRandomVerse(): QuranVerse? = quranVerseDao.getRandomVerse()
+
     suspend fun getAllSurahNumbers(): List<Int> = quranVerseDao.getAllSurahNumbers()
 
     // Reminders

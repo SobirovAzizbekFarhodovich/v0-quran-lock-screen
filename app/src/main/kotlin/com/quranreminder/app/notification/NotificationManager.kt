@@ -1,7 +1,7 @@
 package com.quranreminder.app.notification
 
 import android.app.NotificationChannel
-import android.app.NotificationManager
+import android.app.NotificationManager as AndroidNotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
@@ -13,7 +13,7 @@ import com.quranreminder.app.R
 
 class NotificationManager(private val context: Context) {
     private val notificationManager =
-        context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        context.getSystemService(Context.NOTIFICATION_SERVICE) as AndroidNotificationManager
 
     init {
         createNotificationChannels()
@@ -25,7 +25,7 @@ class NotificationManager(private val context: Context) {
             val reminderChannel = NotificationChannel(
                 REMINDER_CHANNEL_ID,
                 "Quran Reminders",
-                NotificationManager.IMPORTANCE_HIGH
+                AndroidNotificationManager.IMPORTANCE_HIGH
             ).apply {
                 description = "Notifications for Quran reading reminders"
                 setSound(
@@ -42,7 +42,7 @@ class NotificationManager(private val context: Context) {
             val lockScreenChannel = NotificationChannel(
                 LOCK_SCREEN_CHANNEL_ID,
                 "Lock Screen Reminders",
-                NotificationManager.IMPORTANCE_MAX
+                AndroidNotificationManager.IMPORTANCE_MAX
             ).apply {
                 description = "Lock screen reminders for Quran reading"
                 setSound(
@@ -78,7 +78,7 @@ class NotificationManager(private val context: Context) {
         )
 
         val notification = NotificationCompat.Builder(context, LOCK_SCREEN_CHANNEL_ID)
-            .setSmallIcon(android.R.drawable.ic_dialog_info)
+            .setSmallIcon(R.drawable.ic_quran_notification)
             .setContentTitle("$surahName $ayahNumber")
             .setContentText(verses.take(100))
             .setStyle(
@@ -106,7 +106,7 @@ class NotificationManager(private val context: Context) {
         notificationId: Int = SIMPLE_NOTIFICATION_ID
     ) {
         val notification = NotificationCompat.Builder(context, REMINDER_CHANNEL_ID)
-            .setSmallIcon(android.R.drawable.ic_dialog_info)
+            .setSmallIcon(R.drawable.ic_quran_notification)
             .setContentTitle(title)
             .setContentText(message)
             .setAutoCancel(true)

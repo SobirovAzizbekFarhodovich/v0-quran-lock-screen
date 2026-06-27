@@ -4,10 +4,9 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.os.Build
-import androidx.work.OneTimeWorkRequestBuilder
-import androidx.work.WorkManager
-import androidx.work.workDataOf
-import java.util.concurrent.TimeUnit
+import androidx.core.content.ContextCompat
+import com.quranreminder.app.lockscreen.DailyAyahForegroundService
+import com.quranreminder.app.lockscreen.DailyAyahScheduler
 
 class ReminderReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
@@ -15,8 +14,8 @@ class ReminderReceiver : BroadcastReceiver() {
         
         when (action) {
             Intent.ACTION_BOOT_COMPLETED -> {
-                // Reschedule reminders after device reboot
-                scheduleAllReminders(context)
+                DailyAyahScheduler.schedule(context)
+                startDailyAyahService(context)
             }
             "com.quranreminder.REMINDER_NOTIFICATION" -> {
                 val surahNumber = intent.getIntExtra("surah_number", 1)
@@ -37,12 +36,12 @@ class ReminderReceiver : BroadcastReceiver() {
         }
     }
 
-    private fun scheduleAllReminders(context: Context) {
-        // This will be called after device boot to reschedule all reminders
-        val workRequest = OneTimeWorkRequestBuilder<ReminderWorker>()
-            .setInitialDelay(5, TimeUnit.SECONDS)
-            .build()
-        
-        WorkManager.getInstance(context).enqueue(workRequest)
+    private fun startDailyAyahService(context: Context) {
+        val serviceIntent = Intent(context, DailyAyahForegroundService::class.java)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            ContextCompat.startForegroundService(context, serviceIntent)
+        } else {
+            context.startService(serviceIntent)
+        }
     }
 }

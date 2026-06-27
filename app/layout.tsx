@@ -1,4 +1,3 @@
-import { Analytics } from '@vercel/analytics/next'
 import type { Metadata } from 'next'
 import { Geist, Geist_Mono } from 'next/font/google'
 import './globals.css'
@@ -10,9 +9,21 @@ const geistMono = Geist_Mono({
 })
 
 export const metadata: Metadata = {
-  title: 'v0 App',
-  description: 'Created with v0',
-  generator: 'v0.app',
+  title: "Tadabbur AI — Qur'on va Hadisdan Yo'l-Yo'riq",
+  description:
+    "Holatingizga mos Qur'on oyatlari va sahih hadislarni AI yordamida toping. Qwen modeli asosida ishlaydigan islomiy ruhiy maslahatchi.",
+  generator: 'Quran Reminder',
+  keywords: [
+    "Qur'on",
+    'Hadis',
+    'Tadabbur',
+    'AI',
+    "O'zbek",
+    'Islom',
+    'Sabr',
+    'Duo',
+    'Tavba',
+  ],
   icons: {
     icon: [
       {
@@ -38,10 +49,17 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en" className={`${geistSans.variable} ${geistMono.variable}`}>
+    <html lang="uz" className={`${geistSans.variable} ${geistMono.variable}`}>
+      <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link
+          rel="preconnect"
+          href="https://fonts.gstatic.com"
+          crossOrigin="anonymous"
+        />
+      </head>
       <body className="font-sans antialiased">
         {children}
-        {process.env.NODE_ENV === 'production' && <Analytics />}
       </body>
     </html>
   )

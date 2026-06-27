@@ -16,7 +16,9 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bookmark
+import androidx.compose.material.icons.filled.Chat
 import androidx.compose.material.icons.filled.NotificationsActive
+import androidx.compose.material.icons.filled.Wallpaper
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Card
@@ -29,6 +31,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
@@ -57,12 +60,12 @@ fun HomeScreen(
         ) {
             Column {
                 Text(
-                    text = "Quran Reminder",
+                    text = "Qur'on Eslatma",
                     style = MaterialTheme.typography.headlineLarge,
                     color = MaterialTheme.colorScheme.onBackground
                 )
                 Text(
-                    text = "O'zbek tilida to'liq tarjima",
+                    text = "Offline o'qish, qidirish va eslatmalar",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f)
                 )
@@ -95,15 +98,27 @@ fun HomeScreen(
         ) {
             QuickActionButton(
                 icon = Icons.Default.NotificationsActive,
-                label = "Reminders",
+                label = "Eslatmalar",
                 modifier = Modifier.weight(1f),
                 onClick = { navController.navigate("reminders") }
             )
             QuickActionButton(
                 icon = Icons.Default.Bookmark,
-                label = "Bookmarks",
+                label = "Saqlanganlar",
                 modifier = Modifier.weight(1f),
                 onClick = { navController.navigate("bookmarks") }
+            )
+            QuickActionButton(
+                icon = Icons.Default.Wallpaper,
+                label = "Preview",
+                modifier = Modifier.weight(1f),
+                onClick = { navController.navigate("lock_preview") }
+            )
+            QuickActionButton(
+                icon = Icons.Default.Chat,
+                label = "Tadabbur",
+                modifier = Modifier.weight(1f),
+                onClick = { navController.navigate("tadabbur_chat") }
             )
         }
 
@@ -111,10 +126,16 @@ fun HomeScreen(
 
         // Surahs list
         Text(
-            text = "Surahs",
+            text = "Suralar",
             style = MaterialTheme.typography.headlineSmall,
             modifier = Modifier.padding(horizontal = 16.dp),
             color = MaterialTheme.colorScheme.onBackground
+        )
+        Text(
+            text = "${surahs.size} ta sura yuklandi",
+            style = MaterialTheme.typography.bodySmall,
+            modifier = Modifier.padding(horizontal = 16.dp),
+            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.65f)
         )
 
         Spacer(modifier = Modifier.height(8.dp))
@@ -189,7 +210,7 @@ fun SurahCard(
 
 @Composable
 fun QuickActionButton(
-    icon: androidx.compose.material.icons.Icons.Filled,
+    icon: ImageVector,
     label: String,
     modifier: Modifier = Modifier,
     onClick: () -> Unit

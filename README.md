@@ -4,8 +4,8 @@ A modern Android application for reading the Quran in Uzbek translation with rem
 
 ## Features
 
-- **Full Quran Text**: Complete Uzbek translation (Muhammad Sadik Muhammad Yusuf)
-- **Offline Support**: Works completely offline - no internet required
+- **Quran Data Import**: Offline Room database with JSON import support for a licensed Uzbek translation
+- **Offline Support**: Works completely offline after data is imported
 - **Smart Reminders**: Schedule reminders for specific Surahs and Ayahs
 - **Lock Screen Notifications**: Important reminders appear on your lock screen
 - **Search**: Full-text search across all verses
@@ -65,23 +65,32 @@ app/
    ./gradlew installDebug
    ```
 
-## Adding More Quran Data
+## Adding Quran Data
 
-The app includes sample data for 10 Surahs. To add the complete Quran translation:
+The app includes a small sample dataset so the UI works on first launch. To add a complete Uzbek translation, place your licensed data at:
 
-1. **Option A: JSON Import**
-   - Create a JSON file with complete verse data in `app/src/main/assets/quran.json`
-   - Format: `{ "verses": [{ "surahNumber", "ayahNumber", "ayahTextArabic", "translation", ... }] }`
-   - Modify `QuranDatabase.kt` to load from assets on first run
+`app/src/main/assets/quran/verses.json`
 
-2. **Option B: SQL Script**
-   - Create a migration file in `app/src/main/assets/migrations/`
-   - Insert verse data directly using SQL
+Format:
 
-3. **Option C: API Integration**
-   - Fetch data from a Quran API (e.g., quran-api.com)
-   - Cache locally using Room
-   - Implement sync functionality in a background service
+```json
+{
+  "verses": [
+    {
+      "surahNumber": 1,
+      "surahName": "Al-Fatiha",
+      "surahNameArabic": "الفاتحة",
+      "ayahNumber": 1,
+      "ayahText": "optional transliteration or Arabic",
+      "ayahTextArabic": "Arabic ayah text",
+      "translation": "Licensed Uzbek translation",
+      "transliteration": ""
+    }
+  ]
+}
+```
+
+On first launch, the app imports this file into Room. If the file is missing, it falls back to the sample data.
 
 ## Reminder System
 
@@ -139,10 +148,9 @@ Reminders are stored in the database with:
 
 The app requires these permissions:
 - `POST_NOTIFICATIONS`: For displaying notifications (Android 13+)
-- `SCHEDULE_EXACT_ALARM`: For exact time alarms
-- `USE_EXACT_ALARM`: For alarm scheduling
+- `RECEIVE_BOOT_COMPLETED`: To restart reminder checks after reboot
+- `USE_FULL_SCREEN_INTENT`: To show high-priority lock-screen reminders
 - `WAKE_LOCK`: For keeping device awake during reminders
-- `INTERNET`: For potential future features (not currently used)
 
 ## Release Build
 
@@ -163,7 +171,7 @@ This creates an Android App Bundle for Play Store submission.
 
 ## Future Enhancements
 
-- [ ] Complete Quran data (114 Surahs)
+- [ ] Add licensed complete Quran data (114 Surahs)
 - [ ] Multiple Uzbek translations
 - [ ] Tajweed highlighting
 - [ ] Audio recitation

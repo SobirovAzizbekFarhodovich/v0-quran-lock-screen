@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -20,6 +22,17 @@ android {
         vectorDrawables {
             useSupportLibrary = true
         }
+
+        // OpenRouter API key (local.properties yoki gradle.properties dan olinadi)
+        val localPropsFile = rootProject.file("local.properties")
+        val apiKey = if (localPropsFile.exists()) {
+            val props = Properties()
+            localPropsFile.inputStream().use { props.load(it) }
+            props.getProperty("OPENROUTER_API_KEY") ?: ""
+        } else {
+            (project.findProperty("OPENROUTER_API_KEY") as? String) ?: ""
+        }
+        buildConfigField("String", "OPENROUTER_API_KEY", "\"$apiKey\"")
     }
 
     buildTypes {
@@ -40,6 +53,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
     composeOptions {
         kotlinCompilerExtensionVersion = "1.5.10"

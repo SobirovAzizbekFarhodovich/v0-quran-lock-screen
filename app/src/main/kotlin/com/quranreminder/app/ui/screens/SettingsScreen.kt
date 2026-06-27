@@ -12,32 +12,43 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
+import com.quranreminder.app.database.AppSettings
+import com.quranreminder.app.lockscreen.DailyAyahScheduler
+import com.quranreminder.app.lockscreen.LockScreenAyahCategory
+import com.quranreminder.app.lockscreen.LockScreenWallpaperApplier
+import com.quranreminder.app.ui.viewmodel.SettingsViewModel
 
 @Composable
-fun SettingsScreen(navController: NavHostController) {
-    val notificationsEnabled = remember { mutableStateOf(true) }
-    val vibrateOnReminder = remember { mutableStateOf(true) }
-    val soundEnabled = remember { mutableStateOf(true) }
-    val fontSize = remember { mutableStateOf(16f) }
-    val darkMode = remember { mutableStateOf(false) }
-    val lockScreenNotifications = remember { mutableStateOf(true) }
+fun SettingsScreen(
+    navController: NavHostController,
+    viewModel: SettingsViewModel
+) {
+    val settings = viewModel.settings.collectAsState().value ?: AppSettings()
+    val context = LocalContext.current
+    val selectedCategory = remember {
+        mutableStateOf(LockScreenWallpaperApplier.getSelectedCategory(context))
+    }
 
     Column(
         modifier = Modifier
@@ -54,7 +65,7 @@ fun SettingsScreen(navController: NavHostController) {
         ) {
             IconButton(onClick = { navController.popBackStack() }) {
                 Icon(
-                    Icons.AutoMirrored.Filled.ArrowBack,
+                    Icons.Default.ArrowBack,
                     contentDescription = "Back",
                     tint = MaterialTheme.colorScheme.primary
                 )
@@ -79,23 +90,23 @@ fun SettingsScreen(navController: NavHostController) {
                 SettingSection(title = "Notifications")
                 SettingToggle(
                     label = "Enable Notifications",
-                    isChecked = notificationsEnabled.value,
-                    onCheckedChange = { notificationsEnabled.value = it }
+                    isChecked = settings.notificationsEnabled,
+                    onCheckedChange = { viewModel.toggleNotifications() }
                 )
                 SettingToggle(
                     label = "Vibrate on Reminder",
-                    isChecked = vibrateOnReminder.value,
-                    onCheckedChange = { vibrateOnReminder.value = it }
+                    isChecked = settings.vibrateOnReminder,
+                    onCheckedChange = { viewModel.toggleVibration() }
                 )
                 SettingToggle(
                     label = "Sound Enabled",
-                    isChecked = soundEnabled.value,
-                    onCheckedChange = { soundEnabled.value = it }
+                    isChecked = settings.soundEnabled,
+                    onCheckedChange = { viewModel.toggleSound() }
                 )
                 SettingToggle(
                     label = "Lock Screen Notifications",
-                    isChecked = lockScreenNotifications.value,
-                    onCheckedChange = { lockScreenNotifications.value = it }
+                    isChecked = settings.lockScreenNotifications,
+                    onCheckedChange = { viewModel.toggleLockScreenNotifications() }
                 )
             }
 
@@ -104,14 +115,33 @@ fun SettingsScreen(navController: NavHostController) {
                 SettingSection(title = "Display")
                 SettingSlider(
                     label = "Font Size",
-                    value = fontSize.value,
-                    onValueChange = { fontSize.value = it },
+                    value = settings.fontSize.toFloat(),
+                    onValueChange = { viewModel.setFontSize(it.toInt()) },
                     valueRange = 12f..24f
                 )
                 SettingToggle(
                     label = "Dark Mode",
-                    isChecked = darkMode.value,
-                    onCheckedChange = { darkMode.value = it }
+                    isChecked = settings.darkMode,
+                    onCheckedChange = { viewModel.toggleDarkMode() }
+                )
+            }
+
+            item {
+                Spacer(modifier = Modifier.height(16.dp))
+                SettingSection(title = "Lock-screen")
+                LockScreenControls(
+                    selectedCategory = selectedCategory.value,
+                    onPreview = { navController.navigate("lock_preview") },
+                    onRandom = {
+                        LockScreenWallpaperApplier.clearSelectedVerse(context)
+                        DailyAyahScheduler.updateToday(context)
+                    },
+                    onCategorySelected = { category ->
+                        LockScreenWallpaperApplier.clearSelectedVerse(context)
+                        LockScreenWallpaperApplier.setSelectedCategory(context, category)
+                        selectedCategory.value = category
+                        DailyAyahScheduler.updateToday(context)
+                    }
                 )
             }
 
@@ -138,10 +168,77 @@ fun SettingsScreen(navController: NavHostController) {
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
-                            text = "O'zbek tilida Qur'on tarjimasi (Muhammad Sadik Muhammad Yusuf)",
+                            text = "Ruxsatli JSON data importi orqali offline Qur'on o'qish va eslatmalar",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                         )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun LockScreenControls(
+    selectedCategory: LockScreenAyahCategory?,
+    onPreview: () -> Unit,
+    onRandom: () -> Unit,
+    onCategorySelected: (LockScreenAyahCategory?) -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(
+                    modifier = Modifier.weight(1f),
+                    onClick = onPreview
+                ) {
+                    Text("Preview")
+                }
+                OutlinedButton(
+                    modifier = Modifier.weight(1f),
+                    onClick = {
+                        onCategorySelected(null)
+                        onRandom()
+                    }
+                ) {
+                    Text("Randomga qaytish")
+                }
+            }
+            Text(
+                text = "Kategoriya",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            LockScreenAyahCategory.entries.chunked(2).forEach { rowCategories ->
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    rowCategories.forEach { category ->
+                        val isSelected = selectedCategory == category
+                        if (isSelected) {
+                            Button(
+                                modifier = Modifier.weight(1f),
+                                onClick = { onCategorySelected(category) }
+                            ) {
+                                Text(category.label)
+                            }
+                        } else {
+                            OutlinedButton(
+                                modifier = Modifier.weight(1f),
+                                onClick = { onCategorySelected(category) }
+                            ) {
+                                Text(category.label)
+                            }
+                        }
+                    }
+                    if (rowCategories.size == 1) {
+                        Spacer(modifier = Modifier.weight(1f))
                     }
                 }
             }

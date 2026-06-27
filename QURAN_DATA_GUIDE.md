@@ -4,7 +4,7 @@ This guide explains how to add the complete Quran (114 Surahs) in Uzbek translat
 
 ## Overview
 
-The app currently includes sample data for 10 Surahs. To add the full Quran translation by Muhammad Sadik Muhammad Yusuf, you have several options.
+The app currently includes a small sample dataset. To add a complete Uzbek translation, use a text source you are licensed or otherwise permitted to distribute.
 
 ## Option 1: JSON File Import (Recommended)
 
@@ -237,10 +237,10 @@ Room.databaseBuilder(context, QuranDatabase::class.java, "quran_database")
 
 ## Recommended Uzbek Translation
 
-**Muhammad Sadik Muhammad Yusuf's translation**:
-- Complete 114 Surahs, 6,236 verses
-- Culturally appropriate Uzbek phrasing
-- Available in public domain sources
+**Muhammad Sodiq Muhammad Yusuf translation**:
+- Use only if you have distribution permission for the app.
+- Keep the source/license notes with your data file.
+- Put the licensed data in `app/src/main/assets/quran/verses.json`.
 
 ## Testing Your Data Import
 

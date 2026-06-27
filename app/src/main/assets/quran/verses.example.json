@@ -1,0 +1,14 @@
+{
+  "verses": [
+    {
+      "surahNumber": 1,
+      "surahName": "Al-Fatiha",
+      "surahNameArabic": "الفاتحة",
+      "ayahNumber": 1,
+      "ayahText": "Arabic text or transliteration",
+      "ayahTextArabic": "Arabic ayah text",
+      "translation": "Licensed Uzbek translation text",
+      "transliteration": ""
+    }
+  ]
+}

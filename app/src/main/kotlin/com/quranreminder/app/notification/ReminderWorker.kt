@@ -23,12 +23,22 @@ class ReminderWorker(
             val currentHour = calendar.get(Calendar.HOUR_OF_DAY)
             val currentMinute = calendar.get(Calendar.MINUTE)
             val currentDayOfWeek = calendar.get(Calendar.DAY_OF_WEEK) - 1 // 0 = Sunday
+            val currentTotalMinutes = currentHour * 60 + currentMinute
+            val previousDayOfWeek = if (currentDayOfWeek == 0) 6 else currentDayOfWeek - 1
 
             for (reminder in enabledReminders) {
-                // Check if this reminder should trigger now
-                if (reminder.hourOfDay == currentHour && reminder.minuteOfHour == currentMinute) {
+                val reminderTotalMinutes = reminder.hourOfDay * 60 + reminder.minuteOfHour
+                val minutesSinceReminder =
+                    (currentTotalMinutes - reminderTotalMinutes + MINUTES_PER_DAY) % MINUTES_PER_DAY
+
+                if (minutesSinceReminder in 0 until WORK_WINDOW_MINUTES) {
                     val days = reminder.daysOfWeek.split(",").map { it.toInt() }
-                    if (currentDayOfWeek in days) {
+                    val reminderDay = if (currentTotalMinutes < reminderTotalMinutes) {
+                        previousDayOfWeek
+                    } else {
+                        currentDayOfWeek
+                    }
+                    if (reminderDay in days) {
                         // Get the verse for this reminder
                         val verse = verseDao.getVerse(
                             reminder.surahNumber,
@@ -54,5 +64,10 @@ class ReminderWorker(
             e.printStackTrace()
             Result.retry()
         }
+    }
+
+    private companion object {
+        const val WORK_WINDOW_MINUTES = 15
+        const val MINUTES_PER_DAY = 24 * 60
     }
 }

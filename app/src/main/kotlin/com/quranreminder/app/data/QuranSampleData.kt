@@ -3,8 +3,8 @@ package com.quranreminder.app.data
 import com.quranreminder.app.database.QuranVerse
 
 /**
- * Sample Quran verses in Uzbek translation (Muhammad Sadik Muhammad Yusuf)
- * This is a starting point. In production, load from a complete database file.
+ * Small offline sample used only when app/src/main/assets/quran/verses.json is missing.
+ * Replace it with a licensed complete Uzbek translation JSON before publishing.
  */
 object QuranSampleData {
     fun getSampleVerses(): List<QuranVerse> = listOf(

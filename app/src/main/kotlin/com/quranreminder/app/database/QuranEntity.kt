@@ -1,9 +1,16 @@
 package com.quranreminder.app.database
 
 import androidx.room.Entity
+import androidx.room.Index
 import androidx.room.PrimaryKey
 
-@Entity(tableName = "quran_verses")
+@Entity(
+    tableName = "quran_verses",
+    indices = [
+        Index(value = ["surahNumber", "ayahNumber"], unique = true),
+        Index(value = ["surahNumber"])
+    ]
+)
 data class QuranVerse(
     @PrimaryKey(autoGenerate = true)
     val id: Int = 0,
