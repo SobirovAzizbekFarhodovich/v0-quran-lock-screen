@@ -20,6 +20,7 @@ import com.quranreminder.app.database.QuranDatabase
 import com.quranreminder.app.lockscreen.DailyAyahForegroundService
 import com.quranreminder.app.lockscreen.DailyAyahScheduler
 import com.quranreminder.app.ui.screens.BookmarksScreen
+import com.quranreminder.app.ui.screens.LanguageSelectionScreen
 import com.quranreminder.app.ui.screens.HomeScreen
 import com.quranreminder.app.ui.screens.LockScreenPreviewScreen
 import com.quranreminder.app.ui.screens.RemindersScreen
@@ -37,6 +38,13 @@ import com.quranreminder.app.ui.viewmodel.SettingsViewModelFactory
 import androidx.lifecycle.lifecycleScope
 import com.quranreminder.app.database.DatabaseInitializer
 import kotlinx.coroutines.launch
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.material3.CircularProgressIndicator
 
 class MainActivity : ComponentActivity() {
     private lateinit var quranViewModel: QuranViewModel
@@ -81,14 +89,26 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             val settings = settingsViewModel.settings.collectAsState().value
-            QuranReminderTheme(darkTheme = settings?.darkMode ?: false) {
-                navController = rememberNavController()
-                AppNavigation(
-                    navController = navController,
-                    quranViewModel = quranViewModel,
-                    reminderViewModel = reminderViewModel,
-                    settingsViewModel = settingsViewModel
-                )
+            
+            if (settings != null) {
+                val startDest = if (settings.language.isEmpty()) "language_selection" else "home"
+                QuranReminderTheme(darkTheme = settings.darkMode) {
+                    navController = rememberNavController()
+                    AppNavigation(
+                        navController = navController,
+                        startDestination = startDest,
+                        quranViewModel = quranViewModel,
+                        reminderViewModel = reminderViewModel,
+                        settingsViewModel = settingsViewModel
+                    )
+                }
+            } else {
+                Box(
+                    modifier = Modifier.fillMaxSize().background(Color(0xFF0F3042)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator(color = Color.White)
+                }
             }
         }
     }
@@ -122,11 +142,22 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun AppNavigation(
     navController: NavHostController,
+    startDestination: String,
     quranViewModel: QuranViewModel,
     reminderViewModel: ReminderViewModel,
     settingsViewModel: SettingsViewModel
 ) {
-    NavHost(navController = navController, startDestination = "home") {
+    NavHost(navController = navController, startDestination = startDestination) {
+        composable("language_selection") {
+            LanguageSelectionScreen(
+                viewModel = settingsViewModel,
+                onLanguageSelected = {
+                    navController.navigate("home") {
+                        popUpTo("language_selection") { inclusive = true }
+                    }
+                }
+            )
+        }
         composable("home") {
             HomeScreen(
                 viewModel = quranViewModel,

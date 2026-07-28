@@ -21,15 +21,15 @@ class DailyAyahWallpaperWorker(
             val database = QuranDatabase.getDatabase(applicationContext)
             DatabaseInitializer(applicationContext).initializeDatabase(database)
 
-            val today = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
+            val currentHour = SimpleDateFormat("yyyy-MM-dd-HH", Locale.US).format(Date())
             val prefs = applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            if (prefs.getString(KEY_LAST_DATE, null) == today) {
+            if (prefs.getString(KEY_LAST_HOUR, null) == currentHour) {
                 return@withContext Result.success()
             }
 
             val verse = LockScreenVerseSelector.select(applicationContext, database)
                 ?: return@withContext Result.retry()
-            LockScreenWallpaperApplier.apply(applicationContext, verse, rememberForToday = true)
+            LockScreenWallpaperApplier.apply(applicationContext, verse, rememberForHour = true)
 
             Result.success()
         } catch (security: SecurityException) {
@@ -41,6 +41,6 @@ class DailyAyahWallpaperWorker(
 
     companion object {
         private const val PREFS = LockScreenWallpaperApplier.PREFS
-        private const val KEY_LAST_DATE = LockScreenWallpaperApplier.KEY_LAST_DATE
+        private const val KEY_LAST_HOUR = LockScreenWallpaperApplier.KEY_LAST_HOUR
     }
 }

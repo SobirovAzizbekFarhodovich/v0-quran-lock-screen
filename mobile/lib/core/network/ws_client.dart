@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:math';
+import 'package:flutter/foundation.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
 class WebSocketClient {
@@ -49,7 +50,7 @@ class WebSocketClient {
   }
 
   void sendAudio(List<int> chunk) {
-    if (_channel != null && _channel!.sink != null) {
+    if (_channel != null) {
       _channel!.sink.add(chunk);
     }
   }
@@ -63,12 +64,16 @@ class WebSocketClient {
   }
 
   void _onError(error) {
-    print("WebSocket Error: $error");
+    if (kDebugMode) {
+      print("WebSocket Error: $error");
+    }
     _scheduleReconnect();
   }
 
   void _onDone() {
-    print("WebSocket Connection Closed");
+    if (kDebugMode) {
+      print("WebSocket Connection Closed");
+    }
     if (_isConnecting && _reconnectAttempts < maxReconnectAttempts) {
       _scheduleReconnect();
     }
@@ -79,8 +84,9 @@ class WebSocketClient {
     final delay = Duration(
       seconds: pow(2, _reconnectAttempts).toInt(), // Exponential backoff: 1s, 2s, 4s, 8s, 16s
     );
-    
-    print("Scheduling WebSocket reconnect in ${delay.inSeconds} seconds (Attempt ${_reconnectAttempts + 1}/$maxReconnectAttempts)");
+    if (kDebugMode) {
+      print("Scheduling WebSocket reconnect in ${delay.inSeconds} seconds (Attempt ${_reconnectAttempts + 1}/$maxReconnectAttempts)");
+    }
 
     _reconnectTimer = Timer(delay, () {
       _reconnectAttempts++;
@@ -88,5 +94,10 @@ class WebSocketClient {
         connect(_lastUrl!, _lastToken!);
       }
     });
+  }
+
+  void dispose() {
+    disconnect();
+    _streamController.close();
   }
 }

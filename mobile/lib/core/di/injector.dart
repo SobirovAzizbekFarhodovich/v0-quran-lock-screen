@@ -1,10 +1,10 @@
 import 'package:get_it/get_it.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:dio/dio.dart';
 import 'package:http/http.dart' as http;
 
 import '../../services/api_client.dart';
+import '../../services/recitation_service.dart';
 import '../../core/network/ws_client.dart';
 
 final getIt = GetIt.instance;
@@ -18,21 +18,16 @@ Future<void> setupLocator() async {
   const secureStorage = FlutterSecureStorage();
   getIt.registerSingleton<FlutterSecureStorage>(secureStorage);
 
-  // Load server IP (default to localhost, or 10.0.2.2 for emulator, but user can change it)
-  final savedIp = sharedPrefs.getString('server_ip') ?? 'http://localhost:8080';
-
-  // Dio client
-  final dio = Dio(BaseOptions(
-    baseUrl: savedIp, // Gateway default
-    connectTimeout: const Duration(seconds: 15),
-    receiveTimeout: const Duration(seconds: 15),
-  ));
-  getIt.registerSingleton<Dio>(dio);
+  // One canonical setting is used by onboarding/login and Settings.
+  final savedUrl = sharedPrefs.getString(ApiClient.serverUrlPreferenceKey) ?? ApiClient.defaultBaseUrl;
 
   // ApiClient
   final apiClient = ApiClient(httpClient: http.Client(), storage: secureStorage);
-  apiClient.baseUrl = savedIp;
+  apiClient.baseUrl = savedUrl;
   getIt.registerSingleton<ApiClient>(apiClient);
+
+  // RecitationService
+  getIt.registerFactory<RecitationService>(() => RecitationService());
 
   // WebSocket Client
   final wsClient = WebSocketClient();

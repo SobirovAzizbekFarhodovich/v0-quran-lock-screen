@@ -1,34 +1,37 @@
 import 'package:flutter/material.dart';
 
 class AppTheme {
-  static const primaryGreen = Color(0xFF0F7A50);
-  static const secondaryGreen = Color(0xFF1B4D3E);
-  static const accentGold = Color(0xFFD4AF37);
-  static const darkBackground = Color(0xFF121815);
-  static const lightBackground = Color(0xFFF4F7F5);
-
   static ThemeData get lightTheme {
     return ThemeData(
       useMaterial3: true,
-      colorScheme: ColorScheme.fromSeed(
-        seedColor: primaryGreen,
-        primary: primaryGreen,
-        secondary: secondaryGreen,
-        tertiary: accentGold,
-        background: lightBackground,
-        brightness: Brightness.light,
+      colorScheme: const ColorScheme.light(
+        primary:          Color(0xFF1B4D3E),
+        onPrimary:        Color(0xFFFFFFFF),
+        primaryContainer: Color(0xFF9FD4B2),
+        secondary:        Color(0xFFC9A96E),
+        onSecondary:      Color(0xFF1A2B22),
+        surface:          Color(0xFFFFFFFF),
+        onSurface:        Color(0xFF1A2B22),
+        error:            Color(0xFFD64045),
+        outline:          Color(0xFFD4C5B0),
       ),
-      fontFamily: 'Outfit',
+      scaffoldBackgroundColor: const Color(0xFFF8F4ED),
       appBarTheme: const AppBarTheme(
-        backgroundColor: primaryGreen,
+        backgroundColor: Color(0xFF1B4D3E),
         foregroundColor: Colors.white,
         elevation: 0,
         centerTitle: true,
+        titleTextStyle: TextStyle(
+          fontSize: 20,
+          fontWeight: FontWeight.w600,
+          color: Colors.white,
+        ),
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
-          backgroundColor: primaryGreen,
+          backgroundColor: const Color(0xFF1B4D3E),
           foregroundColor: Colors.white,
+          elevation: 0,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
           ),
@@ -41,25 +44,34 @@ class AppTheme {
   static ThemeData get darkTheme {
     return ThemeData(
       useMaterial3: true,
-      colorScheme: ColorScheme.fromSeed(
-        seedColor: primaryGreen,
-        primary: primaryGreen,
-        secondary: secondaryGreen,
-        tertiary: accentGold,
-        background: darkBackground,
-        brightness: Brightness.dark,
+      colorScheme: const ColorScheme.dark(
+        primary:          Color(0xFF52B788),
+        onPrimary:        Color(0xFF0A2218),
+        primaryContainer: Color(0xFF1B4D3E),
+        secondary:        Color(0xFFD4AF6E),
+        onSecondary:      Color(0xFF0D1B2A),
+        surface:          Color(0xFF112240),
+        onSurface:        Color(0xFFE2EEF4),
+        error:            Color(0xFFFF6B6B),
+        outline:          Color(0xFF1E3A55),
       ),
-      fontFamily: 'Outfit',
+      scaffoldBackgroundColor: const Color(0xFF0D1B2A),
       appBarTheme: const AppBarTheme(
-        backgroundColor: darkBackground,
-        foregroundColor: Colors.white,
+        backgroundColor: Color(0xFF0D1B2A),
+        foregroundColor: Color(0xFFE2EEF4),
         elevation: 0,
         centerTitle: true,
+        titleTextStyle: TextStyle(
+          fontSize: 20,
+          fontWeight: FontWeight.w600,
+          color: Color(0xFFE2EEF4),
+        ),
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
-          backgroundColor: primaryGreen,
-          foregroundColor: Colors.white,
+          backgroundColor: const Color(0xFF52B788),
+          foregroundColor: const Color(0xFF0A2218),
+          elevation: 0,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
           ),

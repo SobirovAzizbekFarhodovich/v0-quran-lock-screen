@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'l10n/app_localizations.dart';
 
 import 'core/di/injector.dart';
 import 'app/router.dart';
@@ -49,6 +50,7 @@ class _IslamicAiAppState extends State<IslamicAiApp> {
         darkTheme: AppTheme.darkTheme,
         themeMode: ThemeMode.system,
         localizationsDelegates: const [
+          AppLocalizations.delegate,
           GlobalMaterialLocalizations.delegate,
           GlobalWidgetsLocalizations.delegate,
           GlobalCupertinoLocalizations.delegate,

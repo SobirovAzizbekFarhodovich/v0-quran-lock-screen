@@ -57,5 +57,6 @@ data class AppSettings(
     val soundEnabled: Boolean = true,
     val fontSize: Int = 16,
     val darkMode: Boolean = false,
-    val lockScreenNotifications: Boolean = true
+    val lockScreenNotifications: Boolean = true,
+    val language: String = ""
 )

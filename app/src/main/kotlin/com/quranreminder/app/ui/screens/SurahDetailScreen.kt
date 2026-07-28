@@ -147,7 +147,7 @@ fun SurahDetailScreen(
                         scope.launch {
                             runCatching {
                                 LockScreenWallpaperApplier.saveSelectedVerse(context, verse)
-                                LockScreenWallpaperApplier.apply(context, verse, rememberForToday = true)
+                                LockScreenWallpaperApplier.apply(context, verse, rememberForHour = true)
                             }.onSuccess {
                                 Toast.makeText(context, "Lock-screen uchun shu oyat tanlandi", Toast.LENGTH_SHORT).show()
                             }.onFailure {

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../../app/colors.dart';
 
 class MicButton extends StatefulWidget {
   final bool isRecording;
@@ -14,18 +15,28 @@ class MicButton extends StatefulWidget {
   State<MicButton> createState() => _MicButtonState();
 }
 
-class _MicButtonState extends State<MicButton> with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
+class _MicButtonState extends State<MicButton> with TickerProviderStateMixin {
+  late AnimationController _pulseController;
+  late AnimationController _scaleController;
 
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(
+    _pulseController = AnimationController(
       vsync: this,
-      duration: const Duration(seconds: 1),
+      duration: const Duration(milliseconds: 1500),
     );
+
+    _scaleController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 300),
+      lowerBound: 0.92,
+      upperBound: 1.0,
+      value: 1.0,
+    );
+
     if (widget.isRecording) {
-      _controller.repeat(reverse: true);
+      _pulseController.repeat();
     }
   }
 
@@ -33,72 +44,122 @@ class _MicButtonState extends State<MicButton> with SingleTickerProviderStateMix
   void didUpdateWidget(covariant MicButton oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.isRecording && !oldWidget.isRecording) {
-      _controller.repeat(reverse: true);
+      _pulseController.repeat();
     } else if (!widget.isRecording && oldWidget.isRecording) {
-      _controller.stop();
-      _controller.reset();
+      _pulseController.stop();
+      _pulseController.reset();
     }
+  }
+
+  @override
+  void dispose() {
+    _pulseController.dispose();
+    _scaleController.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: widget.onTap,
+      onTapDown: (_) => _scaleController.animateTo(0.92, duration: const Duration(milliseconds: 100)),
+      onTapUp: (_) {
+        _scaleController.animateTo(1.0, duration: const Duration(milliseconds: 100));
+        widget.onTap();
+      },
+      onTapCancel: () => _scaleController.animateTo(1.0, duration: const Duration(milliseconds: 100)),
       child: Center(
-        child: AnimatedBuilder(
-          animation: _controller,
-          builder: (context, child) {
-            final scale = 1.0 + (_controller.value * 0.15);
-            return Container(
-              height: 100,
-              width: 100,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: widget.isRecording
-                    ? Colors.red.withOpacity(0.2)
-                    : const Color(0xFF0F7A50).withOpacity(0.1),
-              ),
-              alignment: Alignment.center,
-              child: Container(
-                height: 80,
-                width: 80,
-                transform: Matrix4.identity()..scale(widget.isRecording ? scale : 1.0),
-                transformAlignment: Alignment.center,
+        child: ScaleTransition(
+          scale: _scaleController,
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              // Pulse Ring 2 (Outer)
+              if (widget.isRecording)
+                AnimatedBuilder(
+                  animation: _pulseController,
+                  builder: (context, child) {
+                    final progress = (_pulseController.value + 0.27) % 1.0;
+                    final scale = 1.0 + (progress * 1.2);
+                    final opacity = (1.0 - progress).clamp(0.0, 1.0) * 0.35;
+                    return Container(
+                      height: 100,
+                      width: 100,
+                      transform: Matrix4.identity()
+                        ..scale(scale)
+                        ..translate(-50.0 * (scale - 1), -50.0 * (scale - 1)),
+                      transformAlignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: AppColors.primaryLight.withValues(alpha: opacity),
+                      ),
+                    );
+                  },
+                ),
+              // Pulse Ring 1 (Inner)
+              if (widget.isRecording)
+                AnimatedBuilder(
+                  animation: _pulseController,
+                  builder: (context, child) {
+                    final scale = 1.0 + (_pulseController.value * 0.8);
+                    final opacity = (1.0 - _pulseController.value).clamp(0.0, 1.0) * 0.5;
+                    return Container(
+                      height: 100,
+                      width: 100,
+                      transform: Matrix4.identity()
+                        ..scale(scale)
+                        ..translate(-50.0 * (scale - 1), -50.0 * (scale - 1)),
+                      transformAlignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: AppColors.primaryLight.withValues(alpha: opacity),
+                      ),
+                    );
+                  },
+                ),
+              // Main central button
+              Container(
+                height: 100,
+                width: 100,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  gradient: LinearGradient(
-                    colors: widget.isRecording
-                        ? [Colors.red, Colors.redAccent]
-                        : [const Color(0xFF0F7A50), const Color(0xFF1B4D3E)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: (widget.isRecording ? Colors.red : const Color(0xFF0F7A50))
-                          .withOpacity(0.4),
-                      blurRadius: 15,
-                      spreadRadius: 2,
-                      offset: const Offset(0, 4),
-                    )
-                  ],
+                  color: widget.isRecording
+                      ? AppColors.error.withValues(alpha: 0.15)
+                      : AppColors.primaryLight.withValues(alpha: 0.12),
                 ),
-                child: Icon(
-                  widget.isRecording ? Icons.stop : Icons.mic,
-                  color: Colors.white,
-                  size: 38,
+                alignment: Alignment.center,
+                child: Container(
+                  height: 80,
+                  width: 80,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: LinearGradient(
+                      colors: widget.isRecording
+                          ? [AppColors.error, Colors.redAccent]
+                          : [AppColors.primaryMid, AppColors.primary],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: (widget.isRecording ? AppColors.error : AppColors.primary)
+                            .withValues(alpha: 0.45),
+                        blurRadius: 20,
+                        spreadRadius: 1,
+                        offset: const Offset(0, 8),
+                      )
+                    ],
+                  ),
+                  child: Icon(
+                    widget.isRecording ? Icons.stop_rounded : Icons.mic_rounded,
+                    color: Colors.white,
+                    size: 38,
+                  ),
                 ),
               ),
-            );
-          },
+            ],
+          ),
         ),
       ),
     );
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
   }
 }

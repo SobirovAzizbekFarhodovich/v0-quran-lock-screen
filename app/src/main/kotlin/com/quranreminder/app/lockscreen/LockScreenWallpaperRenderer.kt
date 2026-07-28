@@ -26,7 +26,7 @@ object LockScreenWallpaperRenderer {
         val canvas = Canvas(bitmap)
 
         drawBackground(context, canvas, width, height)
-        drawContent(canvas, width, height, verse)
+        drawContent(canvas, width, height, verse, context)
 
         return bitmap
     }
@@ -124,9 +124,19 @@ object LockScreenWallpaperRenderer {
         canvas.drawBitmap(bitmap, null, dest, Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG))
     }
 
-    private fun drawContent(canvas: Canvas, width: Int, height: Int, verse: QuranVerse) {
+    private fun drawContent(canvas: Canvas, width: Int, height: Int, verse: QuranVerse, context: Context) {
         val safe = calculateSafeTextArea(width, height)
-        val translation = cleanTranslation(verse.translation)
+        val selectedLang = LockScreenWallpaperApplier.getLockScreenLanguage(context)
+
+        var rawTranslation = cleanTranslation(verse.translation)
+        var surahTitle = verse.surahName
+
+        if (selectedLang == "uz_latin" || selectedLang == "uz") {
+            rawTranslation = CyrillicToLatinConverter.convert(rawTranslation)
+            surahTitle = CyrillicToLatinConverter.convert(surahTitle)
+        }
+
+        val translation = rawTranslation
         val contentWidth = safe.width().toInt()
         val maxTextHeight = safe.height()
 
@@ -145,7 +155,7 @@ object LockScreenWallpaperRenderer {
             setShadowLayer(width * 0.013f, 0f, width * 0.005f, Color.argb(185, 0, 0, 0))
         }
 
-        val title = "${verse.surahName} ${verse.surahNumber}:${verse.ayahNumber}"
+        val title = "$surahTitle ${verse.surahNumber}:${verse.ayahNumber}"
         fitContentToSafeArea(
             title = title,
             titlePaint = titlePaint,

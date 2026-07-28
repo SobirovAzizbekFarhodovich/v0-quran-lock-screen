@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:intl/intl.dart';
 
+import '../app/colors.dart';
+import '../app/text_styles.dart';
+import '../app/spacing.dart';
 import '../core/di/injector.dart';
 import '../services/api_client.dart';
 import '../features/spiritual/presentation/bloc/spiritual_bloc.dart';
@@ -14,10 +18,12 @@ class ChatMessage {
   final String text;
   final bool isUser;
   final List<dynamic>? sources;
+  final String time;
 
   ChatMessage({
     required this.text,
     required this.isUser,
+    required this.time,
     this.sources,
   });
 }
@@ -35,6 +41,15 @@ class _SpiritualScreenState extends State<SpiritualScreen> {
   final List<ChatMessage> _messages = [];
   final _scrollController = ScrollController();
 
+  final List<String> _quickStates = [
+    'Charchadim 😔',
+    'Ko\'nglim g\'ash 😕',
+    'Qo\'rqyapman 😨',
+    'Siqilyapman 😭',
+    'Xursandman 😊',
+    'Tashvishdaman 😰',
+  ];
+
   @override
   void initState() {
     super.initState();
@@ -42,25 +57,38 @@ class _SpiritualScreenState extends State<SpiritualScreen> {
     
     // Add initial greeting message
     _messages.add(ChatMessage(
-      text: "Assalomu alaykum. Bugun o'zingizni qanday his qilyapsiz? Ruhoniy holatingiz haqida yozing, kitoblardan taskin izlaymiz.",
+      text: "Assalamu alaykum. Bugun o'zingizni qanday his qilyapsiz? Ruhiy holatingiz haqida yozing, Qur'on va Hadislardan taskin izlaymiz.",
       isUser: false,
+      time: DateFormat('HH:mm').format(DateTime.now()),
     ));
   }
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cardBg = isDark ? AppColors.darkSurface : Colors.white;
+    final borderColor = isDark ? AppColors.darkBorder : AppColors.border;
+    final textSecondary = isDark ? AppColors.darkText2 : AppColors.textSecondary;
+    final bottomPadding = MediaQuery.of(context).padding.bottom;
+
     return BlocProvider<SpiritualBloc>(
       create: (context) => _bloc,
       child: Scaffold(
-        backgroundColor: const Color(0xFFF4F7F5),
+        backgroundColor: isDark ? AppColors.darkBackground : AppColors.background,
         appBar: AppBar(
-          title: const Text(
-            'Ruhiy Taskin',
-            style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 0.5),
+          title: Column(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              const Text('Ruhiy Taskin'),
+              Text(
+                'Qur\'on va Hadis asosida',
+                style: AppTextStyles.labelSmall.copyWith(color: Colors.white.withValues(alpha: 0.8), fontSize: 10),
+              ),
+            ],
           ),
-          elevation: 0,
-          backgroundColor: const Color(0xFF0F7A50),
+          backgroundColor: isDark ? AppColors.darkBackground : AppColors.primary,
           foregroundColor: Colors.white,
+          elevation: 0,
         ),
         body: BlocConsumer<SpiritualBloc, SpiritualState>(
           listener: (context, state) {
@@ -70,6 +98,7 @@ class _SpiritualScreenState extends State<SpiritualScreen> {
                   text: state.answer.answer,
                   isUser: false,
                   sources: state.answer.sources,
+                  time: DateFormat('HH:mm').format(DateTime.now()),
                 ));
               });
               _scrollToBottom();
@@ -77,7 +106,7 @@ class _SpiritualScreenState extends State<SpiritualScreen> {
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
                   content: Text(state.message), 
-                  backgroundColor: Colors.redAccent,
+                  backgroundColor: AppColors.error,
                   behavior: SnackBarBehavior.floating,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 ),
@@ -89,11 +118,47 @@ class _SpiritualScreenState extends State<SpiritualScreen> {
 
             return Column(
               children: [
-                // Chat Messages List
+                // QUICK STATE SELECTOR CHIPS
+                if (_messages.length <= 1) ...[
+                  const SizedBox(height: AppSpacing.sm),
+                  SizedBox(
+                    height: 40,
+                    child: ListView.builder(
+                      scrollDirection: Axis.horizontal,
+                      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl),
+                      itemCount: _quickStates.length,
+                      itemBuilder: (context, index) {
+                        final chipText = _quickStates[index];
+                        return Padding(
+                          padding: const EdgeInsets.only(right: 8.0),
+                          child: ActionChip(
+                            label: Text(
+                              chipText,
+                              style: AppTextStyles.labelMedium.copyWith(
+                                color: isDark ? AppColors.darkText : AppColors.textPrimary,
+                              ),
+                            ),
+                            backgroundColor: cardBg,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(20),
+                              side: BorderSide(color: borderColor),
+                            ),
+                            onPressed: () {
+                              _controller.text = "O'zimni $chipText his qilyapman.";
+                              _sendMessage();
+                            },
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+
+                // CHAT MESSAGES AREA
                 Expanded(
                   child: ListView.builder(
                     controller: _scrollController,
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+                    padding: const EdgeInsets.all(AppSpacing.xl),
                     itemCount: _messages.length + (isLoading ? 1 : 0),
                     itemBuilder: (context, index) {
                       if (index == _messages.length) {
@@ -104,61 +169,46 @@ class _SpiritualScreenState extends State<SpiritualScreen> {
                       }
 
                       final msg = _messages[index];
-                      return Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          ChatBubble(text: msg.text, isUser: msg.isUser),
-                          if (!msg.isUser && msg.sources != null && msg.sources!.isNotEmpty) ...[
-                            const SizedBox(height: 4),
-                            const Padding(
-                              padding: EdgeInsets.only(left: 14, bottom: 6),
-                              child: Text(
-                                'Manbalar:',
-                                style: TextStyle(
-                                  fontSize: 12, 
-                                  fontWeight: FontWeight.bold, 
-                                  color: Color(0xFF1B4D3E),
-                                ),
-                              ),
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 12.0),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            ChatBubble(
+                              text: msg.text,
+                              isUser: msg.isUser,
+                              time: msg.time,
                             ),
-                            SizedBox(
-                              height: 76,
-                              child: ListView.builder(
-                                scrollDirection: Axis.horizontal,
-                                padding: const EdgeInsets.only(left: 12, bottom: 8),
-                                itemCount: msg.sources!.length,
-                                itemBuilder: (context, sIdx) {
-                                  final source = msg.sources![sIdx];
-                                  return SourceCard(
-                                    book: source['book']?.toString() ?? 'Kitob',
-                                    chapter: source['chapter']?.toString() ?? '',
-                                  );
-                                },
-                              ),
-                            ),
+                            // Render Sources list if available
+                            if (!msg.isUser && msg.sources != null && msg.sources!.isNotEmpty) ...[
+                              const SizedBox(height: 6),
+                              ...msg.sources!.map((source) {
+                                return SourceCard(
+                                  book: source['book']?.toString() ?? 'Manba',
+                                  chapter: source['chapter']?.toString() ?? '',
+                                );
+                              }),
+                            ],
                           ],
-                        ],
+                        ),
                       );
                     },
                   ),
                 ),
 
-                // Input field
+                // INPUT CONTROLLER FLOAT CARD
                 Container(
-                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+                  padding: EdgeInsets.fromLTRB(16, 12, 16, bottomPadding > 0 ? bottomPadding : 16),
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: cardBg,
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.04),
+                        color: Colors.black.withValues(alpha: 0.04),
                         blurRadius: 10,
                         offset: const Offset(0, -4),
                       )
                     ],
-                    borderRadius: const BorderRadius.only(
-                      topLeft: Radius.circular(24),
-                      topRight: Radius.circular(24),
-                    ),
+                    border: Border(top: BorderSide(color: borderColor, width: 0.5)),
                   ),
                   child: Row(
                     children: [
@@ -167,33 +217,43 @@ class _SpiritualScreenState extends State<SpiritualScreen> {
                           controller: _controller,
                           minLines: 1,
                           maxLines: 4,
+                          style: AppTextStyles.bodyLarge.copyWith(
+                            color: isDark ? AppColors.darkText : AppColors.textPrimary,
+                          ),
                           decoration: InputDecoration(
                             hintText: 'Holatingizni yozing...',
-                            hintStyle: TextStyle(color: Colors.grey.shade400),
+                            hintStyle: AppTextStyles.bodyMedium.copyWith(color: textSecondary),
                             contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                             filled: true,
-                            fillColor: Colors.grey.shade50,
+                            fillColor: isDark ? AppColors.darkSurface2 : AppColors.background,
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(24),
-                              borderSide: BorderSide(color: Colors.grey.shade200),
+                              borderSide: BorderSide(color: borderColor),
                             ),
                             enabledBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(24),
-                              borderSide: BorderSide(color: Colors.grey.shade100),
+                              borderSide: BorderSide(color: borderColor),
                             ),
                             focusedBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(24),
-                              borderSide: const BorderSide(color: Color(0xFF0F7A50), width: 1.2),
+                              borderSide: BorderSide(
+                                color: isDark ? AppColors.primaryLight : AppColors.primary,
+                                width: 1.5,
+                              ),
                             ),
                           ),
                         ),
                       ),
                       const SizedBox(width: 12),
                       CircleAvatar(
-                        backgroundColor: const Color(0xFF0F7A50),
+                        backgroundColor: isDark ? AppColors.primaryLight : AppColors.primary,
                         radius: 24,
                         child: IconButton(
-                          icon: const Icon(Icons.send_rounded, color: Colors.white, size: 20),
+                          icon: Icon(
+                            Icons.send_rounded,
+                            color: isDark ? AppColors.primaryDark : Colors.white,
+                            size: 20,
+                          ),
                           onPressed: isLoading ? null : _sendMessage,
                         ),
                       ),
@@ -212,12 +272,15 @@ class _SpiritualScreenState extends State<SpiritualScreen> {
     final text = _controller.text.trim();
     if (text.isNotEmpty) {
       setState(() {
-        _messages.add(ChatMessage(text: text, isUser: true));
+        _messages.add(ChatMessage(
+          text: text,
+          isUser: true,
+          time: DateFormat('HH:mm').format(DateTime.now()),
+        ));
       });
       _controller.clear();
       _scrollToBottom();
       
-      // Fetch language setting from local profile or default to 'uz'
       _bloc.add(SendSpiritualQueryEvent(message: text, language: 'uz'));
     }
   }

@@ -24,7 +24,12 @@ class RecitationBloc extends Bloc<RecitationEvent, RecitationState> {
       final baseUrl = _apiClient.baseUrl;
 
       // Start audio recording and websocket stream
-      await _recitationService.start(baseUrl: baseUrl, token: token);
+      await _recitationService.start(
+        baseUrl: baseUrl,
+        token: token,
+        surahNumber: event.surahNumber,
+        ayahNumber: event.ayahNumber,
+      );
       
       // Subscribe to service events
       await _recitationSubscription?.cancel();
@@ -32,11 +37,11 @@ class RecitationBloc extends Bloc<RecitationEvent, RecitationState> {
         (recEvent) {
           if (recEvent.error != null) {
             add(RecitationErrorOccurred(error: recEvent.error!));
-          } else if (recEvent.transcription != null || recEvent.score != null) {
+          } else if (recEvent.type == 'result' || recEvent.transcription != null || recEvent.score != null) {
             add(RecitationResultReceived(result: {
               'transcription': recEvent.transcription ?? '',
               'score': recEvent.score ?? 0.0,
-              'errors': const [], // Tajweed errors list if present
+              'errors': recEvent.errors,
             }));
           }
         },
@@ -53,12 +58,10 @@ class RecitationBloc extends Bloc<RecitationEvent, RecitationState> {
 
   Future<void> _onStop(StopRecitationEvent event, Emitter<RecitationState> emit) async {
     if (state is RecitationRecording) {
+      final current = state as RecitationRecording;
       try {
-        await _recitationSubscription?.cancel();
-        _recitationSubscription = null;
-        await _recitationService.stop();
-        // Keep current state or emit initial until next action
-        emit(RecitationInitial());
+        await _recitationService.stopRecording();
+        emit(RecitationProcessing(surahNumber: current.surahNumber, ayahNumber: current.ayahNumber));
       } catch (e) {
         emit(RecitationErrorState(error: "Yozishni to'xtatishda xatolik: ${e.toString()}"));
       }

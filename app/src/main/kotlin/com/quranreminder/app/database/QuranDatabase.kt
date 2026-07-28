@@ -8,7 +8,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [QuranVerse::class, Reminder::class, Bookmark::class, AppSettings::class],
-    version = 1,
+    version = 2,
     exportSchema = false
 )
 abstract class QuranDatabase : RoomDatabase() {

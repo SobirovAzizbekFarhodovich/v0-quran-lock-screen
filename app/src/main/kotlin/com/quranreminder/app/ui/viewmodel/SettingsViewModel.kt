@@ -81,6 +81,12 @@ class SettingsViewModel(private val settingsDao: AppSettingsDao) : ViewModel() {
             updateSettings(current.copy(fontSize = size))
         }
     }
+
+    fun setLanguage(lang: String) {
+        _settings.value?.let { current ->
+            updateSettings(current.copy(language = lang))
+        }
+    }
 }
 
 class SettingsViewModelFactory(private val settingsDao: AppSettingsDao) : ViewModelProvider.Factory {

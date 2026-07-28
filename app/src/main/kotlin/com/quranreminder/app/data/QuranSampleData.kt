@@ -3,8 +3,7 @@ package com.quranreminder.app.data
 import com.quranreminder.app.database.QuranVerse
 
 /**
- * Small offline sample used only when app/src/main/assets/quran/verses.json is missing.
- * Replace it with a licensed complete Uzbek translation JSON before publishing.
+ * Offline sample Quran verses with accurate Uzbek Latin translation and transliteration.
  */
 object QuranSampleData {
     fun getSampleVerses(): List<QuranVerse> = listOf(
@@ -16,7 +15,8 @@ object QuranSampleData {
             ayahNumber = 1,
             ayahText = "بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ",
             ayahTextArabic = "بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ",
-            translation = "Rahmani, rahimiy Allohning nomida boshlayman"
+            translation = "Mehribon va rahmli Allohning nomi bilan boshlayman.",
+            transliteration = "Bismillahir Rohmanir Rohiym"
         ),
         QuranVerse(
             surahNumber = 1,
@@ -25,7 +25,8 @@ object QuranSampleData {
             ayahNumber = 2,
             ayahText = "الْحَمْدُ لِلَّهِ رَبِّ الْعَالَمِينَ",
             ayahTextArabic = "الْحَمْدُ لِلَّهِ رَبِّ الْعَالَمِينَ",
-            translation = "Barcha olam-jahonlarning Rabi Allohga barcha hamdlar bo'lsin"
+            translation = "Barcha olamlarning Robbi bo'lmish Allohga hamdlar bo'lsin.",
+            transliteration = "Alhamdu lillahi robbil 'alamiyn"
         ),
         QuranVerse(
             surahNumber = 1,
@@ -34,7 +35,8 @@ object QuranSampleData {
             ayahNumber = 3,
             ayahText = "الرَّحْمَٰنِ الرَّحِيمِ",
             ayahTextArabic = "الرَّحْمَٰنِ الرَّحِيمِ",
-            translation = "Rahmani, rahimiy (bo'lgan Allohga)"
+            translation = "U Mehribon va Rahmlidir.",
+            transliteration = "Ar-Rohmanir-Rohiym"
         ),
 
         // Surah Al-Baqarah (2)
@@ -45,7 +47,8 @@ object QuranSampleData {
             ayahNumber = 1,
             ayahText = "الم",
             ayahTextArabic = "الم",
-            translation = "Alif, Lom, Mim"
+            translation = "Alif, Lom, Mim.",
+            transliteration = "Alif, Lom, Mim"
         ),
         QuranVerse(
             surahNumber = 2,
@@ -54,7 +57,8 @@ object QuranSampleData {
             ayahNumber = 2,
             ayahText = "ذَٰلِكَ الْكِتَابُ لَا رَيْبَ فِيهِ هُدًى لِّلْمُتَّقِينَ",
             ayahTextArabic = "ذَٰلِكَ الْكِتَابُ لَا رَيْبَ فِيهِ هُدًى لِّلْمُتَّقِينَ",
-            translation = "Vot o'sha Kitob - undagi shubha yo'q. U taqvo qiluvchilarni to'g'ri yo'lga olib boradigan hidoya"
+            translation = "Ushbu Kitobda hech qanday shubha yo'qdir; u taqvodorlar uchun hidoyatdir.",
+            transliteration = "Zalikal kitabu la royba fih, hudal-lil-muttaqiyn"
         ),
 
         // Surah Al-Imran (3)
@@ -65,7 +69,8 @@ object QuranSampleData {
             ayahNumber = 1,
             ayahText = "الم",
             ayahTextArabic = "الم",
-            translation = "Alif, Lom, Mim"
+            translation = "Alif, Lom, Mim.",
+            transliteration = "Alif, Lom, Mim"
         ),
         QuranVerse(
             surahNumber = 3,
@@ -74,7 +79,8 @@ object QuranSampleData {
             ayahNumber = 2,
             ayahText = "اللَّهُ لَا إِلَٰهَ إِلَّا هُوَ الْحَيُّ الْقَيُّومُ",
             ayahTextArabic = "اللَّهُ لَا إِلَٰهَ إِلَّا هُوَ الْحَيُّ الْقَيُّومُ",
-            translation = "Alloh - Uning tashqarida boshqa iloh yo'q. U - Hayy (Doimiy tirik), Qayyum (O'ziga va boshqalarning o'ziga ishonib turadigan)"
+            translation = "Alloh – Undan o'zga iloh yo'q. U Tirik va Qayyum (abadiy turuvchi)dir.",
+            transliteration = "Allahu la ilaha illa huwal-Hayyul-Qayyum"
         ),
 
         // Surah An-Nisa (4)
@@ -85,7 +91,8 @@ object QuranSampleData {
             ayahNumber = 1,
             ayahText = "يَا أَيُّهَا النَّاسُ اتَّقُوا رَبَّكُمُ الَّذِي خَلَقَكُم مِّن نَّفْسٍ وَاحِدَةٍ",
             ayahTextArabic = "يَا أَيُّهَا النَّاسُ اتَّقُوا رَبَّكُمُ الَّذِي خَلَقَكُم مِّن نَّفْسٍ وَاحِدَةٍ",
-            translation = "Ey odamlar! O'zlaringizning Rabbingizdan qo'rqing. U sizlarni bitta nafs (Odam)dan yaratdi"
+            translation = "Ey odamlar! Sizlarni bir nafsdan yaratgan Robbingizdan qo'rqingiz.",
+            transliteration = "Ya ayyuhan-nasuttaqu robbakumullazi khalaqakum min nafsiw-wahidah"
         ),
 
         // Surah Al-Ma'idah (5)
@@ -96,7 +103,8 @@ object QuranSampleData {
             ayahNumber = 1,
             ayahText = "يَا أَيُّهَا الَّذِينَ آمَنُوا أَوْفُوا بِالْعُقُودِ",
             ayahTextArabic = "يَا أَيُّهَا الَّذِينَ آمَنُوا أَوْفُوا بِالْعُقُودِ",
-            translation = "Ey imon keltirganlar! Shartlarni to'ldirib bering"
+            translation = "Ey iymon keltirganlar! Ahd-paymonlarga vafo qilingiz.",
+            transliteration = "Ya ayyuhallazina amanu awfu bil-'uqud"
         ),
 
         // Surah Al-An'am (6)
@@ -107,7 +115,8 @@ object QuranSampleData {
             ayahNumber = 1,
             ayahText = "الْحَمْدُ لِلَّهِ الَّذِي خَلَقَ السَّمَاوَاتِ وَالْأَرْضَ وَجَعَلَ الظُّلُمَاتِ وَالنُّورَ",
             ayahTextArabic = "الْحَمْدُ لِلَّهِ الَّذِي خَلَقَ السَّمَاوَاتِ وَالْأَرْضَ وَجَعَلَ الظُّلُمَاتِ وَالنُّورَ",
-            translation = "Samovotlar va yerni yaratgan Allohga barcha hamdlar bo'lsin. U zulmatlar va nurni yaratdi"
+            translation = "Osmonlar va yerni yaratgan, zulmatlar va nurni paydo qilgan Allohga hamd bo'lsin.",
+            transliteration = "Alhamdu lillahillazi khalaqas-samawati wal-arda wa ja'alaz-zulumati wan-nur"
         ),
 
         // Surah Al-A'raf (7)
@@ -118,7 +127,8 @@ object QuranSampleData {
             ayahNumber = 1,
             ayahText = "كِتَابٌ أُنزِلَ إِلَيْكَ فَلَا يَكُن فِي صَدْرِكَ حَرَجٌ مِّنْهُ",
             ayahTextArabic = "كِتَابٌ أُنزِلَ إِلَيْكَ فَلَا يَكُن فِي صَدْرِكَ حَرَجٌ مِّنْهُ",
-            translation = "Bu Kitob saga nozil bo'ldi. Uni sabab bilgan xavflanmang"
+            translation = "Senga nozil qilingan bu Kitob sababli dilingda siqilish bo'lmasin.",
+            transliteration = "Kitabun unzila ilayka fala yakun fi sadrika harajum-minh"
         ),
 
         // Surah Al-Anfal (8)
@@ -129,7 +139,8 @@ object QuranSampleData {
             ayahNumber = 1,
             ayahText = "يَسْأَلُونَكَ عَنِ الْأَنفَالِ قُلِ الْأَنفَالُ لِلَّهِ وَالرَّسُولِ",
             ayahTextArabic = "يَسْأَلُونَكَ عَنِ الْأَنفَالِ قُلِ الْأَنفَالُ لِلَّهِ وَالرَّسُولِ",
-            translation = "Seni ganima haqida so'rashadi. Sen: \"Ganima Allohning va Rasulning.\" deb ey."
+            translation = "Sendan g'animatlar haqida so'raydilar. Sen: «G'animatlar Alloh va Payg'ambarnikidir», degin.",
+            transliteration = "Yas'alunaka 'anil-anfal, qulil-anfalu lillahi war-rasul"
         ),
 
         // Surah At-Tawbah (9)
@@ -140,7 +151,8 @@ object QuranSampleData {
             ayahNumber = 1,
             ayahText = "بَرَاءَةٌ مِّنَ اللَّهِ وَرَسُولِهِ إِلَى الَّذِينَ عَاهَدتُم مِّنَ الْمُشْرِكِينَ",
             ayahTextArabic = "بَرَاءَةٌ مِّنَ اللَّهِ وَرَسُولِهِ إِلَى الَّذِينَ عَاهَدتُم مِّنَ الْمُشْرِكِينَ",
-            translation = "Bu Alloh va Uning Rasulining ozodlik e'loni bo'lib, u shunday mushriklar tomoniga yo'naltiriladiki"
+            translation = "Ushbu (oyatlar) Alloh va Uning Rasuli tomonidan ahdlashgan mushriklaringizga berilgan ogohlantirishdir.",
+            transliteration = "Bara'atum-minallahi wa rasulihi ilallazina 'ahadtum-minal-mushrikiyn"
         ),
 
         // Surah Yunus (10)
@@ -151,7 +163,9 @@ object QuranSampleData {
             ayahNumber = 1,
             ayahText = "الر تِلْكَ آيَاتُ الْكِتَابِ الْحَكِيمِ",
             ayahTextArabic = "الر تِلْكَ آيَاتُ الْكِتَابِ الْحَكِيمِ",
-            translation = "Alif, Lom, Rod. Bu - danishmand Kitobning oyatlari"
+            translation = "Alif, Lom, Ro. Bular hikmatli Kitobning oyatlaridir.",
+            transliteration = "Alif, Lom, Ro. Tilka ayatul-kitabil-hakiym"
         )
     )
 }
+

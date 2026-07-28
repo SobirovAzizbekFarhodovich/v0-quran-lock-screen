@@ -35,7 +35,7 @@ RESPONSE=$(curl -s -X POST https://openrouter.ai/api/v1/chat/completions \
   -H "HTTP-Referer: https://quran-reminder.app" \
   -H "X-Title: Quran Reminder Test" \
   -d '{
-    "model": "qwen/qwen3-4b",
+    "model": "qwen/qwen3.6-flash",
     "messages": [{"role": "user", "content": "Siz islomiy ruhiy maslahatchi sifatida foydalanuvchining holatini tahlil qilasiz.\n\nFoydalanuvchi yozdi: \"ko'\''nglim siqilyapti\"\n\nBu insonnning ruhiy, jismoniy yoki hayotiy holatini tahlil qiling.\n\nFAQAT quyidagi JSON formatida javob bering:\n{\"topics\": [\"eng mos mavzu1\"], \"moods\": [\"holati1\"], \"keywords\": [\"kalit_soz1\"], \"userState\": \"qisqacha tavsif\"}"}],
     "temperature": 0.3,
     "max_tokens": 500,

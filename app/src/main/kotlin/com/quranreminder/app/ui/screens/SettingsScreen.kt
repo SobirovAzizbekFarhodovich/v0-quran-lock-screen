@@ -186,6 +186,7 @@ fun LockScreenControls(
     onRandom: () -> Unit,
     onCategorySelected: (LockScreenAyahCategory?) -> Unit
 ) {
+    val context = LocalContext.current
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
@@ -212,6 +213,47 @@ fun LockScreenControls(
                     Text("Randomga qaytish")
                 }
             }
+            Text(
+                text = "Lock-screen Tili (4 ta til)",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            val currentLang = LockScreenWallpaperApplier.getLockScreenLanguage(context)
+            val languages = listOf(
+                "uz_cyrillic" to "Ўзбек (Кирил)",
+                "uz_latin" to "O'zbek (Lotin)",
+                "en" to "English",
+                "ru" to "Русский"
+            )
+            languages.chunked(2).forEach { rowLangs ->
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    rowLangs.forEach { (code, label) ->
+                        val isSelected = currentLang == code
+                        if (isSelected) {
+                            Button(
+                                modifier = Modifier.weight(1f),
+                                onClick = {
+                                    LockScreenWallpaperApplier.setLockScreenLanguage(context, code)
+                                    DailyAyahScheduler.updateToday(context)
+                                }
+                            ) {
+                                Text(label)
+                            }
+                        } else {
+                            OutlinedButton(
+                                modifier = Modifier.weight(1f),
+                                onClick = {
+                                    LockScreenWallpaperApplier.setLockScreenLanguage(context, code)
+                                    DailyAyahScheduler.updateToday(context)
+                                }
+                            ) {
+                                Text(label)
+                            }
+                        }
+                    }
+                }
+            }
+
             Text(
                 text = "Kategoriya",
                 style = MaterialTheme.typography.bodyMedium,

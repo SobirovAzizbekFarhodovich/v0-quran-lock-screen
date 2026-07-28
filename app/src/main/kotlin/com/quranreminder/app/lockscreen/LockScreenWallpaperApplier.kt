@@ -16,7 +16,7 @@ import java.util.Date
 import java.util.Locale
 
 object LockScreenWallpaperApplier {
-    suspend fun apply(context: Context, verse: QuranVerse, rememberForToday: Boolean = true) {
+    suspend fun apply(context: Context, verse: QuranVerse, rememberForHour: Boolean = true) {
         withContext(Dispatchers.IO) {
             val bitmap = LockScreenWallpaperRenderer.render(context.applicationContext, verse)
             val wallpaperManager = WallpaperManager.getInstance(context.applicationContext)
@@ -32,12 +32,12 @@ object LockScreenWallpaperApplier {
                 wallpaperManager.setBitmap(bitmap)
             }
 
-            if (rememberForToday) {
-                val today = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
+            if (rememberForHour) {
+                val currentHour = SimpleDateFormat("yyyy-MM-dd-HH", Locale.US).format(Date())
                 context.applicationContext
                     .getSharedPreferences(PREFS, Context.MODE_PRIVATE)
                     .edit()
-                    .putString(KEY_LAST_DATE, today)
+                    .putString(KEY_LAST_HOUR, currentHour)
                     .putInt(KEY_LAST_SURAH, verse.surahNumber)
                     .putInt(KEY_LAST_AYAH, verse.ayahNumber)
                     .apply()
@@ -51,7 +51,7 @@ object LockScreenWallpaperApplier {
             .edit()
             .putInt(KEY_SELECTED_SURAH, verse.surahNumber)
             .putInt(KEY_SELECTED_AYAH, verse.ayahNumber)
-            .remove(KEY_LAST_DATE)
+            .remove(KEY_LAST_HOUR)
             .apply()
     }
 
@@ -61,7 +61,7 @@ object LockScreenWallpaperApplier {
             .edit()
             .remove(KEY_SELECTED_SURAH)
             .remove(KEY_SELECTED_AYAH)
-            .remove(KEY_LAST_DATE)
+            .remove(KEY_LAST_HOUR)
             .apply()
     }
 
@@ -69,7 +69,7 @@ object LockScreenWallpaperApplier {
         val editor = context.applicationContext
             .getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             .edit()
-            .remove(KEY_LAST_DATE)
+            .remove(KEY_LAST_HOUR)
         if (category == null) {
             editor.remove(KEY_SELECTED_CATEGORY)
         } else {
@@ -83,6 +83,21 @@ object LockScreenWallpaperApplier {
             .getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             .getString(KEY_SELECTED_CATEGORY, null)
         return LockScreenAyahCategory.entries.firstOrNull { it.id == id }
+    }
+
+    fun getLockScreenLanguage(context: Context): String {
+        return context.applicationContext
+            .getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .getString(KEY_LOCKSCREEN_LANGUAGE, "uz_cyrillic") ?: "uz_cyrillic"
+    }
+
+    fun setLockScreenLanguage(context: Context, language: String) {
+        context.applicationContext
+            .getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .edit()
+            .putString(KEY_LOCKSCREEN_LANGUAGE, language)
+            .remove(KEY_LAST_HOUR)
+            .apply()
     }
 
     suspend fun shareImage(context: Context, verse: QuranVerse) {
@@ -110,12 +125,13 @@ object LockScreenWallpaperApplier {
     }
 
     const val PREFS = "daily_ayah_wallpaper"
-    const val KEY_LAST_DATE = "last_date"
+    const val KEY_LAST_HOUR = "last_hour"
     const val KEY_LAST_SURAH = "last_surah"
     const val KEY_LAST_AYAH = "last_ayah"
     const val KEY_SELECTED_SURAH = "selected_surah"
     const val KEY_SELECTED_AYAH = "selected_ayah"
     const val KEY_SELECTED_CATEGORY = "selected_category"
+    const val KEY_LOCKSCREEN_LANGUAGE = "lockscreen_language"
 }
 
 enum class LockScreenAyahCategory(

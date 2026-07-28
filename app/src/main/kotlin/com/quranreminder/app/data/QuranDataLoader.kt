@@ -45,9 +45,22 @@ data class QuranVerseDto(
 }
 
 object QuranDataLoader {
-    fun loadFromAssets(context: Context): List<QuranVerse> {
+    private const val BACKEND_VERSES_URL = "http://18.197.97.234/api/quran/verses"
+
+    fun loadFromServer(): List<QuranVerse> {
         return runCatching {
-            val json = context.assets.open(ASSET_PATH).bufferedReader().use { it.readText() }
+            val url = java.net.URL(BACKEND_VERSES_URL)
+            val connection = url.openConnection() as java.net.HttpURLConnection
+            connection.requestMethod = "GET"
+            connection.connectTimeout = 30_000
+            connection.readTimeout = 30_000
+
+            if (connection.responseCode != java.net.HttpURLConnection.HTTP_OK) {
+                android.util.Log.e("QuranDataLoader", "Failed to fetch verses, response code: ${connection.responseCode}")
+                return@runCatching emptyList<QuranVerse>()
+            }
+
+            val json = connection.inputStream.bufferedReader().use { it.readText() }
             val data = Gson().fromJson(json, QuranAssetData::class.java)
             val verses = if (data.verses.isNotEmpty()) {
                 data.verses.map { it.toEntity() }
@@ -60,10 +73,10 @@ object QuranDataLoader {
                     verse.ayahTextArabic.isNotBlank() &&
                     verse.translation.isNotBlank()
             }
+        }.onFailure { e ->
+            android.util.Log.e("QuranDataLoader", "Exception while fetching verses", e)
         }.getOrElse { emptyList() }
     }
-
-    private const val ASSET_PATH = "quran/verses.json"
 }
 
 data class QuranEncVerseDto(
@@ -107,7 +120,7 @@ private object SurahNames {
         "Mutoffifin", "Inshiqoq", "Buruj", "Toriq", "A'lo", "G'oshiya", "Fajr",
         "Balad", "Shams", "Layl", "Zuho", "Sharh", "Tiyn", "Alaq", "Qadr",
         "Bayyina", "Zalzala", "Odiyot", "Qoria", "Takosur", "Asr", "Humaza",
-        "Fil", "Quraysh", "Moun", "Kavsar", "Kofirun", "Nasr", "Masad", "Ixlos",
+        "Fil", "Quraysh", "Mo'un", "Kavsar", "Kofirun", "Nasr", "Masad", "Ixlos",
         "Falaq", "Nos"
     )
 

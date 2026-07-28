@@ -19,6 +19,16 @@ class RecitationRecording extends RecitationState {
   List<Object?> get props => [surahNumber, ayahNumber];
 }
 
+class RecitationProcessing extends RecitationState {
+  final int surahNumber;
+  final int ayahNumber;
+
+  const RecitationProcessing({required this.surahNumber, required this.ayahNumber});
+
+  @override
+  List<Object?> get props => [surahNumber, ayahNumber];
+}
+
 class RecitationResultState extends RecitationState {
   final String transcription;
   final double score;

@@ -6,22 +6,19 @@ import androidx.work.ExistingWorkPolicy
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
-import java.util.Calendar
 import java.util.concurrent.TimeUnit
 
 object DailyAyahScheduler {
     fun schedule(context: Context) {
-        val dailyWork = PeriodicWorkRequestBuilder<DailyAyahWallpaperWorker>(
-            24,
+        val hourlyWork = PeriodicWorkRequestBuilder<DailyAyahWallpaperWorker>(
+            1,
             TimeUnit.HOURS
-        )
-            .setInitialDelay(delayUntilNextMorning(), TimeUnit.MILLISECONDS)
-            .build()
+        ).build()
 
         WorkManager.getInstance(context).enqueueUniquePeriodicWork(
-            DAILY_WORK_NAME,
+            HOURLY_WORK_NAME,
             ExistingPeriodicWorkPolicy.UPDATE,
-            dailyWork
+            hourlyWork
         )
     }
 
@@ -34,20 +31,6 @@ object DailyAyahScheduler {
         )
     }
 
-    private fun delayUntilNextMorning(): Long {
-        val now = Calendar.getInstance()
-        val next = Calendar.getInstance().apply {
-            set(Calendar.HOUR_OF_DAY, 6)
-            set(Calendar.MINUTE, 0)
-            set(Calendar.SECOND, 0)
-            set(Calendar.MILLISECOND, 0)
-            if (!after(now)) {
-                add(Calendar.DAY_OF_YEAR, 1)
-            }
-        }
-        return next.timeInMillis - now.timeInMillis
-    }
-
-    private const val DAILY_WORK_NAME = "daily_ayah_lock_wallpaper"
-    private const val IMMEDIATE_WORK_NAME = "daily_ayah_lock_wallpaper_now"
+    private const val HOURLY_WORK_NAME = "hourly_ayah_lock_wallpaper"
+    private const val IMMEDIATE_WORK_NAME = "hourly_ayah_lock_wallpaper_now"
 }

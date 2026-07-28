@@ -11,9 +11,9 @@ class DatabaseInitializer(private val context: Context) {
         withContext(Dispatchers.IO) {
             val verseCount = database.quranVerseDao().getVerseCount()
             
-            val assetVerses = QuranDataLoader.loadFromAssets(context)
-            if (verseCount == 0 || (assetVerses.size >= FULL_QURAN_VERSE_COUNT && verseCount < FULL_QURAN_VERSE_COUNT)) {
-                val verses = assetVerses.ifEmpty { QuranSampleData.getSampleVerses() }
+            val serverVerses = QuranDataLoader.loadFromServer()
+            if (verseCount == 0 || (serverVerses.size >= FULL_QURAN_VERSE_COUNT && verseCount < FULL_QURAN_VERSE_COUNT)) {
+                val verses = serverVerses.ifEmpty { QuranSampleData.getSampleVerses() }
                 database.quranVerseDao().insertVerses(verses)
 
             }

@@ -24,7 +24,7 @@ dependencies:
   injectable: ^2.4.1
 
   # Networking
-  dio: ^5.4.3
+  http: ^1.2.1
   web_socket_channel: ^3.0.1
   connectivity_plus: ^6.0.3
 
@@ -68,10 +68,12 @@ dev_dependencies:
   flutter_gen: ^5.5.0
 
 flutter:
+  generate: true
   uses-material-design: true
-  assets:
-    - assets/animations/
   fonts:
-    - family: Scheherazade
+    - family: Amiri
       fonts:
-        - asset: assets/fonts/Scheherazade/Scheherazade-Regular.ttf
+        - asset: assets/fonts/Amiri/Amiri-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/Amiri/Amiri-Bold.ttf
+          weight: 700

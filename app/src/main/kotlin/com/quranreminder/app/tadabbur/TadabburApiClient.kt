@@ -19,7 +19,7 @@ import java.net.URL
 object TadabburApiClient {
     // Emulator uchun lokal Go backend manzili (10.0.2.2). 
     // Haqiqiy qurilmada test qilish uchun kompyuteringizning Wi-Fi IP manzilini qo'ying (masalan: 192.168.1.X)
-    private const val BACKEND_CHAT_URL = "http://10.0.2.2:8080/api/v1/chat/completions"
+    private const val BACKEND_CHAT_URL = "http://18.197.97.234/api/v1/chat/completions"
     private const val QWEN_MODEL = "qwen/qwen3-8b"
     private const val TIMEOUT_MS = 60_000
     private const val MAX_RETRIES = 2

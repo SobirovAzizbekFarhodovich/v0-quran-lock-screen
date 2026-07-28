@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../../../../app/colors.dart';
+import '../../../../app/text_styles.dart';
 
 class SourceCard extends StatelessWidget {
   final String book;
@@ -12,62 +14,62 @@ class SourceCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Container(
-      margin: const EdgeInsets.only(right: 12),
-      width: 160,
+      margin: const EdgeInsets.only(left: 36, top: 4, bottom: 8),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey.shade300),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.03),
-            blurRadius: 4,
-            offset: const Offset(0, 2),
-          )
-        ],
+        color: AppColors.gold.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: AppColors.gold.withValues(alpha: 0.25),
+          width: 0.5,
+        ),
       ),
-      padding: const EdgeInsets.all(12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Row(
-            children: const [
-              Icon(Icons.menu_book, size: 16, color: Color(0xFF0F7A50)),
-              SizedBox(width: 6),
-              Text(
-                'Manba',
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF0F7A50),
+      child: IntrinsicHeight(
+        child: Row(
+          children: [
+            // Left 3px gold vertical highlight line
+            Container(
+              width: 3,
+              decoration: const BoxDecoration(
+                color: AppColors.gold,
+                borderRadius: BorderRadius.only(
+                  topLeft: Radius.circular(10),
+                  bottomLeft: Radius.circular(10),
                 ),
               ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Text(
-            book,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.bold,
-              color: Color(0xFF1B4D3E),
             ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            chapter,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              fontSize: 11,
-              color: Colors.grey,
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      'MANBA',
+                      style: AppTextStyles.labelSmall.copyWith(
+                        color: AppColors.gold,
+                        fontSize: 9,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 1.0,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '$book · $chapter',
+                      style: AppTextStyles.labelMedium.copyWith(
+                        color: isDark ? AppColors.darkText : AppColors.textPrimary,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

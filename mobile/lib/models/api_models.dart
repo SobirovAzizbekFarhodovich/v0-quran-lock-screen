@@ -49,21 +49,45 @@ class SpiritualAnswer {
 }
 
 class RecitationEvent {
-  const RecitationEvent({required this.jobId, this.status, this.transcription, this.score, this.error});
+  const RecitationEvent({
+    required this.jobId,
+    this.type,
+    this.status,
+    this.transcription,
+    this.score,
+    this.errors = const [],
+    this.finalResult = false,
+    this.error,
+  });
 
   final String jobId;
+  final String? type;
   final String? status;
   final String? transcription;
   final double? score;
+  final List<dynamic> errors;
+  final bool finalResult;
   final String? error;
 
   factory RecitationEvent.fromJson(Map<String, dynamic> json) {
+    final type = json['type'] as String?;
+    final tajweed = json['tajweed'] as Map<String, dynamic>?;
+    final directErrors = json['errors'];
+    final tajweedErrors = tajweed?['issues'];
+    final errors = directErrors is List<dynamic>
+        ? directErrors
+        : tajweedErrors is List<dynamic>
+            ? tajweedErrors
+            : const <dynamic>[];
     return RecitationEvent(
-      jobId: json['job_id'] as String? ?? '',
+      jobId: json['job_id'] as String? ?? json['session_id'] as String? ?? json['stream_id'] as String? ?? '',
+      type: type,
       status: json['status'] as String?,
-      transcription: json['transcription'] as String?,
+      transcription: json['transcription'] as String? ?? json['transcript'] as String?,
       score: (json['score'] as num?)?.toDouble(),
-      error: json['error'] as String?,
+      errors: errors,
+      finalResult: json['final'] as bool? ?? false,
+      error: type == 'error' ? (json['error'] as String? ?? json['message'] as String? ?? 'Recitation error') : null,
     );
   }
 }

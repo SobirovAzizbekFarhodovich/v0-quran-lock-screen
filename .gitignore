@@ -7,7 +7,16 @@ __v0_jsx-dev-runtime.ts
 .vercel/
 
 # Environment variables
-.env*.local
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.mobileprovision
+*.jks
+*.keystore
+mobile/android/key.properties
 
 # Common ignores
 node_modules
@@ -21,3 +30,12 @@ build/
 # Local Android build tooling installed by Codex/run setup
 .local/
 local.properties
+
+# Backend and Python local artifacts
+backend-go/quran-backend
+backend-go/gateway
+__pycache__/
+.pytest_cache/
+.venv/
+*.pyc
+chroma_db/

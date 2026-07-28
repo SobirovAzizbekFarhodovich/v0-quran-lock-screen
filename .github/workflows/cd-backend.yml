@@ -1,0 +1,67 @@
+name: Deploy Backend
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "backend/**"
+      - "ai/**"
+      - "docker-compose.yml"
+      - "infra/**"
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_PREFIX: ${{ github.repository }}
+
+jobs:
+  build-and-push:
+    name: Build & Push Images
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        include:
+          - context: ./backend/api-gateway
+            image: api-gateway
+          - context: ./ai/recitation
+            image: ai-recitation
+          - context: ./ai/rag
+            image: ai-rag
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to Container registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/${{ matrix.image }}:latest
+            ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/${{ matrix.image }}:${{ github.sha }}
+
+  deploy:
+    name: Deploy to VPS
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: |
+            cd /opt/islamic-ai
+            docker compose pull
+            docker compose up -d --remove-orphans
+            docker system prune -f
