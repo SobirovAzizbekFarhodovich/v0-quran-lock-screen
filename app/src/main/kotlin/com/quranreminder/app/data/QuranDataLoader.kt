@@ -3,6 +3,7 @@ package com.quranreminder.app.data
 import android.content.Context
 import com.google.gson.Gson
 import com.google.gson.annotations.SerializedName
+import com.quranreminder.app.BuildConfig
 import com.quranreminder.app.database.QuranVerse
 
 data class QuranAssetData(
@@ -45,11 +46,11 @@ data class QuranVerseDto(
 }
 
 object QuranDataLoader {
-    private const val BACKEND_VERSES_URL = "http://18.197.97.234/api/quran/verses"
+    private val backendVersesUrl = "${BuildConfig.SERVER_BASE_URL}/api/quran/verses"
 
     fun loadFromServer(): List<QuranVerse> {
         return runCatching {
-            val url = java.net.URL(BACKEND_VERSES_URL)
+            val url = java.net.URL(backendVersesUrl)
             val connection = url.openConnection() as java.net.HttpURLConnection
             connection.requestMethod = "GET"
             connection.connectTimeout = 30_000
@@ -70,7 +71,6 @@ object QuranDataLoader {
             verses.filter { verse ->
                 verse.surahNumber in 1..114 &&
                     verse.ayahNumber > 0 &&
-                    verse.ayahTextArabic.isNotBlank() &&
                     verse.translation.isNotBlank()
             }
         }.onFailure { e ->

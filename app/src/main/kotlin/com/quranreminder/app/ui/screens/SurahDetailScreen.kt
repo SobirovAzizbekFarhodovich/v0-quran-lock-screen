@@ -225,15 +225,19 @@ fun VerseDetailCard(
                 }
             }
 
-            // Arabic text
-            Text(
-                text = verse.ayahTextArabic,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 12.dp)
-            )
+            // The bundled server data currently contains a complete Uzbek
+            // translation set.  Do not render a fake Arabic placeholder when
+            // an Arabic source has not been imported yet.
+            if (verse.ayahTextArabic.isNotBlank()) {
+                Text(
+                    text = verse.ayahTextArabic,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 12.dp)
+                )
+            }
 
             // Translation
             Text(

@@ -3,6 +3,7 @@ package com.quranreminder.app.lockscreen
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import com.quranreminder.app.BuildConfig
 import android.net.Uri
 import androidx.annotation.DrawableRes
 import com.quranreminder.app.R
@@ -32,17 +33,17 @@ object LockScreenBackgroundManager {
     )
 
     val remoteSamples = listOf(
-        RemoteSample("remote_1", "Sahro kechasi", "http://18.197.97.234/backgrounds/bg_remote_1.png"),
-        RemoteSample("remote_2", "Yashil o'rmon", "http://18.197.97.234/backgrounds/bg_remote_2.png"),
-        RemoteSample("remote_3", "Ish stoli", "http://18.197.97.234/backgrounds/bg_remote_3.png"),
-        RemoteSample("remote_4", "Tog'dagi uycha", "http://18.197.97.234/backgrounds/bg_remote_4.png"),
-        RemoteSample("remote_5", "Tumanli tog'lar", "http://18.197.97.234/backgrounds/bg_remote_5.png"),
-        RemoteSample("remote_6", "Uchta kabutar", "http://18.197.97.234/backgrounds/bg_remote_6.png"),
-        RemoteSample("remote_7", "Somon yo'li va daraxt", "http://18.197.97.234/backgrounds/bg_remote_7.png"),
-        RemoteSample("remote_8", "Tog'lar va shafaq", "http://18.197.97.234/backgrounds/bg_remote_8.png"),
-        RemoteSample("remote_9", "Daraxt va oltin shafaq", "http://18.197.97.234/backgrounds/bg_remote_9.png"),
-        RemoteSample("remote_10", "Kechki dala", "http://18.197.97.234/backgrounds/bg_remote_10.png"),
-        RemoteSample("remote_11", "Jaynamoz", "http://18.197.97.234/backgrounds/bg_remote_11.png")
+        RemoteSample("remote_1", "Sahro kechasi", "${BuildConfig.SERVER_BASE_URL}/backgrounds/bg_remote_1.png"),
+        RemoteSample("remote_2", "Yashil o'rmon", "${BuildConfig.SERVER_BASE_URL}/backgrounds/bg_remote_2.png"),
+        RemoteSample("remote_3", "Ish stoli", "${BuildConfig.SERVER_BASE_URL}/backgrounds/bg_remote_3.png"),
+        RemoteSample("remote_4", "Tog'dagi uycha", "${BuildConfig.SERVER_BASE_URL}/backgrounds/bg_remote_4.png"),
+        RemoteSample("remote_5", "Tumanli tog'lar", "${BuildConfig.SERVER_BASE_URL}/backgrounds/bg_remote_5.png"),
+        RemoteSample("remote_6", "Uchta kabutar", "${BuildConfig.SERVER_BASE_URL}/backgrounds/bg_remote_6.png"),
+        RemoteSample("remote_7", "Somon yo'li va daraxt", "${BuildConfig.SERVER_BASE_URL}/backgrounds/bg_remote_7.png"),
+        RemoteSample("remote_8", "Tog'lar va shafaq", "${BuildConfig.SERVER_BASE_URL}/backgrounds/bg_remote_8.png"),
+        RemoteSample("remote_9", "Daraxt va oltin shafaq", "${BuildConfig.SERVER_BASE_URL}/backgrounds/bg_remote_9.png"),
+        RemoteSample("remote_10", "Kechki dala", "${BuildConfig.SERVER_BASE_URL}/backgrounds/bg_remote_10.png"),
+        RemoteSample("remote_11", "Jaynamoz", "${BuildConfig.SERVER_BASE_URL}/backgrounds/bg_remote_11.png")
     )
 
     fun setSample(context: Context, sample: Sample) {
@@ -166,4 +167,3 @@ object LockScreenBackgroundManager {
     private const val SOURCE_REMOTE = "remote"
     private const val CUSTOM_FILE_NAME = "lock_screen_custom_background"
 }
-

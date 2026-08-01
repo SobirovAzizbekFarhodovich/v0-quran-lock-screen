@@ -58,7 +58,9 @@ func main() {
 	tokenService := auth.NewTokenService(cfg.JWTSecret, cfg.AccessTTL, cfg.RefreshTTL)
 	authHandler := httpapi.NewAuthHandler(db, tokenService, redisClient, httpapi.NewResendEmailSender(cfg.ResendAPIKey, cfg.EmailFrom), cfg.PasswordResetURL, cfg.GoogleClientIDs, cfg.AppleClientID)
 	profileHandler := httpapi.NewProfileHandler(db)
-	ragHandler := httpapi.NewRAGHandler(rag.NewClient(cfg.AIRAGURL, 5*time.Second))
+	ragClient := rag.NewClient(cfg.AIRAGURL, 5*time.Second)
+	ragHandler := httpapi.NewRAGHandler(ragClient)
+	legacyChatHandler := httpapi.NewLegacyChatHandler(ragClient)
 	wsHandler := ws.NewHandler(redisClient, db, cfg.CORSOrigins)
 
 	router := gin.New()
@@ -116,6 +118,12 @@ func main() {
 	v1.POST("/auth/password-reset/confirm", authHandler.ConfirmPasswordReset)
 	v1.POST("/auth/oauth/google", authHandler.GoogleOAuth)
 	v1.POST("/auth/oauth/apple", authHandler.AppleOAuth)
+	// Temporary backwards-compatible route for the Kotlin Tadabbur screen.
+	// Keep it strictly rate-limited because it can invoke an external LLM.
+	v1.POST("/chat/completions",
+		ratelimit.RedisTokenBucket(redisClient, 2, 30*time.Second),
+		legacyChatHandler.Complete,
+	)
 
 	// --- Protected endpoints ---
 	protected := v1.Group("")

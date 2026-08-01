@@ -11,6 +11,7 @@ import hashlib
 import json
 from contextlib import asynccontextmanager
 import os
+from pathlib import Path
 from typing import Any
 
 import httpx
@@ -49,6 +50,14 @@ retriever = HybridRetriever()
 CACHE_HITS_KEY = "rag:cache:hits"
 CACHE_MISSES_KEY = "rag:cache:misses"
 CACHE_TTL_SECONDS = 86400
+QURAN_DATA_DIR = Path(__file__).resolve().parent.parent / "data" / "quran"
+QURAN_LANGUAGE_FILES = {
+    "uz": "uz_latin.jsonl",
+    "uz_latin": "uz_latin.jsonl",
+    "uz_cyrillic": "uz_cyrillic.jsonl",
+    "en": "en.jsonl",
+    "ru": "ru.jsonl",
+}
 
 
 @asynccontextmanager
@@ -197,6 +206,40 @@ async def get_verse(req: VerseRequest) -> VerseResponse:
     if result is None:
         raise HTTPException(status_code=404, detail="Oyat topilmadi")
     return VerseResponse(text=result["text"], metadata=result["metadata"])
+
+
+@app.get("/quran/verses")
+async def quran_verses(language: str = "uz_latin") -> dict[str, list[dict[str, Any]]]:
+    """Return all bundled Quran translations in the legacy Android shape.
+
+    The repository has complete translations, but deliberately does not claim
+    to have a complete Arabic-text corpus.  ``ayahTextArabic`` is therefore
+    empty instead of being fabricated; the Android client hides that line.
+    """
+    lang = resolve_language(language)
+    filename = QURAN_LANGUAGE_FILES.get(lang)
+    if filename is None:
+        raise HTTPException(status_code=400, detail="unsupported Quran language")
+
+    path = QURAN_DATA_DIR / filename
+    if not path.exists():
+        raise HTTPException(status_code=503, detail="Quran translation data is unavailable")
+
+    verses: list[dict[str, Any]] = []
+    with path.open(encoding="utf-8") as data_file:
+        for line in data_file:
+            row = json.loads(line)
+            verses.append({
+                "surahNumber": row["surah"],
+                "surahName": row.get("surah_name") or row.get("surah_name_en") or "",
+                "surahNameArabic": row.get("surah_name_ar") or "",
+                "ayahNumber": row["ayah"],
+                "ayahText": "",
+                "ayahTextArabic": "",
+                "translation": row["text"],
+                "transliteration": "",
+            })
+    return {"verses": verses}
 
 
 async def generate_answer(

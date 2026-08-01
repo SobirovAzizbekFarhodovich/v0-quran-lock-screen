@@ -33,6 +33,20 @@ android {
             (project.findProperty("OPENROUTER_API_KEY") as? String) ?: ""
         }
         buildConfigField("String", "OPENROUTER_API_KEY", "\"$apiKey\"")
+
+        // The temporary HTTP server can be used for device testing.  Supply
+        // SERVER_BASE_URL=https://api.example.com at release time when a
+        // domain and TLS certificate are available.
+        val serverBaseUrl = if (localPropsFile.exists()) {
+            val props = Properties()
+            localPropsFile.inputStream().use { props.load(it) }
+            props.getProperty("SERVER_BASE_URL")
+                ?: (project.findProperty("SERVER_BASE_URL") as? String)
+                ?: "http://18.197.97.234"
+        } else {
+            (project.findProperty("SERVER_BASE_URL") as? String) ?: "http://18.197.97.234"
+        }.trimEnd('/')
+        buildConfigField("String", "SERVER_BASE_URL", "\"$serverBaseUrl\"")
     }
 
     buildTypes {

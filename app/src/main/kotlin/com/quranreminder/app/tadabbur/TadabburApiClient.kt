@@ -2,6 +2,7 @@ package com.quranreminder.app.tadabbur
 
 import com.google.gson.Gson
 import com.google.gson.annotations.SerializedName
+import com.quranreminder.app.BuildConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
@@ -17,9 +18,9 @@ import java.net.URL
  * Faqat internet kerak.
  */
 object TadabburApiClient {
-    // Emulator uchun lokal Go backend manzili (10.0.2.2). 
-    // Haqiqiy qurilmada test qilish uchun kompyuteringizning Wi-Fi IP manzilini qo'ying (masalan: 192.168.1.X)
-    private const val BACKEND_CHAT_URL = "http://18.197.97.234/api/v1/chat/completions"
+    // SERVER_BASE_URL release build vaqtida almashtiriladi. Hozircha u
+    // vaqtinchalik HTTP serverga, keyin esa HTTPS domain'ga ko'rsatiladi.
+    private val backendChatUrl = "${BuildConfig.SERVER_BASE_URL}/api/v1/chat/completions"
     private const val QWEN_MODEL = "qwen/qwen3-8b"
     private const val TIMEOUT_MS = 60_000
     private const val MAX_RETRIES = 2
@@ -148,7 +149,7 @@ Quyidagi tuzilmaga qat'iy rioya qilgan holda, FAQAT TOZA JSON formatida javob be
             includeReasoning = false
         )
 
-        val url = URL(BACKEND_CHAT_URL)
+        val url = URL(backendChatUrl)
         val connection = (url.openConnection() as HttpURLConnection).apply {
             requestMethod = "POST"
             setRequestProperty("Content-Type", "application/json")
