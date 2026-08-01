@@ -19,10 +19,10 @@ class SourceCard extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.only(left: 36, top: 4, bottom: 8),
       decoration: BoxDecoration(
-        color: AppColors.gold.withValues(alpha: 0.08),
+        color: AppColors.gold.withOpacity(0.08),
         borderRadius: BorderRadius.circular(10),
         border: Border.all(
-          color: AppColors.gold.withValues(alpha: 0.25),
+          color: AppColors.gold.withOpacity(0.25),
           width: 0.5,
         ),
       ),

@@ -78,7 +78,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           padding: const EdgeInsets.all(AppSpacing.md),
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
-                            color: AppColors.primaryLight.withValues(alpha: 0.12),
+                            color: AppColors.primaryLight.withOpacity(0.12),
                           ),
                           child: const Text(
                             '☪',
@@ -278,7 +278,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             ),
                             boxShadow: [
                               BoxShadow(
-                                color: AppColors.primary.withValues(alpha: 0.35),
+                                color: AppColors.primary.withOpacity(0.35),
                                 blurRadius: 16,
                                 offset: const Offset(0, 6),
                               ),

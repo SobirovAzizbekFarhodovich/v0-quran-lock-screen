@@ -94,6 +94,9 @@ class MainActivity : ComponentActivity() {
                 val startDest = if (settings.language.isEmpty()) "language_selection" else "home"
                 QuranReminderTheme(darkTheme = settings.darkMode) {
                     navController = rememberNavController()
+                    androidx.compose.runtime.LaunchedEffect(intent) {
+                        handleDeepLink(intent)
+                    }
                     AppNavigation(
                         navController = navController,
                         startDestination = startDest,
@@ -119,7 +122,8 @@ class MainActivity : ComponentActivity() {
         handleDeepLink(intent)
     }
 
-    private fun handleDeepLink(intent: Intent) {
+    private fun handleDeepLink(intent: Intent?) {
+        if (intent == null || !::navController.isInitialized) return
         val surahNumber = intent.getIntExtra("surah_number", -1)
         val ayahNumber = intent.getIntExtra("ayah_number", -1)
         

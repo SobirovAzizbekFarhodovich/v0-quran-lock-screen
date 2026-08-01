@@ -82,7 +82,7 @@ class _SpiritualScreenState extends State<SpiritualScreen> {
               const Text('Ruhiy Taskin'),
               Text(
                 'Qur\'on va Hadis asosida',
-                style: AppTextStyles.labelSmall.copyWith(color: Colors.white.withValues(alpha: 0.8), fontSize: 10),
+                style: AppTextStyles.labelSmall.copyWith(color: Colors.white.withOpacity(0.8), fontSize: 10),
               ),
             ],
           ),
@@ -203,7 +203,7 @@ class _SpiritualScreenState extends State<SpiritualScreen> {
                     color: cardBg,
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.04),
+                        color: Colors.black.withOpacity(0.04),
                         blurRadius: 10,
                         offset: const Offset(0, -4),
                       )

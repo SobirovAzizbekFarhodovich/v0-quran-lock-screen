@@ -41,6 +41,7 @@ dependencies:
   permission_handler: ^11.3.1
 
   # UI/UX
+  google_fonts: ^6.2.1
   shimmer: ^3.0.0
   lottie: ^3.1.2
   cached_network_image: ^3.3.1

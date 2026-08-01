@@ -21,13 +21,19 @@ abstract class AppColors {
   static const border        = Color(0xFFD4C5B0);
   static const background    = Color(0xFFF8F4ED);
 
-  // DARK MODE PALITRASI
-  static const darkBackground = Color(0xFF0D1B2A);
-  static const darkSurface    = Color(0xFF112240);
-  static const darkSurface2   = Color(0xFF1A3A55);
-  static const darkText       = Color(0xFFE2EEF4);
-  static const darkText2      = Color(0xFFA0BDB0);
-  static const darkBorder     = Color(0xFF1E3A55);
+  // DARK MODE / COSMIC UI (reference mockup)
+  static const midnightDeep   = Color(0xFF050B14);
+  static const midnight       = Color(0xFF0A1628);
+  static const midnightSurface = Color(0xFF122338);
+  static const neonTeal       = Color(0xFF10B981);
+  static const neonCyan       = Color(0xFF2DD4BF);
+
+  static const darkBackground = midnight;
+  static const darkSurface    = Color(0xFF152A42);
+  static const darkSurface2   = Color(0xFF1E3A55);
+  static const darkText       = Color(0xFFF1F5F9);
+  static const darkText2      = Color(0xFF94A3B8);
+  static const darkBorder     = Color(0xFF2A4368);
 
   // SIGNAL RANGLAR
   static const error         = Color(0xFFD64045);

@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
 import '../app/colors.dart';
-import '../app/text_styles.dart';
 import '../app/spacing.dart';
+import '../app/text_styles.dart';
 import '../core/di/injector.dart';
+import '../widgets/cosmic_background.dart';
+import '../widgets/glow_button.dart';
+import '../widgets/islamic_3d_scene.dart';
 
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key});
@@ -17,33 +21,25 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   final PageController _pageController = PageController();
   int _currentPage = 0;
 
-  final List<OnboardingData> _slides = [
-    OnboardingData(
-      title: 'Qiroatingizni tekshiring',
-      desc: 'Real vaqtda tajweed xatolarini aniqlang va ballingizni oshiring.',
-      icon: Icons.mic_rounded,
-      iconColor: AppColors.primaryLight,
+  final _slides = const [
+    _Slide(
+      title: 'Qur\'on bilan bog\'laning',
+      desc: 'Real vaqtda qiroatingizni tahlil qiling, tajweed xatolarini aniqlang.',
     ),
-    OnboardingData(
-      title: 'Ruhiy maslahat oling',
-      desc: 'Qur\'on va hadisdan ruhiy holatingizga mos ibrat va dalda toping.',
-      icon: Icons.menu_book_rounded,
-      iconColor: AppColors.gold,
+    _Slide(
+      title: 'Ruhiy taskin',
+      desc: 'Savolingizga Qur\'on va sahih hadislardan dalillar bilan javob oling.',
     ),
-    OnboardingData(
+    _Slide(
       title: 'O\'z tilingizda',
-      desc: 'English, Русский, O\'zbek va Ўзбек — barchasida mukammal ishlaydi.',
-      icon: Icons.translate_rounded,
-      iconColor: AppColors.info,
+      desc: 'O\'zbek (lotin/kirill), ingliz va rus tillarida qulay interfeys.',
     ),
   ];
 
-  void _onDone() async {
+  Future<void> _finish() async {
     final prefs = getIt<SharedPreferences>();
     await prefs.setBool('onboarding_completed', true);
-    if (mounted) {
-      context.go('/login');
-    }
+    if (mounted) context.go('/login');
   }
 
   @override
@@ -54,220 +50,110 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
     return Scaffold(
-      body: SafeArea(
-        child: Column(
-          children: [
-            // Skip button at top
-            Align(
-              alignment: Alignment.centerRight,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl, vertical: AppSpacing.sm),
+      body: CosmicBackground(
+        showMosque: true,
+        child: SafeArea(
+          child: Column(
+            children: [
+              Align(
+                alignment: Alignment.centerRight,
                 child: TextButton(
-                  onPressed: _onDone,
-                  child: Text(
-                    'O\'tkazib yuborish',
-                    style: AppTextStyles.labelLarge.copyWith(
-                      color: isDark ? AppColors.darkText2 : AppColors.textSecondary,
-                    ),
-                  ),
+                  onPressed: _finish,
+                  child: Text('O\'tkazish', style: AppTextStyles.labelLarge.copyWith(color: AppColors.darkText2)),
                 ),
               ),
-            ),
-            // Page view containing slides
-            Expanded(
-              child: PageView.builder(
-                controller: _pageController,
-                itemCount: _slides.length,
-                onPageChanged: (int page) {
-                  setState(() {
-                    _currentPage = page;
-                  });
-                },
-                itemBuilder: (context, index) {
-                  final slide = _slides[index];
-                  return Padding(
-                    padding: const EdgeInsets.all(AppSpacing.xl),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        // Custom vector icon shape
-                        Container(
-                          width: 180,
-                          height: 180,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: slide.iconColor.withValues(alpha: 0.12),
-                          ),
-                          child: Center(
-                            child: Icon(
-                              slide.icon,
-                              size: 80,
-                              color: slide.iconColor,
+              Expanded(
+                child: PageView.builder(
+                  controller: _pageController,
+                  itemCount: _slides.length,
+                  onPageChanged: (p) => setState(() => _currentPage = p),
+                  itemBuilder: (context, index) {
+                    final slide = _slides[index];
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl),
+                      child: Column(
+                        children: [
+                          const Islamic3DScene(height: 280),
+                          const SizedBox(height: AppSpacing.x2l),
+                          Text(
+                            slide.title,
+                            textAlign: TextAlign.center,
+                            style: AppTextStyles.displayMedium.copyWith(
+                              color: AppColors.darkText,
+                              fontWeight: FontWeight.bold,
                             ),
                           ),
-                        ),
-                        const SizedBox(height: AppSpacing.x4l),
-                        Text(
-                          slide.title,
-                          textAlign: TextAlign.center,
-                          style: AppTextStyles.displayMedium.copyWith(
-                            color: isDark ? AppColors.darkText : AppColors.primary,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const SizedBox(height: AppSpacing.lg),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
-                          child: Text(
+                          const SizedBox(height: AppSpacing.lg),
+                          Text(
                             slide.desc,
                             textAlign: TextAlign.center,
                             style: AppTextStyles.bodyLarge.copyWith(
-                              color: isDark ? AppColors.darkText2 : AppColors.textSecondary,
-                              height: 1.45,
+                              color: AppColors.darkText2,
+                              height: 1.5,
                             ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.all(AppSpacing.xl),
+                child: Column(
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: List.generate(_slides.length, (i) {
+                        final active = i == _currentPage;
+                        return AnimatedContainer(
+                          duration: const Duration(milliseconds: 250),
+                          margin: const EdgeInsets.symmetric(horizontal: 4),
+                          width: active ? 28 : 8,
+                          height: 8,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(4),
+                            color: active ? AppColors.neonTeal : Colors.white.withOpacity(0.2),
+                          ),
+                        );
+                      }),
                     ),
-                  );
-                },
-              ),
-            ),
-            // Bottom control area
-            Padding(
-              padding: const EdgeInsets.all(AppSpacing.xl),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // Dot indicator
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: List.generate(_slides.length, (index) {
-                      final isActive = index == _currentPage;
-                      return AnimatedContainer(
-                        duration: const Duration(milliseconds: 300),
-                        width: isActive ? 24 : 8,
-                        height: 8,
-                        margin: const EdgeInsets.symmetric(horizontal: AppSpacing.xs),
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(4),
-                          color: isActive
-                              ? (isDark ? AppColors.primaryLight : AppColors.primary)
-                              : (isDark ? AppColors.darkBorder : AppColors.border),
+                    const SizedBox(height: AppSpacing.x2l),
+                    if (_currentPage == _slides.length - 1) ...[
+                      GlowPrimaryButton(label: 'Boshlash', onPressed: _finish),
+                      const SizedBox(height: 12),
+                      TextButton(
+                        onPressed: _finish,
+                        child: Text(
+                          'Tizimga kirish',
+                          style: AppTextStyles.labelLarge.copyWith(color: AppColors.neonCyan),
                         ),
-                      );
-                    }),
-                  ),
-                  const SizedBox(height: AppSpacing.x2l),
-                  // Action buttons
-                  AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 300),
-                    child: _currentPage == _slides.length - 1
-                        ? Column(
-                            key: const ValueKey('actions_final'),
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              // Primary action button
-                              Container(
-                                height: 52,
-                                decoration: BoxDecoration(
-                                  gradient: const LinearGradient(
-                                    colors: [AppColors.primary, AppColors.primaryMid],
-                                    begin: Alignment.topLeft,
-                                    end: Alignment.bottomRight,
-                                  ),
-                                  borderRadius: BorderRadius.circular(12),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: AppColors.primary.withValues(alpha: 0.35),
-                                      blurRadius: 20,
-                                      offset: const Offset(0, 6),
-                                    ),
-                                  ],
-                                ),
-                                child: ElevatedButton(
-                                  onPressed: _onDone,
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: Colors.transparent,
-                                    shadowColor: Colors.transparent,
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                  ),
-                                  child: Text(
-                                    'Boshlashga tayyor!',
-                                    style: AppTextStyles.labelLarge.copyWith(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 16,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(height: AppSpacing.sm),
-                              // Secondary action button
-                              TextButton(
-                                onPressed: _onDone,
-                                child: Text(
-                                  'Tizimga kirish',
-                                  style: AppTextStyles.labelLarge.copyWith(
-                                    color: isDark ? AppColors.primaryLight : AppColors.primary,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          )
-                        : SizedBox(
-                            key: const ValueKey('actions_next'),
-                            width: double.infinity,
-                            height: 52,
-                            child: ElevatedButton(
-                              onPressed: () {
-                                _pageController.nextPage(
-                                  duration: const Duration(milliseconds: 300),
-                                  curve: Curves.easeInOut,
-                                );
-                              },
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: isDark ? AppColors.primaryLight : AppColors.primary,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                              ),
-                              child: Text(
-                                'Keyingisi',
-                                style: AppTextStyles.labelLarge.copyWith(
-                                  color: isDark ? AppColors.primaryDark : Colors.white,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ),
+                      ),
+                    ] else
+                      Center(
+                        child: GlowCircleButton(
+                          icon: Icons.arrow_forward_rounded,
+                          size: 64,
+                          onPressed: () => _pageController.nextPage(
+                            duration: const Duration(milliseconds: 350),
+                            curve: Curves.easeOutCubic,
                           ),
-                  ),
-                ],
+                        ),
+                      ),
+                  ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
   }
 }
 
-class OnboardingData {
+class _Slide {
+  const _Slide({required this.title, required this.desc});
   final String title;
   final String desc;
-  final IconData icon;
-  final Color iconColor;
-
-  OnboardingData({
-    required this.title,
-    required this.desc,
-    required this.icon,
-    required this.iconColor,
-  });
 }

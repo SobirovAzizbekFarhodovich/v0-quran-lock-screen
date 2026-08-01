@@ -5,6 +5,7 @@ Qur'oni Karim, Hisnul Muslim, Hadis kitoblari (Riyozus Solihiyn, Bulugh al-Maram
 Qur'oniy duolar, Ibodat va Muqaddas oylar bo'yicha qidiradi va natijalarni birlashtirib qaytaradi.
 """
 
+import hashlib
 import json
 import os
 from typing import Any
@@ -185,12 +186,13 @@ class HybridRetriever:
                         score = max(0.0, 1.0 - distance)
                         if score < self.min_semantic_score:
                             continue
+                        doc_hash = hashlib.md5(doc.encode("utf-8")).hexdigest()[:16]
                         results.append({
                             "text": doc,
                             "metadata": meta,
                             "score": score,
                             "source_type": "semantic",
-                            "_id": f"{col_name}:{meta.get('title', meta.get('surah', ''))}:{i}",
+                            "_id": f"{col_name}:{doc_hash}",
                         })
             except Exception as e:
                 continue
@@ -223,12 +225,13 @@ class HybridRetriever:
                 for idx, (score, doc) in enumerate(scored_docs[:limit]):
                     if score <= 0:
                         continue
+                    doc_hash = hashlib.md5(doc["text"].encode("utf-8")).hexdigest()[:16]
                     results.append({
                         "text": doc["text"],
                         "metadata": doc["metadata"],
                         "score": float(score),
                         "source_type": "bm25",
-                        "_id": f"{col_name}:{doc['metadata'].get('title', doc['metadata'].get('surah', ''))}:{idx}",
+                        "_id": f"{col_name}:{doc_hash}",
                     })
             except Exception as e:
                 continue

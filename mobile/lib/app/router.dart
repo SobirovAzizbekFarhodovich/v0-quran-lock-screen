@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
@@ -77,76 +79,85 @@ class _MainShellState extends State<MainShell> {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final activeColor = isDark ? AppColors.primaryLight : AppColors.primary;
-    final inactiveColor = isDark ? AppColors.textTertiary : const Color(0xFF8A9E8A);
-    final backgroundColor = isDark ? AppColors.darkBackground : Colors.white;
-    final borderColor = isDark ? AppColors.darkBorder : Colors.grey.shade200;
-
     final bottomPadding = MediaQuery.of(context).padding.bottom;
 
     return Scaffold(
+      backgroundColor: AppColors.midnight,
+      extendBody: true,
       body: widget.child,
-      bottomNavigationBar: Container(
-        height: 64 + bottomPadding,
-        decoration: BoxDecoration(
-          color: backgroundColor,
-          border: Border(
-            top: BorderSide(color: borderColor, width: 0.5),
+      bottomNavigationBar: Padding(
+        padding: EdgeInsets.fromLTRB(20, 0, 20, 12 + bottomPadding),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(28),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+            child: Container(
+              height: 68,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(28),
+                gradient: LinearGradient(
+                  colors: [
+                    Colors.white.withOpacity(0.14),
+                    Colors.white.withOpacity(0.06),
+                  ],
+                ),
+                border: Border.all(color: Colors.white.withOpacity(0.12)),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.neonTeal.withOpacity(0.12),
+                    blurRadius: 24,
+                    offset: const Offset(0, 8),
+                  ),
+                ],
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: [
+                  _buildNavItem(0, Icons.home_rounded, 'Bosh'),
+                  _buildNavItem(1, Icons.mic_rounded, 'Qiroat'),
+                  _buildNavItem(2, Icons.favorite_rounded, 'Taskin'),
+                  _buildNavItem(3, Icons.person_rounded, 'Profil'),
+                ],
+              ),
+            ),
           ),
-        ),
-        padding: EdgeInsets.only(bottom: bottomPadding),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceAround,
-          children: [
-            _buildNavItem(0, Icons.home_rounded, 'Bosh sahifa', activeColor, inactiveColor),
-            _buildNavItem(1, Icons.mic_rounded, 'Qiroat', activeColor, inactiveColor),
-            _buildNavItem(2, Icons.favorite_rounded, 'Ruhiy taskin', activeColor, inactiveColor),
-            _buildNavItem(3, Icons.person_rounded, 'Profil', activeColor, inactiveColor),
-          ],
         ),
       ),
     );
   }
 
-  Widget _buildNavItem(int index, IconData icon, String label, Color activeColor, Color inactiveColor) {
+  Widget _buildNavItem(int index, IconData icon, String label) {
     final isActive = _selectedIndex == index;
-    final color = isActive ? activeColor : inactiveColor;
+    final color = isActive ? AppColors.neonCyan : AppColors.darkText2;
 
     return Expanded(
       child: GestureDetector(
         onTap: () => _onItemTapped(index, context),
         behavior: HitTestBehavior.opaque,
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            // Active top pill indicator
             AnimatedContainer(
-              duration: const Duration(milliseconds: 250),
-              width: isActive ? 36 : 0,
-              height: 4,
-              decoration: BoxDecoration(
-                color: activeColor,
-                borderRadius: const BorderRadius.only(
-                  bottomLeft: Radius.circular(2),
-                  bottomRight: Radius.circular(2),
-                ),
-              ),
-            ),
-            const Spacer(),
-            Icon(
-              icon,
-              color: color,
-              size: 24,
+              duration: const Duration(milliseconds: 220),
+              padding: const EdgeInsets.all(8),
+              decoration: isActive
+                  ? BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: AppColors.neonTeal.withOpacity(0.18),
+                      boxShadow: [
+                        BoxShadow(color: AppColors.neonTeal.withOpacity(0.35), blurRadius: 12),
+                      ],
+                    )
+                  : null,
+              child: Icon(icon, color: color, size: 22),
             ),
             const SizedBox(height: 2),
             Text(
               label,
               style: isActive
-                  ? AppTextStyles.labelMedium.copyWith(color: color, fontWeight: FontWeight.bold)
+                  ? AppTextStyles.labelMedium.copyWith(color: color)
                   : AppTextStyles.labelSmall.copyWith(color: color),
             ),
-            const Spacer(),
           ],
         ),
       ),

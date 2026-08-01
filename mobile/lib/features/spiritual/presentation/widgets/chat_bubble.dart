@@ -86,7 +86,7 @@ class ChatBubble extends StatelessWidget {
                       ),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withValues(alpha: isUser ? 0.12 : 0.03),
+                    color: Colors.black.withOpacity(isUser ? 0.12 : 0.03),
                     blurRadius: 8,
                     offset: const Offset(0, 3),
                   ),
@@ -116,8 +116,8 @@ class ChatBubble extends StatelessWidget {
                       time,
                       style: AppTextStyles.labelSmall.copyWith(
                         color: isUser
-                            ? Colors.white.withValues(alpha: 0.5)
-                            : (isDark ? AppColors.darkText2.withValues(alpha: 0.6) : AppColors.textTertiary),
+                            ? Colors.white.withOpacity(0.5)
+                            : (isDark ? AppColors.darkText2.withOpacity(0.6) : AppColors.textTertiary),
                         fontSize: 10,
                       ),
                     ),

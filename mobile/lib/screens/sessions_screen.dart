@@ -72,7 +72,7 @@ class SessionsScreen extends StatelessWidget {
                       Container(
                         padding: const EdgeInsets.all(10),
                         decoration: BoxDecoration(
-                          color: (isRecitation ? const Color(0xFF0F7A50) : const Color(0xFFD4AF37)).withValues(alpha: 0.1),
+                          color: (isRecitation ? const Color(0xFF0F7A50) : const Color(0xFFD4AF37)).withOpacity(0.1),
                           shape: BoxShape.circle,
                         ),
                         child: Icon(

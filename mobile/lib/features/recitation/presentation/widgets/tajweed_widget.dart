@@ -13,7 +13,7 @@ class TajweedWidget extends StatelessWidget {
 
     if (errors.isEmpty) {
       return Card(
-        color: AppColors.success.withValues(alpha: 0.08),
+        color: AppColors.success.withOpacity(0.08),
         elevation: 0,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
@@ -93,7 +93,7 @@ class TajweedWidget extends StatelessWidget {
                 leading: Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: (isMakhraj ? AppColors.error : AppColors.warning).withValues(alpha: 0.15),
+                    color: (isMakhraj ? AppColors.error : AppColors.warning).withOpacity(0.15),
                     shape: BoxShape.circle,
                   ),
                   child: Icon(

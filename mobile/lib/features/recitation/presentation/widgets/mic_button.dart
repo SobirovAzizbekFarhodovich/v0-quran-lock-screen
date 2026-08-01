@@ -90,7 +90,7 @@ class _MicButtonState extends State<MicButton> with TickerProviderStateMixin {
                       transformAlignment: Alignment.center,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        color: AppColors.primaryLight.withValues(alpha: opacity),
+                        color: AppColors.primaryLight.withOpacity(opacity),
                       ),
                     );
                   },
@@ -111,7 +111,7 @@ class _MicButtonState extends State<MicButton> with TickerProviderStateMixin {
                       transformAlignment: Alignment.center,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        color: AppColors.primaryLight.withValues(alpha: opacity),
+                        color: AppColors.primaryLight.withOpacity(opacity),
                       ),
                     );
                   },
@@ -123,8 +123,8 @@ class _MicButtonState extends State<MicButton> with TickerProviderStateMixin {
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   color: widget.isRecording
-                      ? AppColors.error.withValues(alpha: 0.15)
-                      : AppColors.primaryLight.withValues(alpha: 0.12),
+                      ? AppColors.error.withOpacity(0.15)
+                      : AppColors.primaryLight.withOpacity(0.12),
                 ),
                 alignment: Alignment.center,
                 child: Container(
@@ -142,7 +142,7 @@ class _MicButtonState extends State<MicButton> with TickerProviderStateMixin {
                     boxShadow: [
                       BoxShadow(
                         color: (widget.isRecording ? AppColors.error : AppColors.primary)
-                            .withValues(alpha: 0.45),
+                            .withOpacity(0.45),
                         blurRadius: 20,
                         spreadRadius: 1,
                         offset: const Offset(0, 8),

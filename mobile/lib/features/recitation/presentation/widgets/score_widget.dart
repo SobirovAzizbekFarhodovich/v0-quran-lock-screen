@@ -57,7 +57,7 @@ class _ScoreWidgetState extends State<ScoreWidget> with SingleTickerProviderStat
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final cardBg = isDark ? AppColors.darkSurface : Colors.white;
-    final shadowColor = isDark ? Colors.transparent : Colors.black.withValues(alpha: 0.04);
+    final shadowColor = isDark ? Colors.transparent : Colors.black.withOpacity(0.04);
     final borderColor = isDark ? AppColors.darkBorder : AppColors.border;
 
     return Container(
@@ -145,13 +145,13 @@ class _ScoreWidgetState extends State<ScoreWidget> with SingleTickerProviderStat
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 decoration: BoxDecoration(
                   color: widget.errorCount > 0
-                      ? AppColors.error.withValues(alpha: 0.1)
-                      : AppColors.success.withValues(alpha: 0.1),
+                      ? AppColors.error.withOpacity(0.1)
+                      : AppColors.success.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(20),
                   border: Border.all(
                     color: widget.errorCount > 0
-                        ? AppColors.error.withValues(alpha: 0.3)
-                        : AppColors.success.withValues(alpha: 0.3),
+                        ? AppColors.error.withOpacity(0.3)
+                        : AppColors.success.withOpacity(0.3),
                   ),
                 ),
                 child: Row(
@@ -173,9 +173,9 @@ class _ScoreWidgetState extends State<ScoreWidget> with SingleTickerProviderStat
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 decoration: BoxDecoration(
-                  color: AppColors.success.withValues(alpha: 0.1),
+                  color: AppColors.success.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: AppColors.success.withValues(alpha: 0.3)),
+                  border: Border.all(color: AppColors.success.withOpacity(0.3)),
                 ),
                 child: Row(
                   children: [

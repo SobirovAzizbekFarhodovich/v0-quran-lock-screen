@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:go_router/go_router.dart';
 import 'l10n/app_localizations.dart';
 
 import 'core/di/injector.dart';
@@ -27,18 +28,18 @@ class IslamicAiApp extends StatefulWidget {
 }
 
 class _IslamicAiAppState extends State<IslamicAiApp> {
-  late AuthBloc _authBloc;
+  late final AuthBloc _authBloc;
+  late final GoRouter _router;
 
   @override
   void initState() {
     super.initState();
     _authBloc = AuthBloc(getIt<ApiClient>())..add(AuthCheckEvent());
+    _router = createRouter(_authBloc);
   }
 
   @override
   Widget build(BuildContext context) {
-    final router = createRouter(_authBloc);
-
     return MultiBlocProvider(
       providers: [
         BlocProvider<AuthBloc>.value(value: _authBloc),
@@ -48,7 +49,7 @@ class _IslamicAiAppState extends State<IslamicAiApp> {
         debugShowCheckedModeBanner: false,
         theme: AppTheme.lightTheme,
         darkTheme: AppTheme.darkTheme,
-        themeMode: ThemeMode.system,
+        themeMode: ThemeMode.dark,
         localizationsDelegates: const [
           AppLocalizations.delegate,
           GlobalMaterialLocalizations.delegate,
@@ -61,7 +62,7 @@ class _IslamicAiAppState extends State<IslamicAiApp> {
           Locale('uz'),
           Locale.fromSubtags(languageCode: 'uz', scriptCode: 'Cyrl'),
         ],
-        routerConfig: router,
+        routerConfig: _router,
       ),
     );
   }

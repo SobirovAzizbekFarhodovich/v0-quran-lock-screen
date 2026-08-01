@@ -131,7 +131,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                 padding: const EdgeInsets.all(AppSpacing.md),
                                 decoration: BoxDecoration(
                                   shape: BoxShape.circle,
-                                  color: AppColors.primaryLight.withValues(alpha: 0.12),
+                                  color: AppColors.primaryLight.withOpacity(0.12),
                                 ),
                                 child: const Text(
                                   '☪',
@@ -181,7 +181,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             border: Border.all(color: Colors.grey.shade300),
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.04),
+                                color: Colors.black.withOpacity(0.04),
                                 blurRadius: 8,
                                 offset: const Offset(0, 2),
                               )
@@ -380,7 +380,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               ),
                               boxShadow: [
                                 BoxShadow(
-                                  color: AppColors.primary.withValues(alpha: 0.35),
+                                  color: AppColors.primary.withOpacity(0.35),
                                   blurRadius: 16,
                                   offset: const Offset(0, 6),
                                 ),
@@ -490,7 +490,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           'Davom etish orqali Foydalanish Shartlari va Maxfiylik Siyosatiga rozilik bildirasiz',
                           textAlign: TextAlign.center,
                           style: AppTextStyles.labelSmall.copyWith(
-                            color: isDark ? AppColors.darkText2.withValues(alpha: 0.6) : AppColors.textTertiary,
+                            color: isDark ? AppColors.darkText2.withOpacity(0.6) : AppColors.textTertiary,
                           ),
                         ),
                       ],
