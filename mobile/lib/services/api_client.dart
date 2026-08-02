@@ -11,7 +11,7 @@ class ApiClient extends ChangeNotifier {
       : _http = httpClient ?? http.Client(),
         _storage = storage ?? const FlutterSecureStorage();
 
-  static const String defaultBaseUrl = String.fromEnvironment('API_BASE_URL', defaultValue: 'http://18.197.97.234');
+  static const String defaultBaseUrl = String.fromEnvironment('API_BASE_URL', defaultValue: 'http://18.199.100.4');
   static const String serverUrlPreferenceKey = 'server_url';
 
   final http.Client _http;

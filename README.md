@@ -7,7 +7,7 @@ Bu o'zbek tilidagi Qur'on tarjimasini offline o'qish, qidirish, eslatmalar yarat
 Butun loyiha keraksiz papka va fayllardan (Flutter, Next.js, Go backend, Python AI va b.) butunlay tozalandi va faqatgina ishchi holatdagi Kotlin Android loyihasi saqlandi.
 
 ### Asosiy O'zgarishlar va Sozlamalar:
-1. **AWS Lightsail Server IP (`18.197.97.234`):**
+1. **AWS Lightsail Server IP (`18.199.100.4`):**
    - Ilovaning barcha API so'rovlari va ma'lumot yuklash sozlari ushbu serverga yo'naltirildi.
    - `QuranDataLoader` endi Qur'on oyatlarini ushbu serverdan yuklaydi.
    - `TadabburApiClient` sun'iy intellekt (Tadabbur Chat) so'rovlarini ushbu serverdagi API'ga yuboradi.
@@ -72,8 +72,8 @@ remote_backgrounds/            # Serverga yuklanadigan qo'shimcha rasmlar (bulut
 ---
 
 ## 💾 Serverga Yuklanadigan Rasmlar (Remote Backgrounds)
-`remote_backgrounds` papkasida joylashgan rasmlarni o'zingizning Lightsail serveringizga (`18.197.97.234`) quyidagi manzillar ostida joylashtiring:
-- `http://18.197.97.234/backgrounds/bg_remote_1.png`
-- `http://18.197.97.234/backgrounds/bg_remote_2.png`
+`remote_backgrounds` papkasida joylashgan rasmlarni o'zingizning Lightsail serveringizga (`18.199.100.4`) quyidagi manzillar ostida joylashtiring:
+- `http://18.199.100.4/backgrounds/bg_remote_1.png`
+- `http://18.199.100.4/backgrounds/bg_remote_2.png`
 
 Ilovadagi "Serverdan yuklash" bo'limi ushbu URL'lar orqali rasmlarni yuklab oladi.
