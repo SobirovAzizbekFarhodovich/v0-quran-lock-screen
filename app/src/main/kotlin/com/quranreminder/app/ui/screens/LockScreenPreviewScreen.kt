@@ -68,6 +68,8 @@ import com.quranreminder.app.lockscreen.LockScreenBackgroundManager
 import com.quranreminder.app.lockscreen.LockScreenVerseSelector
 import com.quranreminder.app.lockscreen.LockScreenWallpaperApplier
 import com.quranreminder.app.lockscreen.LockScreenWallpaperRenderer
+import com.quranreminder.app.ui.theme.NurIconButton
+import com.quranreminder.app.ui.theme.NurScreenHeader
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -141,25 +143,16 @@ fun LockScreenPreviewScreen(navController: NavHostController) {
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            IconButton(onClick = { navController.popBackStack() }) {
-                Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+        NurScreenHeader(
+            title = "Lock-screen oyati",
+            eyebrow = "Kunlik oyat",
+            leading = {
+                NurIconButton(Icons.Default.ArrowBack, "Orqaga", onClick = { navController.popBackStack() })
+            },
+            trailing = {
+                NurIconButton(Icons.Default.Refresh, "Yangi preview", onClick = { refreshKey++ })
             }
-            Text(
-                text = "Lock-screen preview",
-                style = MaterialTheme.typography.headlineSmall,
-                modifier = Modifier.weight(1f),
-                textAlign = TextAlign.Center
-            )
-            IconButton(onClick = { refreshKey++ }) {
-                Icon(Icons.Default.Refresh, contentDescription = "Yangi preview")
-            }
-        }
+        )
 
         LazyColumn(
             state = listState,
@@ -186,7 +179,7 @@ fun LockScreenPreviewScreen(navController: NavHostController) {
                                 modifier = Modifier
                                     .fillMaxSize()
                                     .padding(horizontal = 4.dp),
-                                shape = RoundedCornerShape(16.dp),
+                                shape = RoundedCornerShape(18.dp),
                                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                                 elevation = CardDefaults.cardElevation(defaultElevation = 6.dp)
                             ) {
@@ -528,4 +521,3 @@ private fun BackgroundPreviewControls(
         }
     }
 }
-

@@ -29,6 +29,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
 import com.quranreminder.app.database.Bookmark
+import com.quranreminder.app.ui.theme.NurIconButton
+import com.quranreminder.app.ui.theme.NurScreenHeader
 import com.quranreminder.app.ui.viewmodel.QuranViewModel
 
 @Composable
@@ -43,30 +45,13 @@ fun BookmarksScreen(
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
     ) {
-        // Header
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            IconButton(onClick = { navController.popBackStack() }) {
-                Icon(
-                    Icons.Default.ArrowBack,
-                    contentDescription = "Back",
-                    tint = MaterialTheme.colorScheme.primary
-                )
+        NurScreenHeader(
+            title = "Saqlangan oyatlar",
+            eyebrow = "Kitob belgilari",
+            leading = {
+                NurIconButton(Icons.Default.ArrowBack, "Orqaga", onClick = { navController.popBackStack() })
             }
-            Text(
-                text = "Bookmarks",
-                style = MaterialTheme.typography.headlineSmall,
-                color = MaterialTheme.colorScheme.onBackground,
-                modifier = Modifier.weight(1f),
-                textAlign = TextAlign.Center
-            )
-            Spacer(modifier = Modifier.padding(40.dp))
-        }
+        )
 
         if (bookmarks.isEmpty()) {
             Column(
@@ -119,7 +104,7 @@ fun BookmarkCard(
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface
         ),
-        shape = RoundedCornerShape(12.dp)
+        shape = RoundedCornerShape(18.dp)
     ) {
         Column(
             modifier = Modifier
@@ -127,7 +112,7 @@ fun BookmarkCard(
                 .padding(16.dp)
         ) {
             Text(
-                text = "Surah ${bookmark.surahNumber}, Ayah ${bookmark.ayahNumber}",
+                text = "Sura ${bookmark.surahNumber}, Oyat ${bookmark.ayahNumber}",
                 style = MaterialTheme.typography.headlineSmall,
                 color = MaterialTheme.colorScheme.primary
             )

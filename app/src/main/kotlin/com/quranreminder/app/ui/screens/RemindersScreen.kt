@@ -40,6 +40,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.navigation.NavHostController
 import com.quranreminder.app.database.Reminder
+import com.quranreminder.app.ui.theme.NurIconButton
+import com.quranreminder.app.ui.theme.NurScreenHeader
 import com.quranreminder.app.ui.viewmodel.ReminderViewModel
 
 @Composable
@@ -55,30 +57,13 @@ fun RemindersScreen(
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
     ) {
-        // Header
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            IconButton(onClick = { navController.popBackStack() }) {
-                Icon(
-                    Icons.Default.ArrowBack,
-                    contentDescription = "Back",
-                    tint = MaterialTheme.colorScheme.primary
-                )
+        NurScreenHeader(
+            title = "Eslatmalar",
+            eyebrow = "Tilovat vaqtlari",
+            leading = {
+                NurIconButton(Icons.Default.ArrowBack, "Orqaga", onClick = { navController.popBackStack() })
             }
-            Text(
-                text = "Reminders",
-                style = MaterialTheme.typography.headlineSmall,
-                color = MaterialTheme.colorScheme.onBackground,
-                modifier = Modifier.weight(1f),
-                textAlign = TextAlign.Center
-            )
-            Spacer(modifier = Modifier.padding(40.dp))
-        }
+        )
 
         if (reminders.isEmpty()) {
             Column(
@@ -89,12 +74,12 @@ fun RemindersScreen(
                 verticalArrangement = Arrangement.Center
             ) {
                 Text(
-                    text = "No reminders yet",
+                    text = "Hali eslatma yo'q",
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onBackground
                 )
                 Text(
-                    text = "Tap + to add a new reminder",
+                    text = "+ tugmasi orqali yangi eslatma qo'shing",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
                 )
@@ -127,7 +112,7 @@ fun RemindersScreen(
                 .padding(16.dp),
             containerColor = MaterialTheme.colorScheme.primary
         ) {
-            Icon(Icons.Default.Add, contentDescription = "Add Reminder")
+            Icon(Icons.Default.Add, contentDescription = "Eslatma qo'shish")
         }
 
         if (showDialog.value) {
@@ -153,7 +138,7 @@ fun ReminderCard(
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface
         ),
-        shape = RoundedCornerShape(12.dp)
+        shape = RoundedCornerShape(18.dp)
     ) {
         Row(
             modifier = Modifier
@@ -164,7 +149,7 @@ fun ReminderCard(
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = "Surah ${reminder.surahNumber}, Ayah ${reminder.ayahNumber}",
+                    text = "Sura ${reminder.surahNumber}, Oyat ${reminder.ayahNumber}",
                     style = MaterialTheme.typography.headlineSmall,
                     color = MaterialTheme.colorScheme.primary
                 )

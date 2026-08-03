@@ -1,6 +1,6 @@
 # Temporary HTTP deployment
 
-This guide is for short-term testing on `http://18.199.100.4` before a domain
+This guide is for short-term testing on `http://18.195.218.23` before a domain
 and HTTPS certificate are available. Do not share the app widely in this mode:
 passwords, access tokens and recitation audio are not encrypted over HTTP.
 
@@ -36,7 +36,7 @@ enough for the app:
 
 ```dotenv
 APP_ENV=staging
-PUBLIC_BASE_URL=http://18.199.100.4
+PUBLIC_BASE_URL=http://18.195.218.23
 PASSWORD_RESET_URL=islamicai:///reset-password
 
 POSTGRES_PASSWORD=<long-random-password>
@@ -44,7 +44,7 @@ DATABASE_URL=postgres://islamic_ai:<long-random-password>@postgres:5432/islamic_
 REDIS_PASSWORD=<another-long-random-password>
 JWT_SECRET=<at-least-32-random-characters>
 
-CORS_ORIGINS=http://18.199.100.4
+CORS_ORIGINS=http://18.195.218.23
 GEMINI_API_KEY=<optional-but-needed-for-AI>
 # Or use OPENROUTER_API_KEY=<key> instead.
 ```
@@ -64,9 +64,9 @@ The first RAG initialization can take several minutes because it builds the
 ChromaDB index. Then test from the server or another machine:
 
 ```bash
-curl http://18.199.100.4/healthz
-curl -s http://18.199.100.4/api/quran/verses | head -c 200
-curl -I http://18.199.100.4/backgrounds/bg_remote_1.png
+curl http://18.195.218.23/healthz
+curl -s http://18.195.218.23/api/quran/verses | head -c 200
+curl -I http://18.195.218.23/backgrounds/bg_remote_1.png
 ```
 
 Expected results are an `{"status":"ok"}` health response, JSON beginning
@@ -74,7 +74,7 @@ with `{"verses":`, and `HTTP/1.1 200 OK` for the image.
 
 ## 4. Install the Android test APK
 
-The Kotlin app uses `http://18.199.100.4` by default. Build it with:
+The Kotlin app uses `http://18.195.218.23` by default. Build it with:
 
 ```bash
 ./gradlew :app:assembleDebug

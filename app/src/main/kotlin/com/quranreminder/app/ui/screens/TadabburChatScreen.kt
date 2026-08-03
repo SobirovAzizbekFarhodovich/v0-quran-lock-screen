@@ -2,6 +2,7 @@ package com.quranreminder.app.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -9,6 +10,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -18,10 +21,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -35,22 +35,27 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
 import com.quranreminder.app.tadabbur.EvidenceType
 import com.quranreminder.app.tadabbur.TadabburAnswer
 import com.quranreminder.app.tadabbur.TadabburEvidence
 import com.quranreminder.app.tadabbur.TadabburRepository
+import com.quranreminder.app.ui.theme.NurColors
+import com.quranreminder.app.ui.theme.NurEmblem
+import com.quranreminder.app.ui.theme.NurIconButton
+import com.quranreminder.app.ui.theme.NurPill
+import com.quranreminder.app.ui.theme.NurScreenHeader
+import com.quranreminder.app.ui.theme.NurSectionTitle
+import com.quranreminder.app.ui.theme.NurSurfaceCard
 import kotlinx.coroutines.launch
 
 @Composable
 fun TadabburChatScreen(navController: NavHostController) {
-    val context = LocalContext.current
+    val context = androidx.compose.ui.platform.LocalContext.current
     val repository = remember { TadabburRepository(context) }
     val scope = rememberCoroutineScope()
     val messages = remember { mutableStateListOf<ChatMessage>() }
@@ -80,42 +85,33 @@ fun TadabburChatScreen(navController: NavHostController) {
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            IconButton(onClick = { navController.popBackStack() }) {
-                Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+        NurScreenHeader(
+            title = "Islomiy AI yordamchi",
+            eyebrow = "Nur AI · ishonchli manbalar",
+            leading = {
+                NurIconButton(
+                    icon = Icons.Default.ArrowBack,
+                    contentDescription = "Orqaga",
+                    onClick = { navController.popBackStack() }
+                )
             }
-            Text(
-                text = "Tadabbur AI",
-                style = MaterialTheme.typography.headlineSmall,
-                modifier = Modifier.weight(1f),
-                textAlign = TextAlign.Center
-            )
-            Spacer(modifier = Modifier.padding(24.dp))
-        }
+        )
 
         LazyColumn(
             modifier = Modifier
                 .weight(1f)
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp),
+                .fillMaxWidth(),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(
+                start = 20.dp,
+                end = 20.dp,
+                top = 8.dp,
+                bottom = 16.dp
+            ),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             if (messages.isEmpty()) {
                 item {
-                    Text(
-                        text = "Holatingizni yozing — AI sizga Qur'on va Hadisdan mos dalillarni topib beradi",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 32.dp),
-                        textAlign = TextAlign.Center
-                    )
+                    EmptyChatState()
                 }
             }
             items(messages) { message ->
@@ -126,12 +122,17 @@ fun TadabburChatScreen(navController: NavHostController) {
             }
             if (isLoading) {
                 item {
-                    Text(
-                        text = "AI tahlil qilmoqda... 🤖",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.65f),
-                        modifier = Modifier.padding(vertical = 8.dp)
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        NurEmblem(size = 26.dp)
+                        Text(
+                            text = "AI tahlil qilmoqda...",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.67f)
+                        )
+                    }
                 }
             }
         }
@@ -139,7 +140,8 @@ fun TadabburChatScreen(navController: NavHostController) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(12.dp),
+                .background(MaterialTheme.colorScheme.background)
+                .padding(horizontal = 16.dp, vertical = 12.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.Bottom
         ) {
@@ -147,39 +149,71 @@ fun TadabburChatScreen(navController: NavHostController) {
                 value = input,
                 onValueChange = { input = it },
                 modifier = Modifier.weight(1f),
-                placeholder = { Text("Masalan: ko'nglim siqilyapti...") },
-                maxLines = 4,
+                placeholder = { Text("Savolingizni yozing...") },
+                shape = RoundedCornerShape(20.dp),
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
-                keyboardActions = KeyboardActions(onSend = { send() })
+                keyboardActions = KeyboardActions(onSend = { send() }),
+                maxLines = 4
             )
-            Button(
-                enabled = input.isNotBlank() && !isLoading,
-                onClick = { send() }
+            NurIconButton(
+                icon = Icons.Default.Send,
+                contentDescription = "Yuborish",
+                onClick = { send() },
+                modifier = Modifier.size(48.dp),
+                emphasized = true
+            )
+        }
+    }
+}
+
+@Composable
+private fun EmptyChatState() {
+    NurSurfaceCard(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 28.dp),
+        containerColor = MaterialTheme.colorScheme.surface
+    ) {
+        Column(
+            modifier = Modifier.padding(22.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(48.dp)
+                    .background(NurColors.Ink, androidx.compose.foundation.shape.CircleShape),
+                contentAlignment = Alignment.Center
             ) {
-                Icon(Icons.Default.Send, contentDescription = "Yuborish")
+                NurEmblem(size = 24.dp, color = NurColors.GoldSoft)
             }
+            Text(
+                text = "Assalomu alaykum",
+                style = MaterialTheme.typography.headlineSmall,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                text = "Savolingizni yozing — AI Qur'on va hadisdan mos dalillarni topib beradi.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+            )
         }
     }
 }
 
 @Composable
 private fun UserBubble(text: String) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.End
-    ) {
-        Card(
-            modifier = Modifier.fillMaxWidth(0.86f),
-            shape = RoundedCornerShape(8.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.13f)
-            )
+    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+        Box(
+            modifier = Modifier
+                .background(NurColors.Gold, RoundedCornerShape(16.dp, 16.dp, 4.dp, 16.dp))
+                .padding(horizontal = 14.dp, vertical = 12.dp)
         ) {
             Text(
                 text = text,
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.padding(12.dp)
+                style = MaterialTheme.typography.bodyMedium,
+                color = NurColors.Charcoal
             )
         }
     }
@@ -187,42 +221,55 @@ private fun UserBubble(text: String) {
 
 @Composable
 private fun AssistantAnswer(answer: TadabburAnswer) {
-    Column(
+    Row(
         modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+        verticalAlignment = Alignment.Top
     ) {
-        Text(
-            text = answer.intro,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.82f),
-            modifier = Modifier.padding(horizontal = 2.dp)
-        )
-        if (answer.aiInsight.isNotBlank()) {
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
-                )
-            ) {
+        Box(
+            modifier = Modifier
+                .size(32.dp)
+                .background(NurColors.Ink, androidx.compose.foundation.shape.CircleShape),
+            contentAlignment = Alignment.Center
+        ) {
+            NurEmblem(size = 18.dp, color = NurColors.GoldSoft)
+        }
+        Spacer(modifier = Modifier.width(10.dp))
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            NurSurfaceCard(modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(14.dp)) {
                     Text(
-                        text = "💡 AI Tavsiyasi",
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Text(
-                        text = answer.aiInsight,
+                        text = answer.intro,
                         style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f)
+                        color = MaterialTheme.colorScheme.onSurface
                     )
+                    if (answer.aiInsight.isNotBlank()) {
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(NurColors.SageSoft, RoundedCornerShape(12.dp))
+                                .padding(12.dp)
+                        ) {
+                            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Text(
+                                    text = "AI tavsiyasi",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = NurColors.Sage
+                                )
+                                Text(
+                                    text = answer.aiInsight,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+                        }
+                    }
                 }
             }
-        }
-        answer.evidence.forEach { evidence ->
-            EvidenceCard(evidence)
+            answer.evidence.forEach { EvidenceCard(it) }
         }
     }
 }
@@ -231,59 +278,46 @@ private fun AssistantAnswer(answer: TadabburAnswer) {
 private fun EvidenceCard(evidence: TadabburEvidence) {
     var expanded by remember(evidence.title, evidence.text) { mutableStateOf(false) }
     val canExpand = evidence.type == EvidenceType.HADITH && evidence.text.length > 520
-    val tone = if (evidence.type == EvidenceType.QURAN) {
-        MaterialTheme.colorScheme.primary
-    } else {
-        MaterialTheme.colorScheme.tertiary
-    }
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(8.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-    ) {
+    val tone = if (evidence.type == EvidenceType.QURAN) NurColors.Sage else NurColors.Gold
+
+    NurSurfaceCard(modifier = Modifier.fillMaxWidth()) {
         Column(
             modifier = Modifier.padding(14.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Text(
-                text = "${evidence.type.label} • ${evidence.title}",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-                color = tone
-            )
-            HighlightTags(highlights = evidence.highlights)
+            NurSectionTitle("${evidence.type.label} · ${evidence.title}")
+            HighlightTags(evidence.highlights)
             Text(
                 text = evidence.text,
-                style = MaterialTheme.typography.bodyMedium,
+                style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurface,
                 maxLines = if (expanded || !canExpand) Int.MAX_VALUE else 9,
                 overflow = TextOverflow.Ellipsis
             )
             if (canExpand) {
-                TextButton(
-                    modifier = Modifier.align(Alignment.End),
-                    onClick = { expanded = !expanded }
-                ) {
-                    Text(if (expanded) "Kamroq ko'rsatish" else "Show more")
+                TextButton(onClick = { expanded = !expanded }) {
+                    Text(
+                        text = if (expanded) "Kamroq ko'rsatish" else "Ko'proq ko'rsatish",
+                        color = tone
+                    )
                 }
             }
             if (evidence.narrator.isNotBlank()) {
                 Text(
                     text = "Roviy: ${evidence.narrator}",
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f)
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-            Text(
+            NurPill(
                 text = evidence.source,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.62f)
+                tone = NurColors.SageSoft
             )
             if (evidence.aiRelevance.isNotBlank()) {
                 Text(
                     text = "✦ ${evidence.aiRelevance}",
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.75f),
+                    color = tone,
                     fontWeight = FontWeight.Medium
                 )
             }
@@ -293,27 +327,10 @@ private fun EvidenceCard(evidence: TadabburEvidence) {
 
 @Composable
 private fun HighlightTags(highlights: List<String>) {
-    val visible = highlights.filter { it.isNotBlank() }.take(6)
+    val visible = highlights.filter { it.isNotBlank() }.take(4)
     if (visible.isEmpty()) return
-
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        visible.chunked(2).forEach { rowItems ->
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                rowItems.forEach { highlight ->
-                    Text(
-                        text = highlight,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.76f),
-                        modifier = Modifier
-                            .background(
-                                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.10f),
-                                shape = RoundedCornerShape(50)
-                            )
-                            .padding(horizontal = 8.dp, vertical = 4.dp)
-                    )
-                }
-            }
-        }
+    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        visible.forEach { NurPill(text = it) }
     }
 }
 

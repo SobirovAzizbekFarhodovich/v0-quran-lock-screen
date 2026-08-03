@@ -3,6 +3,7 @@ package com.quranreminder.app.ui.screens
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -10,21 +11,17 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.BookmarkBorder
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Share
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -33,11 +30,18 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
 import com.quranreminder.app.database.QuranVerse
 import com.quranreminder.app.lockscreen.LockScreenWallpaperApplier
+import com.quranreminder.app.ui.theme.NurColors
+import com.quranreminder.app.ui.theme.NurEmblem
+import com.quranreminder.app.ui.theme.NurIconButton
+import com.quranreminder.app.ui.theme.NurPill
+import com.quranreminder.app.ui.theme.NurScreenHeader
+import com.quranreminder.app.ui.theme.NurSectionTitle
+import com.quranreminder.app.ui.theme.NurSurfaceCard
 import com.quranreminder.app.ui.viewmodel.QuranViewModel
 import kotlinx.coroutines.launch
 
@@ -50,39 +54,36 @@ fun SurahDetailScreen(
 ) {
     val verses = viewModel.currentSurahVerses.collectAsState().value
     val bookmarkedVerseKeys = viewModel.bookmarkedVerseKeys.collectAsState().value
-    val context = LocalContext.current
+    val context = androidx.compose.ui.platform.LocalContext.current
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
 
-    LaunchedEffect(surahNumber) {
-        viewModel.loadSurahVerses(surahNumber)
-    }
+    LaunchedEffect(surahNumber) { viewModel.loadSurahVerses(surahNumber) }
 
     if (verses.isEmpty()) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .background(MaterialTheme.colorScheme.background)
-                .padding(16.dp),
+                .background(MaterialTheme.colorScheme.background),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
+            NurEmblem(size = 46.dp)
+            Spacer(modifier = Modifier.height(16.dp))
             Text(
-                text = "Loading...",
-                color = MaterialTheme.colorScheme.onBackground
+                text = "Oyatlar yuklanmoqda...",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f)
             )
         }
         return
     }
 
     val firstVerse = verses.first()
-
     LaunchedEffect(verses, targetAyahNumber) {
         val target = targetAyahNumber ?: return@LaunchedEffect
         val index = verses.indexOfFirst { it.ayahNumber == target }
-        if (index >= 0) {
-            listState.scrollToItem(index)
-        }
+        if (index >= 0) listState.scrollToItem(index)
     }
 
     Column(
@@ -90,59 +91,44 @@ fun SurahDetailScreen(
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
     ) {
-        // Header
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            IconButton(onClick = { navController.popBackStack() }) {
-                Icon(
-                    Icons.Default.ArrowBack,
-                    contentDescription = "Back",
-                    tint = MaterialTheme.colorScheme.primary
+        NurScreenHeader(
+            title = firstVerse.surahName,
+            eyebrow = firstVerse.surahNameArabic.ifBlank { "Qur'oni Karim" },
+            leading = {
+                NurIconButton(
+                    icon = Icons.Default.ArrowBack,
+                    contentDescription = "Orqaga",
+                    onClick = { navController.popBackStack() }
                 )
             }
-            Column(
-                modifier = Modifier.weight(1f),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Text(
-                    text = firstVerse.surahName,
-                    style = MaterialTheme.typography.headlineSmall,
-                    color = MaterialTheme.colorScheme.onBackground
-                )
-                Text(
-                    text = firstVerse.surahNameArabic,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.primary
-                )
-            }
-            Spacer(modifier = Modifier.width(48.dp))
-        }
+        )
 
-        Spacer(modifier = Modifier.height(8.dp))
-
-        // Verses list
         LazyColumn(
             state = listState,
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 16.dp),
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(
+                start = 20.dp,
+                end = 20.dp,
+                bottom = 24.dp
+            ),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            items(verses) { verse ->
+            item {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    NurPill(text = "O'ZBEK TARJIMASI")
+                    if (verses.any { it.ayahTextArabic.isNotBlank() }) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            TajwidLegend("Madd", NurColors.Terracotta)
+                            TajwidLegend("Ixfo", NurColors.Sage)
+                        }
+                    }
+                }
+            }
+            items(verses, key = { it.id }) { verse ->
                 VerseDetailCard(
                     verse = verse,
-                    isBookmarked = QuranViewModel.verseKey(
-                        verse.surahNumber,
-                        verse.ayahNumber
-                    ) in bookmarkedVerseKeys,
-                    onBookmarkClick = {
-                        viewModel.toggleBookmark(verse.surahNumber, verse.ayahNumber)
-                    },
+                    isBookmarked = QuranViewModel.verseKey(verse.surahNumber, verse.ayahNumber) in bookmarkedVerseKeys,
+                    onBookmarkClick = { viewModel.toggleBookmark(verse.surahNumber, verse.ayahNumber) },
                     onLockScreenClick = {
                         scope.launch {
                             runCatching {
@@ -157,16 +143,32 @@ fun SurahDetailScreen(
                     },
                     onShareClick = {
                         scope.launch {
-                            runCatching {
-                                LockScreenWallpaperApplier.shareImage(context, verse)
-                            }.onFailure {
-                                Toast.makeText(context, "Rasm ulashilmadi", Toast.LENGTH_SHORT).show()
-                            }
+                            runCatching { LockScreenWallpaperApplier.shareImage(context, verse) }
+                                .onFailure {
+                                    Toast.makeText(context, "Rasm ulashilmadi", Toast.LENGTH_SHORT).show()
+                                }
                         }
                     }
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun TajwidLegend(label: String, color: androidx.compose.ui.graphics.Color) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Box(
+            modifier = Modifier
+                .size(8.dp)
+                .background(color, androidx.compose.foundation.shape.CircleShape)
+        )
+        Spacer(modifier = Modifier.width(5.dp))
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
 }
 
@@ -178,72 +180,62 @@ fun VerseDetailCard(
     onLockScreenClick: () -> Unit,
     onShareClick: () -> Unit
 ) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
-        ),
-        shape = RoundedCornerShape(12.dp)
-    ) {
+    NurSurfaceCard(modifier = Modifier.fillMaxWidth()) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp)
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = "Oyat ${verse.ayahNumber}",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.primary
-                )
-                Row {
-                    IconButton(onClick = onShareClick) {
-                        Icon(
-                            imageVector = Icons.Default.Share,
-                            contentDescription = "Rasm qilib ulashish",
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                    }
-                    IconButton(onClick = onLockScreenClick) {
-                        Icon(
-                            imageVector = Icons.Default.Lock,
-                            contentDescription = "Lock-screen uchun tanlash",
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                    }
-                    IconButton(onClick = onBookmarkClick) {
-                        Icon(
-                            imageVector = if (isBookmarked) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
-                            contentDescription = "Saqlash",
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                    }
+                Box(
+                    modifier = Modifier.size(30.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    NurEmblem(size = 30.dp)
+                    Text(
+                        text = verse.ayahNumber.toString(),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = NurColors.Ink
+                    )
                 }
+                Spacer(modifier = Modifier.width(8.dp))
+                NurSectionTitle("Oyat ${verse.ayahNumber}", modifier = Modifier.weight(1f))
+                NurIconButton(Icons.Default.Share, "Rasm qilib ulashish", onShareClick)
+                Spacer(modifier = Modifier.width(6.dp))
+                NurIconButton(Icons.Default.Lock, "Lock-screen uchun tanlash", onLockScreenClick)
+                Spacer(modifier = Modifier.width(6.dp))
+                NurIconButton(
+                    if (isBookmarked) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
+                    "Saqlash",
+                    onBookmarkClick,
+                    emphasized = isBookmarked
+                )
             }
 
-            // The bundled server data currently contains a complete Uzbek
-            // translation set.  Do not render a fake Arabic placeholder when
-            // an Arabic source has not been imported yet.
             if (verse.ayahTextArabic.isNotBlank()) {
                 Text(
                     text = verse.ayahTextArabic,
-                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.fillMaxWidth(),
+                    style = MaterialTheme.typography.titleLarge,
                     color = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 12.dp)
+                    textAlign = TextAlign.End
                 )
             }
-
-            // Translation
+            if (verse.transliteration.isNotBlank()) {
+                Text(
+                    text = verse.transliteration,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
             Text(
                 text = verse.translation,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface
             )
         }
     }

@@ -29,6 +29,7 @@ import com.quranreminder.app.ui.screens.SettingsScreen
 import com.quranreminder.app.ui.screens.SurahDetailScreen
 import com.quranreminder.app.ui.screens.TadabburChatScreen
 import com.quranreminder.app.ui.theme.QuranReminderTheme
+import com.quranreminder.app.ui.theme.NurColors
 import com.quranreminder.app.ui.viewmodel.QuranViewModel
 import com.quranreminder.app.ui.viewmodel.QuranViewModelFactory
 import com.quranreminder.app.ui.viewmodel.ReminderViewModel
@@ -43,7 +44,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.material3.CircularProgressIndicator
 
 class MainActivity : ComponentActivity() {
@@ -107,10 +107,10 @@ class MainActivity : ComponentActivity() {
                 }
             } else {
                 Box(
-                    modifier = Modifier.fillMaxSize().background(Color(0xFF0F3042)),
+                    modifier = Modifier.fillMaxSize().background(NurColors.Parchment),
                     contentAlignment = Alignment.Center
                 ) {
-                    CircularProgressIndicator(color = Color.White)
+                    CircularProgressIndicator(color = NurColors.Gold)
                 }
             }
         }

@@ -7,6 +7,7 @@ Qur'oniy duolar, Ibodat va Muqaddas oylar bo'yicha to'plangan ma'lumotlarni Chro
 """
 
 import argparse
+import hashlib
 import json
 import os
 import sys
@@ -16,10 +17,29 @@ import chromadb
 from chromadb.config import Settings
 from chromadb.utils.embedding_functions import SentenceTransformerEmbeddingFunction
 
-# Ko'p tilli embedding model — barcha tillarni yaxshi qo'llab-quvvatlaydi
-EMBEDDING_FN = SentenceTransformerEmbeddingFunction(
-    model_name="sentence-transformers/paraphrase-multilingual-mpnet-base-v2"
-)
+# Embedding modelini faqat indeksni haqiqatan qayta qurish kerak bo'lganda
+# yuklaymiz. Oldingi variantda tayyor collectionlar ham har deployda modelni
+# yuklab, barcha collectionlarni o'chirib qayta hisoblar edi.
+_embedding_fn: SentenceTransformerEmbeddingFunction | None = None
+
+
+def embedding_function() -> SentenceTransformerEmbeddingFunction:
+    global _embedding_fn
+    if _embedding_fn is None:
+        _embedding_fn = SentenceTransformerEmbeddingFunction(
+            model_name="sentence-transformers/paraphrase-multilingual-mpnet-base-v2"
+        )
+    return _embedding_fn
+
+
+def fingerprint_file(filepath: Path, suffix: str = "") -> str:
+    """Manba fayli va indeks parametrlaridan barqaror fingerprint yaratadi."""
+    digest = hashlib.sha256()
+    with filepath.open("rb") as source:
+        for chunk in iter(lambda: source.read(1024 * 1024), b""):
+            digest.update(chunk)
+    digest.update(suffix.encode("utf-8"))
+    return digest.hexdigest()
 
 
 def load_jsonl(filepath: Path) -> list[dict]:
@@ -160,20 +180,38 @@ def ingest_to_chromadb(
     documents: list[str],
     metadatas: list[dict],
     batch_size: int = 200,
-) -> None:
+    source_fingerprint: str = "",
+    force: bool = False,
+) -> bool:
     """ChromaDB collectionga ma'lumot joylaydi."""
+    total = len(ids)
+    existing = None
     try:
-        client.delete_collection(collection_name)
+        existing = client.get_collection(collection_name)
     except Exception:
-        pass
+        existing = None
+
+    is_current = (
+        existing is not None
+        and not force
+        and existing.count() == total
+        and (existing.metadata or {}).get("source_fingerprint") == source_fingerprint
+    )
+    if is_current:
+        print(f"⏭️  {collection_name}: o'zgarmagan ({total} documents), o'tkazib yuborildi")
+        return False
+    if existing is not None:
+        client.delete_collection(collection_name)
 
     collection = client.get_or_create_collection(
         name=collection_name,
-        metadata={"hnsw:space": "cosine"},
-        embedding_function=EMBEDDING_FN,
+        metadata={
+            "hnsw:space": "cosine",
+            "source_fingerprint": source_fingerprint,
+        },
+        embedding_function=embedding_function(),
     )
 
-    total = len(ids)
     for start in range(0, total, batch_size):
         end = min(start + batch_size, total)
         collection.add(
@@ -184,6 +222,7 @@ def ingest_to_chromadb(
         print(f"  [{collection_name}] {end}/{total} documents joylandi")
 
     print(f"✅ {collection_name}: {total} documents jami")
+    return True
 
 
 def main() -> None:
@@ -196,6 +235,11 @@ def main() -> None:
                         default=int(os.getenv("CHROMA_PORT", "8000")))
     parser.add_argument("--chunk-size", type=int, default=5)
     parser.add_argument("--overlap", type=int, default=2)
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Collectionlar o'zgarmagan bo'lsa ham majburan qayta qurish",
+    )
     args = parser.parse_args()
 
     print(f"ChromaDB ga ulanish: {args.chroma_host}:{args.chroma_port}")
@@ -236,17 +280,44 @@ def main() -> None:
         if entry_type == "quran":
             verse_collection = f"quran_verses_{lang}"
             v_ids, v_docs, v_metas = create_verse_documents(entries)
-            ingest_to_chromadb(client, verse_collection, v_ids, v_docs, v_metas)
+            ingest_to_chromadb(
+                client,
+                verse_collection,
+                v_ids,
+                v_docs,
+                v_metas,
+                source_fingerprint=fingerprint_file(filepath, "quran-verses-v1"),
+                force=args.force,
+            )
 
             chunk_collection = f"quran_chunks_{lang}"
             c_ids, c_docs, c_metas = create_contextual_chunks(
                 entries, chunk_size=args.chunk_size, overlap=args.overlap
             )
-            ingest_to_chromadb(client, chunk_collection, c_ids, c_docs, c_metas)
+            ingest_to_chromadb(
+                client,
+                chunk_collection,
+                c_ids,
+                c_docs,
+                c_metas,
+                source_fingerprint=fingerprint_file(
+                    filepath,
+                    f"quran-chunks-v1:{args.chunk_size}:{args.overlap}",
+                ),
+                force=args.force,
+            )
         else:
             collection_name = f"{entry_type}_{lang}"
             d_ids, d_docs, d_metas = create_generic_documents(entries)
-            ingest_to_chromadb(client, collection_name, d_ids, d_docs, d_metas)
+            ingest_to_chromadb(
+                client,
+                collection_name,
+                d_ids,
+                d_docs,
+                d_metas,
+                source_fingerprint=fingerprint_file(filepath, "generic-v1"),
+                force=args.force,
+            )
 
     print(f"\n{'='*60}")
     print("Barcha collectionlar:")

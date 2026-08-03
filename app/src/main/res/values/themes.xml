@@ -2,8 +2,8 @@
 <resources>
     <style name="Theme.QuranReminder" parent="android:Theme.Material.Light.NoActionBar">
         <item name="android:colorAccent">@color/secondary</item>
-        <item name="android:statusBarColor">@color/white</item>
-        <item name="android:navigationBarColor">@color/white</item>
+        <item name="android:statusBarColor">@color/parchment</item>
+        <item name="android:navigationBarColor">@color/parchment</item>
         <item name="android:windowLightStatusBar">true</item>
     </style>
 

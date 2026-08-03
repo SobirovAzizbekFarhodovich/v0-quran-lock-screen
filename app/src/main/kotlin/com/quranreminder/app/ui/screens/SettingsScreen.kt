@@ -37,6 +37,8 @@ import com.quranreminder.app.database.AppSettings
 import com.quranreminder.app.lockscreen.DailyAyahScheduler
 import com.quranreminder.app.lockscreen.LockScreenAyahCategory
 import com.quranreminder.app.lockscreen.LockScreenWallpaperApplier
+import com.quranreminder.app.ui.theme.NurScreenHeader
+import com.quranreminder.app.ui.theme.NurSectionTitle
 import com.quranreminder.app.ui.viewmodel.SettingsViewModel
 
 @Composable
@@ -55,30 +57,19 @@ fun SettingsScreen(
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
     ) {
-        // Header
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            IconButton(onClick = { navController.popBackStack() }) {
-                Icon(
-                    Icons.Default.ArrowBack,
-                    contentDescription = "Back",
-                    tint = MaterialTheme.colorScheme.primary
-                )
+        NurScreenHeader(
+            title = "Sozlamalar",
+            eyebrow = "Nur",
+            leading = {
+                androidx.compose.material3.IconButton(onClick = { navController.popBackStack() }) {
+                    Icon(
+                        Icons.Default.ArrowBack,
+                        contentDescription = "Orqaga",
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
             }
-            Text(
-                text = "Settings",
-                style = MaterialTheme.typography.headlineSmall,
-                color = MaterialTheme.colorScheme.onBackground,
-                modifier = Modifier.weight(1f),
-                textAlign = TextAlign.Center
-            )
-            Spacer(modifier = Modifier.padding(40.dp))
-        }
+        )
 
         LazyColumn(
             modifier = Modifier
@@ -87,24 +78,24 @@ fun SettingsScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             item {
-                SettingSection(title = "Notifications")
+                SettingSection(title = "Bildirishnomalar")
                 SettingToggle(
-                    label = "Enable Notifications",
+                    label = "Bildirishnomalarni yoqish",
                     isChecked = settings.notificationsEnabled,
                     onCheckedChange = { viewModel.toggleNotifications() }
                 )
                 SettingToggle(
-                    label = "Vibrate on Reminder",
+                    label = "Eslatmada vibratsiya",
                     isChecked = settings.vibrateOnReminder,
                     onCheckedChange = { viewModel.toggleVibration() }
                 )
                 SettingToggle(
-                    label = "Sound Enabled",
+                    label = "Ovozli eslatma",
                     isChecked = settings.soundEnabled,
                     onCheckedChange = { viewModel.toggleSound() }
                 )
                 SettingToggle(
-                    label = "Lock Screen Notifications",
+                    label = "Lock-screen bildirishnomalari",
                     isChecked = settings.lockScreenNotifications,
                     onCheckedChange = { viewModel.toggleLockScreenNotifications() }
                 )
@@ -112,15 +103,15 @@ fun SettingsScreen(
 
             item {
                 Spacer(modifier = Modifier.height(16.dp))
-                SettingSection(title = "Display")
+                SettingSection(title = "Ko'rinish")
                 SettingSlider(
-                    label = "Font Size",
+                    label = "Matn kattaligi",
                     value = settings.fontSize.toFloat(),
                     onValueChange = { viewModel.setFontSize(it.toInt()) },
                     valueRange = 12f..24f
                 )
                 SettingToggle(
-                    label = "Dark Mode",
+                    label = "Tungi ko'rinish",
                     isChecked = settings.darkMode,
                     onCheckedChange = { viewModel.toggleDarkMode() }
                 )
@@ -147,28 +138,28 @@ fun SettingsScreen(
 
             item {
                 Spacer(modifier = Modifier.height(16.dp))
-                SettingSection(title = "About")
+                SettingSection(title = "Ilova haqida")
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     colors = CardDefaults.cardColors(
                         containerColor = MaterialTheme.colorScheme.surface
                     ),
-                    shape = RoundedCornerShape(12.dp)
+                    shape = RoundedCornerShape(18.dp)
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Text(
-                            text = "Quran Reminder",
+                            text = "Nur",
                             style = MaterialTheme.typography.headlineSmall,
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
-                            text = "Version 1.0.0",
+                            text = "Qur'oni Karim yordamchisi · 1.0.0",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
-                            text = "Ruxsatli JSON data importi orqali offline Qur'on o'qish va eslatmalar",
+                            text = "Qur'on o'qish, eslatmalar, lock-screen oyati va ishonchli manbalarga asoslangan yordamchi.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                         )
@@ -190,7 +181,7 @@ fun LockScreenControls(
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        shape = RoundedCornerShape(12.dp)
+        shape = RoundedCornerShape(18.dp)
     ) {
         Column(
             modifier = Modifier.padding(16.dp),
@@ -290,12 +281,7 @@ fun LockScreenControls(
 
 @Composable
 fun SettingSection(title: String) {
-    Text(
-        text = title,
-        style = MaterialTheme.typography.headlineSmall,
-        color = MaterialTheme.colorScheme.primary,
-        modifier = Modifier.padding(vertical = 8.dp)
-    )
+    NurSectionTitle(text = title, modifier = Modifier.padding(vertical = 8.dp))
 }
 
 @Composable
@@ -309,7 +295,7 @@ fun SettingToggle(
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface
         ),
-        shape = RoundedCornerShape(12.dp)
+        shape = RoundedCornerShape(18.dp)
     ) {
         Row(
             modifier = Modifier
@@ -344,7 +330,7 @@ fun SettingSlider(
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface
         ),
-        shape = RoundedCornerShape(12.dp)
+        shape = RoundedCornerShape(18.dp)
     ) {
         Column(
             modifier = Modifier

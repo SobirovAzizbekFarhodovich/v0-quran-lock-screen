@@ -7,41 +7,71 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 
+/** The parchment, emerald and antique-gold system from the Nur design. */
+object NurColors {
+    val Ink = Color(0xFF16332E)
+    val InkSoft = Color(0xFF1F433C)
+    val Parchment = Color(0xFFF6EFDE)
+    val Sand = Color(0xFFEAE0C7)
+    val SandDark = Color(0xFFDED0AC)
+    val Gold = Color(0xFFB8912F)
+    val GoldSoft = Color(0xFFD8C077)
+    val Charcoal = Color(0xFF2A241C)
+    val CharcoalSoft = Color(0xFF6B6152)
+    val Terracotta = Color(0xFFA6503E)
+    val TerracottaSoft = Color(0xFFE9CFC6)
+    val Sage = Color(0xFF5C7A63)
+    val SageSoft = Color(0xFFD9E3D8)
+    val Night = Color(0xFF0D211E)
+    val NightSoft = Color(0xFF12312C)
+    val Cream = Color(0xFFFFFCF6)
+}
+
 private val DarkColorScheme = darkColorScheme(
-    primary = Color(0xFF6D28D9),
-    onPrimary = Color.White,
-    primaryContainer = Color(0xFF7C3AED),
-    onPrimaryContainer = Color.White,
-    secondary = Color(0xFF06B6D4),
-    onSecondary = Color.White,
-    secondaryContainer = Color(0xFF0891B2),
-    onSecondaryContainer = Color.White,
-    tertiary = Color(0xFFFBBF24),
-    onTertiary = Color.Black,
-    background = Color(0xFF0F172A),
-    onBackground = Color(0xFFE2E8F0),
-    surface = Color(0xFF1E293B),
-    onSurface = Color(0xFFE2E8F0),
-    error = Color(0xFFEF4444),
-    onError = Color.White
+    primary = NurColors.GoldSoft,
+    onPrimary = NurColors.Night,
+    primaryContainer = NurColors.InkSoft,
+    onPrimaryContainer = NurColors.Cream,
+    secondary = NurColors.Gold,
+    onSecondary = NurColors.Night,
+    secondaryContainer = Color(0xFF4C3B14),
+    onSecondaryContainer = NurColors.GoldSoft,
+    tertiary = Color(0xFF9AB59E),
+    onTertiary = NurColors.Night,
+    tertiaryContainer = Color(0xFF243F31),
+    onTertiaryContainer = Color(0xFFD9E3D8),
+    background = NurColors.Night,
+    onBackground = NurColors.Cream,
+    surface = NurColors.NightSoft,
+    onSurface = NurColors.Cream,
+    surfaceVariant = NurColors.InkSoft,
+    onSurfaceVariant = Color(0xFFC7D7D0),
+    outline = Color(0xFF31564D),
+    error = Color(0xFFE7A092),
+    onError = NurColors.Night
 )
 
 private val LightColorScheme = lightColorScheme(
-    primary = Color(0xFF7C3AED),
-    onPrimary = Color.White,
-    primaryContainer = Color(0xFFEDE9FE),
-    onPrimaryContainer = Color(0xFF2E1065),
-    secondary = Color(0xFF0891B2),
-    onSecondary = Color.White,
-    secondaryContainer = Color(0xFFCFFAFE),
-    onSecondaryContainer = Color(0xFF003638),
-    tertiary = Color(0xFFFBBF24),
-    onTertiary = Color.Black,
-    background = Color(0xFFFAFAFA),
-    onBackground = Color(0xFF1F2937),
-    surface = Color.White,
-    onSurface = Color(0xFF1F2937),
-    error = Color(0xFFDC2626),
+    primary = NurColors.Ink,
+    onPrimary = NurColors.Cream,
+    primaryContainer = NurColors.SageSoft,
+    onPrimaryContainer = NurColors.Ink,
+    secondary = NurColors.Gold,
+    onSecondary = Color(0xFF231B08),
+    secondaryContainer = Color(0xFFF1E5BC),
+    onSecondaryContainer = Color(0xFF4A390C),
+    tertiary = NurColors.Sage,
+    onTertiary = NurColors.Cream,
+    tertiaryContainer = NurColors.SageSoft,
+    onTertiaryContainer = Color(0xFF294332),
+    background = NurColors.Parchment,
+    onBackground = NurColors.Charcoal,
+    surface = NurColors.Cream,
+    onSurface = NurColors.Charcoal,
+    surfaceVariant = NurColors.Sand,
+    onSurfaceVariant = NurColors.CharcoalSoft,
+    outline = NurColors.SandDark,
+    error = NurColors.Terracotta,
     onError = Color.White
 )
 
@@ -50,13 +80,8 @@ fun QuranReminderTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     content: @Composable () -> Unit
 ) {
-    val colorScheme = when {
-        darkTheme -> DarkColorScheme
-        else -> LightColorScheme
-    }
-
     MaterialTheme(
-        colorScheme = colorScheme,
+        colorScheme = if (darkTheme) DarkColorScheme else LightColorScheme,
         typography = Typography,
         content = content
     )

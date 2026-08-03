@@ -42,9 +42,9 @@ android {
             localPropsFile.inputStream().use { props.load(it) }
             props.getProperty("SERVER_BASE_URL")
                 ?: (project.findProperty("SERVER_BASE_URL") as? String)
-                ?: "http://18.199.100.4"
+                ?: "http://18.195.218.23"
         } else {
-            (project.findProperty("SERVER_BASE_URL") as? String) ?: "http://18.199.100.4"
+            (project.findProperty("SERVER_BASE_URL") as? String) ?: "http://18.195.218.23"
         }.trimEnd('/')
         buildConfigField("String", "SERVER_BASE_URL", "\"$serverBaseUrl\"")
     }
