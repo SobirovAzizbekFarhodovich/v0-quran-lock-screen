@@ -46,11 +46,11 @@ data class QuranVerseDto(
 }
 
 object QuranDataLoader {
-    private val backendVersesUrl = "${BuildConfig.SERVER_BASE_URL}/api/quran/verses"
 
-    fun loadFromServer(): List<QuranVerse> {
+    fun loadFromServer(language: String): List<QuranVerse> {
         return runCatching {
-            val url = java.net.URL(backendVersesUrl)
+            val encodedLanguage = java.net.URLEncoder.encode(language, "UTF-8")
+            val url = java.net.URL("${BuildConfig.SERVER_BASE_URL}/api/quran/verses?language=$encodedLanguage")
             val connection = url.openConnection() as java.net.HttpURLConnection
             connection.requestMethod = "GET"
             connection.connectTimeout = 30_000

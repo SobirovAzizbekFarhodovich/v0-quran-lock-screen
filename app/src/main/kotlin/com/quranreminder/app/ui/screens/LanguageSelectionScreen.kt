@@ -54,7 +54,7 @@ private val appLanguages = listOf(
 @Composable
 fun LanguageSelectionScreen(
     viewModel: SettingsViewModel,
-    onLanguageSelected: () -> Unit
+    onLanguageSelected: (String) -> Unit
 ) {
     val savedLanguage = viewModel.settings.collectAsState().value?.language
     var selectedCode by remember(savedLanguage) {
@@ -109,7 +109,7 @@ fun LanguageSelectionScreen(
             Button(
                 onClick = {
                     viewModel.setLanguage(selectedCode)
-                    onLanguageSelected()
+                    onLanguageSelected(selectedCode)
                 },
                 modifier = Modifier
                     .fillMaxWidth()

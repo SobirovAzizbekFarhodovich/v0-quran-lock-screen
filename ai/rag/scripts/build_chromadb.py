@@ -11,6 +11,7 @@ import hashlib
 import json
 import os
 import sys
+import time
 from pathlib import Path
 
 import chromadb
@@ -249,11 +250,23 @@ def main() -> None:
         settings=Settings(anonymized_telemetry=False),
     )
 
-    try:
-        client.heartbeat()
-        print("✅ ChromaDB ulanish muvaffaqiyatli")
-    except Exception as e:
-        print(f"❌ ChromaDB ga ulanib bo'lmadi: {e}")
+    # Container "started" holatiga o'tishi ChromaDB HTTP serveri allaqachon
+    # so'rov qabul qilayotganini anglatmaydi. Sovuq startda bir necha soniya
+    # kerak bo'lishi mumkin; init jobni darhol xato bilan tugatmaslik uchun
+    # ikki daqiqagacha kutamiz.
+    last_error: Exception | None = None
+    for attempt in range(1, 61):
+        try:
+            client.heartbeat()
+            print("✅ ChromaDB ulanish muvaffaqiyatli")
+            break
+        except Exception as error:
+            last_error = error
+            if attempt < 60:
+                print(f"⏳ ChromaDB tayyorlanmoqda ({attempt}/60), 2 soniyadan so'ng qayta urinish")
+                time.sleep(2)
+    else:
+        print(f"❌ ChromaDB ga ulanib bo'lmadi: {last_error}")
         sys.exit(1)
 
     jsonl_files = sorted(args.data_dir.rglob("*.jsonl"))

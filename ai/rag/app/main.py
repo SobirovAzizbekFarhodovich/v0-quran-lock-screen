@@ -58,6 +58,13 @@ QURAN_LANGUAGE_FILES = {
     "en": "en.jsonl",
     "ru": "ru.jsonl",
 }
+# The translation files deliberately contain translations only.  Keep the
+# canonical Uthmani text on the server as well, so a device receives Arabic and
+# its chosen translation in one offline-download response.
+QURAN_ARABIC_URL = os.getenv(
+    "QURAN_ARABIC_URL", "https://api.alquran.cloud/v1/quran/quran-uthmani"
+)
+arabic_verses: dict[tuple[int, int], str] | None = None
 
 
 @asynccontextmanager
@@ -225,6 +232,10 @@ async def quran_verses(language: str = "uz_latin") -> dict[str, list[dict[str, A
     if not path.exists():
         raise HTTPException(status_code=503, detail="Quran translation data is unavailable")
 
+    arabic = await load_arabic_verses()
+    if not arabic:
+        raise HTTPException(status_code=503, detail="Arabic Quran text is unavailable")
+
     verses: list[dict[str, Any]] = []
     with path.open(encoding="utf-8") as data_file:
         for line in data_file:
@@ -234,12 +245,39 @@ async def quran_verses(language: str = "uz_latin") -> dict[str, list[dict[str, A
                 "surahName": row.get("surah_name") or row.get("surah_name_en") or "",
                 "surahNameArabic": row.get("surah_name_ar") or "",
                 "ayahNumber": row["ayah"],
-                "ayahText": "",
-                "ayahTextArabic": "",
+                "ayahText": arabic.get((row["surah"], row["ayah"]), ""),
+                "ayahTextArabic": arabic.get((row["surah"], row["ayah"]), ""),
                 "translation": row["text"],
                 "transliteration": "",
             })
     return {"verses": verses}
+
+
+async def load_arabic_verses() -> dict[tuple[int, int], str]:
+    """Load canonical Uthmani verses once and retain them for this process."""
+    global arabic_verses
+    if arabic_verses is not None:
+        return arabic_verses
+    try:
+        async with httpx.AsyncClient(timeout=30) as client:
+            response = await client.get(QURAN_ARABIC_URL)
+            response.raise_for_status()
+        payload = response.json().get("data", {})
+        result: dict[tuple[int, int], str] = {}
+        for surah in payload.get("surahs", []):
+            number = safe_int(surah.get("number"))
+            for ayah in surah.get("ayahs", []):
+                ayah_number = safe_int(ayah.get("numberInSurah"))
+                text = str(ayah.get("text") or "").strip()
+                if number and ayah_number and text:
+                    result[(number, ayah_number)] = text
+        if len(result) != 6236:
+            raise ValueError(f"expected 6236 Arabic verses, received {len(result)}")
+        arabic_verses = result
+    except Exception:
+        # A partial corpus must never be passed to users as a complete Quran.
+        return {}
+    return arabic_verses
 
 
 async def generate_answer(

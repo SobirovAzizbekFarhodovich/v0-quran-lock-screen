@@ -21,6 +21,7 @@ import androidx.compose.material.icons.filled.ChatBubble
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.MenuBook
+import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
@@ -106,6 +107,18 @@ fun HomeScreen(
                         onClick = { navController.navigate("reminders") }
                     )
                 }
+            }
+
+            item {
+                HomeFeatureTile(
+                    icon = Icons.Default.Mic,
+                    title = "Tilovat tekshiruvi",
+                    description = "AI bilan qiroatni tekshiring",
+                    iconBackground = NurColors.TerracottaSoft,
+                    iconTint = NurColors.Terracotta,
+                    modifier = Modifier.fillMaxWidth(),
+                    onClick = { navController.navigate("recitation") }
+                )
             }
 
             item {

@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.quranreminder.app.data.QuranRepository
+import com.quranreminder.app.data.QuranDataLoader
 import com.quranreminder.app.database.Bookmark
 import com.quranreminder.app.database.QuranVerse
 import com.quranreminder.app.database.SurahHeader
@@ -122,6 +123,24 @@ class QuranViewModel(private val repository: QuranRepository) : ViewModel() {
 
     fun clearError() {
         _error.value = null
+    }
+
+    fun downloadSelectedLanguage(language: String) {
+        viewModelScope.launch {
+            _isLoading.value = true
+            _error.value = null
+            try {
+                val verses = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    QuranDataLoader.loadFromServer(language)
+                }
+                check(verses.size >= 6236) { "Qur’on tarjimasi to‘liq yuklanmadi" }
+                repository.replaceVerses(verses)
+            } catch (error: Exception) {
+                _error.value = error.message ?: "Qur’onni serverdan yuklab bo‘lmadi"
+            } finally {
+                _isLoading.value = false
+            }
+        }
     }
 
     companion object {

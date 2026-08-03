@@ -44,6 +44,7 @@ import com.quranreminder.app.tadabbur.EvidenceType
 import com.quranreminder.app.tadabbur.TadabburAnswer
 import com.quranreminder.app.tadabbur.TadabburEvidence
 import com.quranreminder.app.tadabbur.TadabburRepository
+import com.quranreminder.app.tadabbur.RagChatRepository
 import com.quranreminder.app.ui.theme.NurColors
 import com.quranreminder.app.ui.theme.NurEmblem
 import com.quranreminder.app.ui.theme.NurIconButton
@@ -54,9 +55,9 @@ import com.quranreminder.app.ui.theme.NurSurfaceCard
 import kotlinx.coroutines.launch
 
 @Composable
-fun TadabburChatScreen(navController: NavHostController) {
+fun TadabburChatScreen(navController: NavHostController, language: String = "uz_latin") {
     val context = androidx.compose.ui.platform.LocalContext.current
-    val repository = remember { TadabburRepository(context) }
+    val repository = remember { RagChatRepository(context) }
     val scope = rememberCoroutineScope()
     val messages = remember { mutableStateListOf<ChatMessage>() }
     var input by remember { mutableStateOf("") }
@@ -69,7 +70,7 @@ fun TadabburChatScreen(navController: NavHostController) {
         messages.add(ChatMessage.User(query))
         isLoading = true
         scope.launch {
-            val answer = runCatching { repository.answer(query) }.getOrElse {
+            val answer = runCatching { repository.answer(query, language) }.getOrElse {
                 TadabburAnswer(
                     intro = "Javob tayyorlashda xatolik bo'ldi. Qayta urinib ko'ring.",
                     evidence = emptyList()

@@ -46,6 +46,9 @@ interface QuranVerseDao {
     @Query("SELECT COUNT(*) FROM quran_verses")
     suspend fun getVerseCount(): Int
 
+    @Query("DELETE FROM quran_verses")
+    suspend fun deleteAllVerses()
+
     @Query("SELECT * FROM quran_verses ORDER BY RANDOM() LIMIT 1")
     suspend fun getRandomVerse(): QuranVerse?
 
