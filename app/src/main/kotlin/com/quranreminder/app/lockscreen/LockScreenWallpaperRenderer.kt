@@ -126,6 +126,7 @@ object LockScreenWallpaperRenderer {
 
     private fun drawContent(canvas: Canvas, width: Int, height: Int, verse: QuranVerse, context: Context) {
         val safe = calculateSafeTextArea(width, height)
+        drawVersePanel(canvas, safe, width)
         val selectedLang = LockScreenWallpaperApplier.getLockScreenLanguage(context)
 
         var rawTranslation = cleanTranslation(verse.translation)
@@ -137,8 +138,9 @@ object LockScreenWallpaperRenderer {
         }
 
         val translation = rawTranslation
-        val contentWidth = safe.width().toInt()
-        val maxTextHeight = safe.height()
+        val panelPadding = (width * 0.052f).coerceAtLeast(18f)
+        val contentWidth = (safe.width() - panelPadding * 2).toInt()
+        val maxTextHeight = safe.height() - panelPadding * 2
 
         val titlePaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.WHITE
@@ -164,7 +166,7 @@ object LockScreenWallpaperRenderer {
             width = contentWidth,
             maxHeight = maxTextHeight
         )
-        var y = safe.top
+        var y = safe.top + panelPadding
         y += drawWrappedText(
             canvas = canvas,
             text = title,
@@ -185,6 +187,38 @@ object LockScreenWallpaperRenderer {
             width = contentWidth,
             alignment = Layout.Alignment.ALIGN_NORMAL,
             maxLines = Int.MAX_VALUE
+        )
+    }
+
+    /** A calm, centered translucent panel keeps the verse readable over any wallpaper. */
+    private fun drawVersePanel(canvas: Canvas, safe: RectF, width: Int) {
+        val radius = (width * 0.065f).coerceAtLeast(28f)
+        val shadow = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.argb(92, 0, 0, 0)
+            setShadowLayer(width * 0.026f, 0f, width * 0.012f, Color.argb(130, 0, 0, 0))
+        }
+        canvas.drawRoundRect(safe, radius, radius, shadow)
+        shadow.clearShadowLayer()
+
+        val border = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.STROKE
+            strokeWidth = (width * 0.0035f).coerceAtLeast(2f)
+            color = Color.argb(175, 216, 192, 119)
+        }
+        canvas.drawRoundRect(safe, radius, radius, border)
+
+        val accent = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.rgb(216, 192, 119)
+            strokeWidth = (width * 0.008f).coerceAtLeast(4f)
+            strokeCap = Paint.Cap.ROUND
+        }
+        val accentWidth = safe.width() * 0.22f
+        canvas.drawLine(
+            safe.centerX() - accentWidth / 2,
+            safe.top + width * 0.035f,
+            safe.centerX() + accentWidth / 2,
+            safe.top + width * 0.035f,
+            accent
         )
     }
 

@@ -33,14 +33,9 @@ object LockScreenWallpaperApplier {
             }
 
             if (rememberForHour) {
-                val currentHour = SimpleDateFormat("yyyy-MM-dd-HH", Locale.US).format(Date())
-                context.applicationContext
-                    .getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-                    .edit()
-                    .putString(KEY_LAST_HOUR, currentHour)
-                    .putInt(KEY_LAST_SURAH, verse.surahNumber)
-                    .putInt(KEY_LAST_AYAH, verse.ayahNumber)
-                    .apply()
+                rememberHourlyVerse(context, verse)
+                context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                    .edit().putString(KEY_LAST_APPLIED_HOUR, currentHour()).apply()
             }
         }
     }
@@ -100,6 +95,17 @@ object LockScreenWallpaperApplier {
             .apply()
     }
 
+    fun rememberHourlyVerse(context: Context, verse: QuranVerse) {
+        context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .edit()
+            .putString(KEY_LAST_HOUR, currentHour())
+            .putInt(KEY_LAST_SURAH, verse.surahNumber)
+            .putInt(KEY_LAST_AYAH, verse.ayahNumber)
+            .apply()
+    }
+
+    fun currentHour(): String = SimpleDateFormat("yyyy-MM-dd-HH", Locale.US).format(Date())
+
     suspend fun shareImage(context: Context, verse: QuranVerse) {
         val uri = withContext(Dispatchers.IO) {
             val bitmap = LockScreenWallpaperRenderer.render(context.applicationContext, verse)
@@ -132,6 +138,7 @@ object LockScreenWallpaperApplier {
     const val KEY_LAST_HOUR = "last_hour"
     const val KEY_LAST_SURAH = "last_surah"
     const val KEY_LAST_AYAH = "last_ayah"
+    const val KEY_LAST_APPLIED_HOUR = "last_applied_hour"
     const val KEY_SELECTED_SURAH = "selected_surah"
     const val KEY_SELECTED_AYAH = "selected_ayah"
     const val KEY_SELECTED_CATEGORY = "selected_category"

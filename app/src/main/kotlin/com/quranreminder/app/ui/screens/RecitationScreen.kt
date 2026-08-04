@@ -19,6 +19,7 @@ import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -45,12 +46,13 @@ fun RecitationScreen(navController: NavHostController) {
     val client = remember(token) { RecitationClient(token) }
     var surah by remember { mutableStateOf("1") }
     var ayah by remember { mutableStateOf("1") }
+    var fullSurah by remember { mutableStateOf(false) }
     var recording by remember { mutableStateOf(false) }
     var result by remember { mutableStateOf<RecitationResult?>(null) }
     var message by remember { mutableStateOf("Sura va oyatni tanlab, tilovatni boshlang.") }
     fun begin() {
         val surahNumber = surah.toIntOrNull()?.coerceIn(1, 114) ?: 1
-        val ayahNumber = ayah.toIntOrNull()?.coerceAtLeast(1) ?: 1
+        val ayahNumber = if (fullSurah) 0 else ayah.toIntOrNull()?.coerceAtLeast(1) ?: 1
         result = null
         client.start(surahNumber, ayahNumber, { value -> result = value; recording = false; message = "Tahlil tayyor" }, { error -> recording = false; message = error })
         recording = true
@@ -69,7 +71,16 @@ fun RecitationScreen(navController: NavHostController) {
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             Text("AI tilovatingizni tinglab, matn va ehtimoliy xatolarni ko‘rsatadi.", style = MaterialTheme.typography.bodyMedium)
             OutlinedTextField(surah, { surah = it.filter(Char::isDigit).take(3) }, Modifier.fillMaxWidth(), label = { Text("Sura raqami") }, singleLine = true)
-            OutlinedTextField(ayah, { ayah = it.filter(Char::isDigit).take(3) }, Modifier.fillMaxWidth(), label = { Text("Oyat raqami") }, singleLine = true)
+            if (!fullSurah) {
+                OutlinedTextField(ayah, { ayah = it.filter(Char::isDigit).take(3) }, Modifier.fillMaxWidth(), label = { Text("Oyat raqami") }, singleLine = true)
+            }
+            androidx.compose.foundation.layout.Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Column(Modifier.weight(1f)) {
+                    Text("To‘liq surani tekshirish", style = MaterialTheme.typography.titleSmall)
+                    Text("Tahlil faqat o‘zingiz To‘xtatish tugmasini bosgach boshlanadi.", style = MaterialTheme.typography.bodySmall)
+                }
+                Switch(checked = fullSurah, onCheckedChange = { fullSurah = it })
+            }
             Button(
                 onClick = {
                     if (recording) { client.stop(); message = "Tahlil qilinmoqda..." }

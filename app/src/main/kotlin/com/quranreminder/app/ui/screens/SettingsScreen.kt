@@ -104,6 +104,31 @@ fun SettingsScreen(
             item {
                 Spacer(modifier = Modifier.height(16.dp))
                 SettingSection(title = "Ko'rinish")
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    shape = RoundedCornerShape(18.dp)
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text("Ilova va Qur’on tili", style = MaterialTheme.typography.titleMedium)
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = when (settings.language) {
+                                "uz_cyrillic" -> "O‘zbek (kirill)"
+                                "ru" -> "Русский"
+                                "en" -> "English"
+                                else -> "O‘zbek (lotin)"
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f)
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        OutlinedButton(onClick = { navController.navigate("language_selection") }) {
+                            Text("Tilni o‘zgartirish")
+                        }
+                    }
+                }
+                Spacer(modifier = Modifier.height(12.dp))
                 SettingSlider(
                     label = "Matn kattaligi",
                     value = settings.fontSize.toFloat(),
@@ -205,45 +230,10 @@ fun LockScreenControls(
                 }
             }
             Text(
-                text = "Lock-screen Tili (4 ta til)",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface
+                text = "Lock-screen tili ilova va Qur’on tili bilan bir xil. Uni yuqoridagi “Tilni o‘zgartirish” orqali almashtiring.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
             )
-            val currentLang = LockScreenWallpaperApplier.getLockScreenLanguage(context)
-            val languages = listOf(
-                "uz_cyrillic" to "Ўзбек (Кирил)",
-                "uz_latin" to "O'zbek (Lotin)",
-                "en" to "English",
-                "ru" to "Русский"
-            )
-            languages.chunked(2).forEach { rowLangs ->
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    rowLangs.forEach { (code, label) ->
-                        val isSelected = currentLang == code
-                        if (isSelected) {
-                            Button(
-                                modifier = Modifier.weight(1f),
-                                onClick = {
-                                    LockScreenWallpaperApplier.setLockScreenLanguage(context, code)
-                                    DailyAyahScheduler.updateToday(context)
-                                }
-                            ) {
-                                Text(label)
-                            }
-                        } else {
-                            OutlinedButton(
-                                modifier = Modifier.weight(1f),
-                                onClick = {
-                                    LockScreenWallpaperApplier.setLockScreenLanguage(context, code)
-                                    DailyAyahScheduler.updateToday(context)
-                                }
-                            ) {
-                                Text(label)
-                            }
-                        }
-                    }
-                }
-            }
 
             Text(
                 text = "Kategoriya",

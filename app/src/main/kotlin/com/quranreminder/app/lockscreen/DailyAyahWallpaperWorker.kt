@@ -7,9 +7,6 @@ import com.quranreminder.app.database.DatabaseInitializer
 import com.quranreminder.app.database.QuranDatabase
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 
 class DailyAyahWallpaperWorker(
     context: Context,
@@ -21,9 +18,9 @@ class DailyAyahWallpaperWorker(
             val database = QuranDatabase.getDatabase(applicationContext)
             DatabaseInitializer(applicationContext).initializeDatabase(database)
 
-            val currentHour = SimpleDateFormat("yyyy-MM-dd-HH", Locale.US).format(Date())
             val prefs = applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            if (prefs.getString(KEY_LAST_HOUR, null) == currentHour) {
+            val currentHour = LockScreenWallpaperApplier.currentHour()
+            if (prefs.getString(KEY_LAST_APPLIED_HOUR, null) == currentHour) {
                 return@withContext Result.success()
             }
 
@@ -41,6 +38,6 @@ class DailyAyahWallpaperWorker(
 
     companion object {
         private const val PREFS = LockScreenWallpaperApplier.PREFS
-        private const val KEY_LAST_HOUR = LockScreenWallpaperApplier.KEY_LAST_HOUR
+        private const val KEY_LAST_APPLIED_HOUR = LockScreenWallpaperApplier.KEY_LAST_APPLIED_HOUR
     }
 }

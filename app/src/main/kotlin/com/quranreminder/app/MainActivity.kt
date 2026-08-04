@@ -163,6 +163,7 @@ fun AppNavigation(
     sessionManager: SessionManager
 ) {
     val scope = androidx.compose.runtime.rememberCoroutineScope()
+    val appContext = androidx.compose.ui.platform.LocalContext.current
     NavHost(navController = navController, startDestination = startDestination) {
         composable("auth") {
             AuthScreen(session = sessionManager) { user, isNewAccount ->
@@ -172,6 +173,7 @@ fun AppNavigation(
                         else -> user.language
                     }
                     settingsViewModel.setLanguage(language)
+                    com.quranreminder.app.lockscreen.LockScreenWallpaperApplier.setLockScreenLanguage(appContext, language)
                     quranViewModel.downloadSelectedLanguage(language)
                     navController.navigate("home") { popUpTo("auth") { inclusive = true } }
                 } else {
@@ -184,6 +186,8 @@ fun AppNavigation(
                 viewModel = settingsViewModel,
                 onLanguageSelected = { language ->
                     quranViewModel.downloadSelectedLanguage(language)
+                    com.quranreminder.app.lockscreen.LockScreenWallpaperApplier.setLockScreenLanguage(appContext, language)
+                    DailyAyahScheduler.updateToday(appContext)
                     scope.launch { sessionManager.updateLanguage(language) }
                     navController.navigate("home") {
                         popUpTo("language_selection") { inclusive = true }

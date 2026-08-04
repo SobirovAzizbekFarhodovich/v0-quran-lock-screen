@@ -41,7 +41,9 @@ class Settings:
     whisper_compute: str = os.getenv("WHISPER_COMPUTE", "int8")
     worker_name: str = os.getenv("HOSTNAME", "worker-1")
     min_analysis_seconds: float = float(os.getenv("RECITATION_MIN_ANALYSIS_SECONDS", "1.5"))
-    max_analysis_seconds: float = float(os.getenv("RECITATION_MAX_ANALYSIS_SECONDS", "30"))
+    # A complete surah can take several minutes.  Analysis is intentionally
+    # performed only after the reader taps Stop, not after a short silence.
+    max_analysis_seconds: float = float(os.getenv("RECITATION_MAX_ANALYSIS_SECONDS", "900"))
 
 
 settings = Settings()
@@ -193,7 +195,9 @@ async def process_chunk(fields: dict[str, str]) -> dict | None:
     elif not final:
         return None
 
-    if len(buffer) < min_analysis_bytes() and not final:
+    # Do not score while the user is still reciting.  Early partial results
+    # made the Android UI look as if it had stopped listening after ~1.5 sec.
+    if not final:
         return None
 
     transcription = transcribe(bytes(buffer))

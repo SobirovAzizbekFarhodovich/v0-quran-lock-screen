@@ -30,7 +30,12 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -41,6 +46,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
 import com.quranreminder.app.database.SurahHeader
+import com.quranreminder.app.database.QuranDatabase
+import com.quranreminder.app.database.QuranVerse
+import com.quranreminder.app.lockscreen.LockScreenVerseSelector
 import com.quranreminder.app.ui.theme.NurColors
 import com.quranreminder.app.ui.theme.NurEmblem
 import com.quranreminder.app.ui.theme.NurIconButton
@@ -48,6 +56,10 @@ import com.quranreminder.app.ui.theme.NurPill
 import com.quranreminder.app.ui.theme.NurSectionTitle
 import com.quranreminder.app.ui.theme.NurSurfaceCard
 import com.quranreminder.app.ui.viewmodel.QuranViewModel
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.withContext
 
 @Composable
 fun HomeScreen(
@@ -80,7 +92,9 @@ fun HomeScreen(
             }
 
             item {
-                DailyAyahCard(onClick = { navController.navigate("surah_detail/20?ayah=114") })
+                DailyAyahCard(onClick = { verse ->
+                    navController.navigate("surah_detail/${verse.surahNumber}?ayah=${verse.ayahNumber}")
+                })
             }
 
             item {
@@ -225,21 +239,34 @@ private fun HomeHeader(
 }
 
 @Composable
-private fun DailyAyahCard(onClick: () -> Unit) {
+private fun DailyAyahCard(onClick: (QuranVerse) -> Unit) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var verse by remember { mutableStateOf<QuranVerse?>(null) }
+    LaunchedEffect(Unit) {
+        while (isActive) {
+            verse = withContext(Dispatchers.IO) {
+                LockScreenVerseSelector.select(context, QuranDatabase.getDatabase(context))
+            }
+            // Also reflects a manually selected lock-screen verse shortly after returning home.
+            delay(10_000)
+        }
+    }
+    val currentVerse = verse
     NurSurfaceCard(
         modifier = Modifier.fillMaxWidth(),
         containerColor = NurColors.Ink,
-        onClick = onClick
+        onClick = { currentVerse?.let(onClick) }
     ) {
         Column(modifier = Modifier.padding(18.dp)) {
             Text(
-                text = "KUNLIK OYAT · TOHA, 20:114",
+                text = currentVerse?.let { "SOATLIK OYAT · ${it.surahName.uppercase()}, ${it.surahNumber}:${it.ayahNumber}" }
+                    ?: "SOATLIK OYAT",
                 style = MaterialTheme.typography.labelSmall,
                 color = NurColors.GoldSoft
             )
             Spacer(modifier = Modifier.height(12.dp))
             Text(
-                text = "وَقُل رَّبِّ زِدْنِي عِلْمًا",
+                text = currentVerse?.ayahTextArabic.orEmpty(),
                 modifier = Modifier.fillMaxWidth(),
                 style = MaterialTheme.typography.titleLarge,
                 color = NurColors.Cream,
@@ -247,7 +274,7 @@ private fun DailyAyahCard(onClick: () -> Unit) {
             )
             Spacer(modifier = Modifier.height(10.dp))
             Text(
-                text = "\"Robbim, ilmimni yanada ziyoda qilgin\" — deb ayt.",
+                text = currentVerse?.translation ?: "Lock-screen bilan bir xil oyat tayyorlanmoqda...",
                 style = MaterialTheme.typography.bodySmall,
                 color = NurColors.Cream.copy(alpha = 0.78f)
             )
