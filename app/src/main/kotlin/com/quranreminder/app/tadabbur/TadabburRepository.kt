@@ -153,7 +153,7 @@ class TadabburRepository(private val context: Context) {
 
         if (evidence.isEmpty()) {
             return@withContext TadabburAnswer(
-                intro = "Bu holat bo'yicha indekslangan Qur'on va hadis manbalaridan aniq mos dalil topilmadi. Boshqa so'zlar bilan qayta yozing.",
+                intro = "Mavzu bo'yicha aniq mos oyat yoki hadis topilmadi. Savolingizni boshqacharoq shaklda yozishingiz mumkin (masalan: \"sabr haqida oyat\", \"namoz duosi\", \"ota-ona hadis\").",
                 evidence = emptyList()
             )
         }
@@ -213,7 +213,7 @@ class TadabburRepository(private val context: Context) {
     }
 
     private fun minimumScore(profiles: List<TopicProfile>): Int {
-        return if (profiles.isEmpty()) 1 else 10
+        return if (profiles.isEmpty()) 35 else 10
     }
 
     private fun isSourceAllowedForProfiles(

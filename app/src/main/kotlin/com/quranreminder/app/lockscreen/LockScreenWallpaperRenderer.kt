@@ -19,9 +19,7 @@ import com.quranreminder.app.database.QuranVerse
 
 object LockScreenWallpaperRenderer {
     fun render(context: Context, verse: QuranVerse): Bitmap {
-        val metrics = context.resources.displayMetrics
-        val width = metrics.widthPixels.coerceAtLeast(360)
-        val height = metrics.heightPixels.coerceAtLeast(640)
+        val (width, height) = getRealScreenSize(context)
         val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
 
@@ -31,10 +29,28 @@ object LockScreenWallpaperRenderer {
         return bitmap
     }
 
+    private fun getRealScreenSize(context: Context): Pair<Int, Int> {
+        val wm = context.getSystemService(Context.WINDOW_SERVICE) as? android.view.WindowManager
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            val bounds = wm?.currentWindowMetrics?.bounds
+            if (bounds != null && bounds.width() > 0 && bounds.height() > 0) {
+                return Pair(bounds.width(), bounds.height())
+            }
+        }
+        val metrics = android.util.DisplayMetrics()
+        @Suppress("DEPRECATION")
+        wm?.defaultDisplay?.getRealMetrics(metrics)
+        if (metrics.widthPixels > 0 && metrics.heightPixels > 0) {
+            return Pair(metrics.widthPixels, metrics.heightPixels)
+        }
+        val fallback = context.resources.displayMetrics
+        return Pair(fallback.widthPixels.coerceAtLeast(360), fallback.heightPixels.coerceAtLeast(640))
+    }
+
     private fun drawBackground(context: Context, canvas: Canvas, width: Int, height: Int) {
         val wallpaper = LockScreenBackgroundManager.loadSelectedBitmap(context) ?: getUserWallpaper(context)
         if (wallpaper != null) {
-            drawCenterCrop(canvas, wallpaper, width, height)
+            drawFullBackground(canvas, wallpaper, width, height)
             drawLegibilityOverlay(canvas, width, height)
             return
         }
@@ -114,20 +130,15 @@ object LockScreenWallpaperRenderer {
         }.getOrNull()
     }
 
-    private fun drawCenterCrop(canvas: Canvas, bitmap: Bitmap, width: Int, height: Int) {
-        val scale = maxOf(width.toFloat() / bitmap.width, height.toFloat() / bitmap.height)
-        val scaledWidth = bitmap.width * scale
-        val scaledHeight = bitmap.height * scale
-        val left = (width - scaledWidth) / 2f
-        val top = (height - scaledHeight) / 2f
-        val dest = RectF(left, top, left + scaledWidth, top + scaledHeight)
+    private fun drawFullBackground(canvas: Canvas, bitmap: Bitmap, width: Int, height: Int) {
+        val dest = RectF(0f, 0f, width.toFloat(), height.toFloat())
         canvas.drawBitmap(bitmap, null, dest, Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG))
     }
 
     private fun drawContent(canvas: Canvas, width: Int, height: Int, verse: QuranVerse, context: Context) {
         val safe = calculateSafeTextArea(width, height)
-        drawVersePanel(canvas, safe, width)
         val selectedLang = LockScreenWallpaperApplier.getLockScreenLanguage(context)
+        val selectedFont = LockScreenWallpaperApplier.getLockScreenFont(context)
 
         var rawTranslation = cleanTranslation(verse.translation)
         var surahTitle = verse.surahName
@@ -137,6 +148,9 @@ object LockScreenWallpaperRenderer {
             surahTitle = CyrillicToLatinConverter.convert(surahTitle)
         }
 
+        rawTranslation = FancyTextConverter.convert(rawTranslation, selectedFont)
+        surahTitle = FancyTextConverter.convert(surahTitle, selectedFont)
+
         val translation = rawTranslation
         val panelPadding = (width * 0.052f).coerceAtLeast(18f)
         val contentWidth = (safe.width() - panelPadding * 2).toInt()
@@ -145,13 +159,14 @@ object LockScreenWallpaperRenderer {
         val titlePaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.WHITE
             textSize = chooseTitleTextSize(width)
-            isFakeBoldText = true
+            typeface = android.graphics.Typeface.create(selectedFont.typeface, android.graphics.Typeface.BOLD)
             letterSpacing = 0f
             setShadowLayer(width * 0.012f, 0f, width * 0.004f, Color.argb(170, 0, 0, 0))
         }
         val translationPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.WHITE
             textSize = chooseTranslationTextSize(width, translation.length)
+            typeface = selectedFont.typeface
             isFakeBoldText = true
             letterSpacing = 0f
             setShadowLayer(width * 0.013f, 0f, width * 0.005f, Color.argb(185, 0, 0, 0))

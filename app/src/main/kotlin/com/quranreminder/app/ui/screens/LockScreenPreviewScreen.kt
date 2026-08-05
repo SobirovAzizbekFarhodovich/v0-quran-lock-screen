@@ -1,70 +1,45 @@
 package com.quranreminder.app.ui.screens
 
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.CloudDownload
-import androidx.compose.material.icons.filled.Download
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Share
-import androidx.compose.material.icons.filled.Wallpaper
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
 import com.quranreminder.app.database.QuranDatabase
 import com.quranreminder.app.database.QuranVerse
 import com.quranreminder.app.lockscreen.LockScreenBackgroundManager
+import com.quranreminder.app.lockscreen.LockScreenFontFamily
 import com.quranreminder.app.lockscreen.LockScreenVerseSelector
 import com.quranreminder.app.lockscreen.LockScreenWallpaperApplier
 import com.quranreminder.app.lockscreen.LockScreenWallpaperRenderer
@@ -73,27 +48,38 @@ import com.quranreminder.app.ui.theme.NurScreenHeader
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.File
+import kotlin.math.absoluteValue
 
-@OptIn(ExperimentalFoundationApi::class)
+sealed class WallpaperOption {
+    data class Local(val sample: LockScreenBackgroundManager.Sample) : WallpaperOption()
+    data class Remote(val sample: LockScreenBackgroundManager.RemoteSample) : WallpaperOption()
+}
+
+@OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun LockScreenPreviewScreen(navController: NavHostController) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val listState = rememberLazyListState()
-
+    
     var verse by remember { mutableStateOf<QuranVerse?>(null) }
-    var preview by remember { mutableStateOf<Bitmap?>(null) }
+    var selectedFont by remember { mutableStateOf(LockScreenWallpaperApplier.getLockScreenFont(context)) }
     var refreshKey by remember { mutableStateOf(0) }
-
-    // Remote samples download states
+    
     var remoteDownloads by remember { mutableStateOf(mapOf<String, Boolean>()) }
     var activeDownloads by remember { mutableStateOf(mapOf<String, Boolean>()) }
-
-    // Sample backgrounds list for carousel
+    
     val localSamples = LockScreenBackgroundManager.samples
-    val totalPages = localSamples.size + 1 // local samples + 1 Server Download Prompt Page
+    val remoteSamples = LockScreenBackgroundManager.remoteSamples
+    
+    val allOptions = remember(localSamples, remoteSamples) {
+        val list = mutableListOf<WallpaperOption>()
+        list.addAll(localSamples.map { WallpaperOption.Local(it) })
+        list.addAll(remoteSamples.map { WallpaperOption.Remote(it) })
+        list
+    }
 
-    val pagerState = rememberPagerState(pageCount = { totalPages })
+    val pagerState = rememberPagerState(pageCount = { allOptions.size })
 
     val galleryLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
@@ -103,19 +89,36 @@ fun LockScreenPreviewScreen(navController: NavHostController) {
             }
             if (saved) {
                 refreshKey++
-                Toast.makeText(context, "Gallery rasmi previewga qo'yildi", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, "Gallery rasmi o'rnatildi", Toast.LENGTH_SHORT).show()
             } else {
                 Toast.makeText(context, "Rasm tanlanmadi", Toast.LENGTH_SHORT).show()
             }
         }
     }
 
-    // Automatically set background when user swipes to a local sample page
-    LaunchedEffect(pagerState.currentPage) {
-        if (pagerState.currentPage in localSamples.indices) {
-            val sample = localSamples[pagerState.currentPage]
-            LockScreenBackgroundManager.setSample(context, sample)
-            refreshKey++
+    LaunchedEffect(pagerState.settledPage) {
+        val newIndex = pagerState.settledPage
+        if (newIndex < allOptions.size && newIndex >= 0) {
+            val option = allOptions[newIndex]
+            if (option is WallpaperOption.Local) {
+                LockScreenBackgroundManager.setSample(context, option.sample)
+                refreshKey++
+            } else if (option is WallpaperOption.Remote) {
+                if (remoteDownloads[option.sample.id] == true) {
+                    LockScreenBackgroundManager.setRemoteSample(context, option.sample)
+                    refreshKey++
+                } else {
+                    activeDownloads = activeDownloads + (option.sample.id to true)
+                    val success = LockScreenBackgroundManager.downloadRemoteSample(context, option.sample)
+                    activeDownloads = activeDownloads - option.sample.id
+                    if (success) {
+                        remoteDownloads = remoteDownloads + (option.sample.id to true)
+                        LockScreenBackgroundManager.setRemoteSample(context, option.sample)
+                        refreshKey++
+                        Toast.makeText(context, "Rasm yuklandi", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
         }
     }
 
@@ -123,401 +126,314 @@ fun LockScreenPreviewScreen(navController: NavHostController) {
         withContext(Dispatchers.IO) {
             val database = QuranDatabase.getDatabase(context)
             val selectedVerse = LockScreenVerseSelector.select(context, database)
-            val bitmap = selectedVerse?.let { LockScreenWallpaperRenderer.render(context, it) }
-
-            // Check downloaded status of remote backgrounds
+            
             val downloadMap = LockScreenBackgroundManager.remoteSamples.associate {
                 it.id to LockScreenBackgroundManager.isRemoteSampleDownloaded(context, it)
             }
 
             withContext(Dispatchers.Main) {
                 verse = selectedVerse
-                preview = bitmap
                 remoteDownloads = downloadMap
             }
         }
     }
 
-    Column(
+    Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
+            .background(Color(0xFF2E2E2E))
     ) {
-        NurScreenHeader(
-            title = "Lock-screen oyati",
-            eyebrow = "Kunlik oyat",
-            leading = {
-                NurIconButton(Icons.Default.ArrowBack, "Orqaga", onClick = { navController.popBackStack() })
-            },
-            trailing = {
-                NurIconButton(Icons.Default.Refresh, "Yangi preview", onClick = { refreshKey++ })
-            }
-        )
-
-        LazyColumn(
-            state = listState,
+        // Carousel Horizontal Pager
+        HorizontalPager(
+            state = pagerState,
+            beyondBoundsPageCount = 2,
+            contentPadding = PaddingValues(horizontal = 48.dp), // Show edge of next/prev cards
+            pageSpacing = 16.dp, // Space between cards
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 20.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            // Horizontal Carousel Pager for Backgrounds
-            item {
-                Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    HorizontalPager(
-                        state = pagerState,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .aspectRatio(9f / 16f)
-                    ) { page ->
-                        if (page < localSamples.size) {
-                            // Wallpaper Preview Card
-                            Card(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .padding(horizontal = 4.dp),
-                                shape = RoundedCornerShape(18.dp),
-                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                                elevation = CardDefaults.cardElevation(defaultElevation = 6.dp)
-                            ) {
-                                val bitmap = preview
-                                if (bitmap == null) {
-                                    Column(
-                                        modifier = Modifier.fillMaxSize(),
-                                        horizontalAlignment = Alignment.CenterHorizontally,
-                                        verticalArrangement = Arrangement.Center
-                                    ) {
-                                        Text("Preview tayyorlanmoqda...")
-                                    }
-                                } else {
-                                    Image(
-                                        bitmap = bitmap.asImageBitmap(),
-                                        contentDescription = "Lock-screen preview",
-                                        modifier = Modifier.fillMaxSize(),
-                                        contentScale = ContentScale.Crop
-                                    )
-                                }
-                            }
-                        } else {
-                            // Server Download Prompt Card (at the end of scroll)
-                            ServerDownloadPromptCard(
-                                onDownloadRequested = {
-                                    scope.launch {
-                                        listState.animateScrollToItem(index = 1) // Scroll down to server downloads section
-                                    }
-                                }
-                            )
-                        }
+                .padding(top = 135.dp, bottom = 120.dp) // Leave space for header, font selector, and bottom bar
+        ) { page ->
+            // Calculate scale and alpha for carousel effect based on distance from center
+            val pageOffset = (pagerState.currentPage - page) + pagerState.currentPageOffsetFraction
+            val absOffset = pageOffset.absoluteValue.coerceIn(0f, 1f)
+            
+            val scale = 1f - (0.15f * absOffset)
+            val alpha = 1f - (0.5f * absOffset)
+            val cornerRadius = 36.dp // Fixed corner radius for a phone-like card
+            
+            val option = allOptions[page]
+            val isSelected = page == pagerState.settledPage
+            val isDownloaded = if (option is WallpaperOption.Remote) remoteDownloads[option.sample.id] == true else true
+            val isDownloading = if (option is WallpaperOption.Remote) activeDownloads[option.sample.id] == true else false
+            
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer {
+                        scaleX = scale
+                        scaleY = scale
+                        this.alpha = alpha
                     }
-
-                    Spacer(modifier = Modifier.height(10.dp))
-
-                    // Pager Indicators
-                    Row(
-                        horizontalArrangement = Arrangement.Center,
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        repeat(totalPages) { index ->
-                            val isSelected = pagerState.currentPage == index
-                            Box(
-                                modifier = Modifier
-                                    .padding(horizontal = 4.dp)
-                                    .size(if (isSelected) 10.dp else 7.dp)
-                                    .clip(CircleShape)
-                                    .background(
-                                        if (isSelected) MaterialTheme.colorScheme.primary
-                                        else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
-                                    )
-                            )
-                        }
-                    }
-                }
-            }
-
-            item {
-                BackgroundPreviewControls(
-                    onUseSystemWallpaper = {
-                        LockScreenBackgroundManager.setSystemWallpaper(context)
-                        refreshKey++
-                        Toast.makeText(context, "Telefon foni previewga qo'yildi", Toast.LENGTH_SHORT).show()
-                    },
-                    onPickGallery = { galleryLauncher.launch("image/*") },
-                    onSampleSelected = { sample ->
-                        LockScreenBackgroundManager.setSample(context, sample)
-                        val sampleIndex = localSamples.indexOf(sample)
-                        if (sampleIndex >= 0) {
-                            scope.launch { pagerState.animateScrollToPage(sampleIndex) }
-                        }
-                        refreshKey++
-                    },
-                    onRemoteSampleSelected = { remoteSample ->
-                        val isDownloaded = remoteDownloads[remoteSample.id] ?: false
-                        if (isDownloaded) {
-                            LockScreenBackgroundManager.setRemoteSample(context, remoteSample)
-                            refreshKey++
-                            Toast.makeText(context, "${remoteSample.label} tanlandi", Toast.LENGTH_SHORT).show()
-                        } else {
-                            // Start downloading
-                            activeDownloads = activeDownloads + (remoteSample.id to true)
-                            scope.launch {
-                                val success = LockScreenBackgroundManager.downloadRemoteSample(context, remoteSample)
-                                activeDownloads = activeDownloads - remoteSample.id
-                                if (success) {
-                                    remoteDownloads = remoteDownloads + (remoteSample.id to true)
-                                    LockScreenBackgroundManager.setRemoteSample(context, remoteSample)
-                                    refreshKey++
-                                    Toast.makeText(context, "${remoteSample.label} yuklandi va tanlandi", Toast.LENGTH_SHORT).show()
-                                } else {
-                                    Toast.makeText(context, "Yuklab olishda xatolik yuz berdi. Server ishlayotganini tekshiring.", Toast.LENGTH_LONG).show()
-                                }
-                            }
-                        }
-                    },
-                    remoteDownloads = remoteDownloads,
-                    activeDownloads = activeDownloads
+                    .clip(RoundedCornerShape(cornerRadius))
+            ) {
+                WallpaperFullScreenItem(
+                    option = option,
+                    isSelected = isSelected && absOffset == 0f, // Only show text when fully centered
+                    verse = verse,
+                    selectedFont = selectedFont,
+                    isDownloaded = isDownloaded,
+                    isDownloading = isDownloading
                 )
-            }
-
-            item {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    Button(
-                        modifier = Modifier.weight(1f),
-                        enabled = verse != null,
-                        onClick = {
-                            val selected = verse ?: return@Button
-                            scope.launch {
-                                LockScreenWallpaperApplier.apply(context, selected, rememberForHour = true)
-                                Toast.makeText(context, "Lock-screen yangilandi", Toast.LENGTH_SHORT).show()
-                            }
-                        }
-                    ) {
-                        Icon(Icons.Default.Wallpaper, contentDescription = null)
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("Qo'yish")
-                    }
-                    Button(
-                        modifier = Modifier.weight(1f),
-                        enabled = verse != null,
-                        onClick = {
-                            val selected = verse ?: return@Button
-                            scope.launch {
-                                LockScreenWallpaperApplier.shareImage(context, selected)
-                            }
-                        }
-                    ) {
-                        Icon(Icons.Default.Share, contentDescription = null)
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("Ulashish")
-                    }
-                }
-                Spacer(modifier = Modifier.height(16.dp))
             }
         }
-    }
-}
 
-/**
- * End-of-scroll card prompting user to download new wallpapers from the server.
- */
-@Composable
-private fun ServerDownloadPromptCard(
-    onDownloadRequested: () -> Unit
-) {
-    Card(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = 4.dp),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.Transparent),
-        elevation = CardDefaults.cardElevation(defaultElevation = 6.dp)
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(
-                    brush = Brush.verticalGradient(
-                        colors = listOf(
-                            Color(0xFF1E293B),
-                            Color(0xFF0F172A)
-                        )
-                    )
-                )
-                .padding(24.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center
+        // Header and Font Selector overlay
+        Column(modifier = Modifier.fillMaxWidth()) {
+            NurScreenHeader(
+                title = "Fon tanlash",
+                eyebrow = "Lock-screen",
+                leading = {
+                    NurIconButton(Icons.Default.ArrowBack, "Orqaga", onClick = { navController.popBackStack() })
+                },
+                trailing = {
+                    NurIconButton(Icons.Default.Refresh, "Yangi oyat", onClick = { refreshKey++ })
+                }
+            )
+
+            // Font Selector Row
+            LazyRow(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
+                items(LockScreenFontFamily.entries) { font ->
+                    val isFontSelected = font == selectedFont
+                    FilterChip(
+                        selected = isFontSelected,
+                        onClick = {
+                            selectedFont = font
+                            LockScreenWallpaperApplier.setLockScreenFont(context, font)
+                        },
+                        label = {
+                            Text(
+                                text = font.label,
+                                fontFamily = font.composeFontFamily,
+                                fontWeight = if (isFontSelected) FontWeight.Bold else FontWeight.Normal
+                            )
+                        },
+                        colors = FilterChipDefaults.filterChipColors(
+                            containerColor = Color.Black.copy(alpha = 0.4f),
+                            labelColor = Color.White.copy(alpha = 0.8f),
+                            selectedContainerColor = MaterialTheme.colorScheme.primary,
+                            selectedLabelColor = Color.White
+                        ),
+                        shape = RoundedCornerShape(12.dp)
+                    )
+                }
+            }
+        }
+
+        // Horizontal Pip Indicators near bottom
+        Row(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 120.dp), // just above the action bar
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            allOptions.forEachIndexed { index, _ ->
+                val isActive = index == pagerState.currentPage
+                val width by animateDpAsState(targetValue = if (isActive) 16.dp else 6.dp, animationSpec = tween(250))
                 Box(
                     modifier = Modifier
-                        .size(72.dp)
-                        .clip(CircleShape)
-                        .background(Color(0xFF334155))
-                        .border(2.dp, Color(0xFF38BDF8), CircleShape),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.CloudDownload,
-                        contentDescription = "Server Download",
-                        tint = Color(0xFF38BDF8),
-                        modifier = Modifier.size(36.dp)
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(20.dp))
-
-                Text(
-                    text = "Serverdan yangi rasmlar yuklab olishni xohlaysizmi?",
-                    style = MaterialTheme.typography.titleMedium.copy(
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 18.sp
-                    ),
-                    color = Color.White,
-                    textAlign = TextAlign.Center,
-                    lineHeight = 24.sp
+                        .width(width)
+                        .height(6.dp)
+                        .clip(RoundedCornerShape(3.dp))
+                        .background(if (isActive) Color.White else Color.White.copy(alpha = 0.3f))
                 )
-
-                Spacer(modifier = Modifier.height(10.dp))
-
-                Text(
-                    text = "Go'zal va sifatli tabiat hamda islomiy fon rasmlarini serverdan bir bosish bilan yuklab oling.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = Color(0xFF94A3B8),
-                    textAlign = TextAlign.Center,
-                    lineHeight = 20.sp
-                )
-
-                Spacer(modifier = Modifier.height(28.dp))
-
-                Button(
-                    onClick = onDownloadRequested,
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFF0284C7),
-                        contentColor = Color.White
-                    ),
-                    modifier = Modifier
-                        .fillMaxWidth(0.9f)
-                        .height(48.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Download,
-                        contentDescription = null,
-                        modifier = Modifier.size(20.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = "Serverdan yuklab olish",
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 15.sp
-                    )
+            }
+        }
+        
+        // Bottom Action Bar overlay
+        Row(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .background(Brush.verticalGradient(listOf(Color.Transparent, Color(0xCC000000))))
+                .padding(bottom = 32.dp, top = 20.dp, start = 20.dp, end = 20.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Button(
+                modifier = Modifier.weight(1f),
+                enabled = verse != null && allOptions.getOrNull(pagerState.currentPage).let { it !is WallpaperOption.Remote || remoteDownloads[it.sample.id] == true },
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                shape = RoundedCornerShape(14.dp),
+                contentPadding = PaddingValues(vertical = 14.dp),
+                onClick = {
+                    val selected = verse ?: return@Button
+                    scope.launch {
+                        LockScreenWallpaperApplier.apply(context, selected, rememberForHour = true)
+                        Toast.makeText(context, "Lock-screen yangilandi", Toast.LENGTH_SHORT).show()
+                    }
                 }
+            ) {
+                Icon(Icons.Default.Wallpaper, contentDescription = null)
+                Spacer(modifier = Modifier.width(6.dp))
+                Text("Fon qilish", fontWeight = FontWeight.Bold)
+            }
+
+            IconButton(
+                onClick = { galleryLauncher.launch("image/*") },
+                modifier = Modifier
+                    .background(Color.White.copy(alpha = 0.1f), RoundedCornerShape(14.dp))
+                    .border(1.dp, Color.White.copy(alpha = 0.2f), RoundedCornerShape(14.dp))
+                    .padding(4.dp)
+            ) {
+                Icon(Icons.Default.PhotoLibrary, contentDescription = "Galereya", tint = Color.White)
+            }
+            
+            IconButton(
+                enabled = verse != null,
+                onClick = {
+                    val selected = verse ?: return@IconButton
+                    scope.launch { LockScreenWallpaperApplier.shareImage(context, selected) }
+                },
+                modifier = Modifier
+                    .background(Color.White.copy(alpha = 0.1f), RoundedCornerShape(14.dp))
+                    .border(1.dp, Color.White.copy(alpha = 0.2f), RoundedCornerShape(14.dp))
+                    .padding(4.dp)
+            ) {
+                Icon(Icons.Default.Share, contentDescription = "Ulashish", tint = Color.White)
             }
         }
     }
 }
 
 @Composable
-private fun BackgroundPreviewControls(
-    onUseSystemWallpaper: () -> Unit,
-    onPickGallery: () -> Unit,
-    onSampleSelected: (LockScreenBackgroundManager.Sample) -> Unit,
-    onRemoteSampleSelected: (LockScreenBackgroundManager.RemoteSample) -> Unit,
-    remoteDownloads: Map<String, Boolean>,
-    activeDownloads: Map<String, Boolean>
+fun WallpaperFullScreenItem(
+    option: WallpaperOption,
+    isSelected: Boolean,
+    verse: QuranVerse?,
+    selectedFont: LockScreenFontFamily,
+    isDownloaded: Boolean,
+    isDownloading: Boolean
 ) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+    val context = LocalContext.current
+    var decodedBitmap by remember(option, isDownloaded) { mutableStateOf<Bitmap?>(null) }
+
+    LaunchedEffect(option, isDownloaded) {
+        if (option is WallpaperOption.Remote && isDownloaded) {
+            withContext(Dispatchers.IO) {
+                val file = File(context.filesDir, "remote_bg_${option.sample.id}.png")
+                if (file.exists()) {
+                    decodedBitmap = BitmapFactory.decodeFile(file.absolutePath)
+                }
+            }
+        }
+    }
+
+    Box(
+        modifier = Modifier.fillMaxSize()
     ) {
-        Column(
-            modifier = Modifier.padding(14.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            Text(
-                text = "Background tanlash",
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(
-                    modifier = Modifier.weight(1f),
-                    onClick = onUseSystemWallpaper
-                ) {
-                    Text("Telefon foni")
-                }
-                OutlinedButton(
-                    modifier = Modifier.weight(1f),
-                    onClick = onPickGallery
-                ) {
-                    Text("Gallery")
-                }
+        when (option) {
+            is WallpaperOption.Local -> {
+                Image(
+                    painter = painterResource(id = option.sample.resId),
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.FillBounds
+                )
             }
-            LockScreenBackgroundManager.samples.chunked(2).forEach { rowSamples ->
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    rowSamples.forEach { sample ->
-                        OutlinedButton(
-                            modifier = Modifier.weight(1f),
-                            onClick = { onSampleSelected(sample) }
-                        ) {
-                            Text(sample.label)
-                        }
-                    }
-                    if (rowSamples.size == 1) {
-                        Spacer(modifier = Modifier.weight(1f))
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = "Serverdan yuklash",
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-
-            LockScreenBackgroundManager.remoteSamples.forEach { remoteSample ->
-                val isDownloaded = remoteDownloads[remoteSample.id] ?: false
-                val isDownloading = activeDownloads[remoteSample.id] ?: false
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = remoteSample.label,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.weight(1f)
-                    )
-                    if (isDownloading) {
-                        Button(
-                            onClick = {},
-                            enabled = false,
-                            shape = RoundedCornerShape(12.dp)
-                        ) {
-                            Text("Yuklanmoqda...")
-                        }
+            is WallpaperOption.Remote -> {
+                if (isDownloaded) {
+                    if (decodedBitmap != null) {
+                        Image(
+                            bitmap = decodedBitmap!!.asImageBitmap(),
+                            contentDescription = null,
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.FillBounds
+                        )
                     } else {
-                        Button(
-                            onClick = { onRemoteSampleSelected(remoteSample) },
-                            shape = RoundedCornerShape(12.dp)
-                        ) {
-                            Text(if (isDownloaded) "Tanlash" else "Yuklab olish")
-                        }
+                        Box(modifier = Modifier.fillMaxSize().background(Color(0xFF1A5276)))
                     }
+                } else {
+                    Box(modifier = Modifier.fillMaxSize().background(Color(0xFF1A5276)))
+                    if (isDownloading) {
+                        CircularProgressIndicator(modifier = Modifier.align(Alignment.Center), color = Color.White)
+                    } else {
+                        Icon(Icons.Default.CloudDownload, contentDescription = null, modifier = Modifier.align(Alignment.Center).size(64.dp), tint = Color.White.copy(alpha = 0.7f))
+                    }
+                }
+            }
+        }
+        
+        // Overlay Legibility Gradient
+        if (isSelected && verse != null && (option is WallpaperOption.Local || isDownloaded)) {
+            Box(modifier = Modifier.fillMaxSize().background(Brush.verticalGradient(
+                0.0f to Color(0x50000000),
+                0.36f to Color(0x22000000),
+                0.62f to Color(0x0C000000),
+                1.0f to Color(0x48000000)
+            )))
+            
+            // Draw Verse with Compose UI using BoxWithConstraints for proportional scaling
+            BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+                val cardWidth = maxWidth
+                val cardHeight = maxHeight
+                
+                // Match renderer's safe area calculations proportionally
+                val topPadding = cardHeight * 0.27f
+                val horizontalPadding = cardWidth * 0.12f
+                
+                // Scale font size proportionally to the card's width
+                val titleFontSize = (cardWidth.value * 0.05f).sp 
+                val translationFontSize = (cardWidth.value * 0.038f).sp
+
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(top = topPadding, start = horizontalPadding, end = horizontalPadding)
+                ) {
+                    var cleanTranslation = verse.translation.replace(Regex("\\[[^\\]]+\\]"), "").trim()
+                    var surahTitle = verse.surahName
+
+                    val selectedLang = LockScreenWallpaperApplier.getLockScreenLanguage(context)
+                    if (selectedLang == "uz_latin" || selectedLang == "uz") {
+                        cleanTranslation = com.quranreminder.app.lockscreen.CyrillicToLatinConverter.convert(cleanTranslation)
+                        surahTitle = com.quranreminder.app.lockscreen.CyrillicToLatinConverter.convert(surahTitle)
+                    }
+
+                    cleanTranslation = com.quranreminder.app.lockscreen.FancyTextConverter.convert(cleanTranslation, selectedFont)
+                    surahTitle = com.quranreminder.app.lockscreen.FancyTextConverter.convert(surahTitle, selectedFont)
+
+                    val title = "$surahTitle ${verse.surahNumber}:${verse.ayahNumber}"
+                    
+                    Text(
+                        text = title,
+                        style = androidx.compose.ui.text.TextStyle(
+                            color = Color.White,
+                            fontSize = titleFontSize,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = selectedFont.composeFontFamily,
+                            shadow = androidx.compose.ui.graphics.Shadow(color = Color(0xAA000000), offset = androidx.compose.ui.geometry.Offset(3f, 3f), blurRadius = 6f)
+                        )
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = cleanTranslation,
+                        style = androidx.compose.ui.text.TextStyle(
+                            color = Color.White,
+                            fontSize = translationFontSize,
+                            fontWeight = FontWeight.SemiBold,
+                            fontFamily = selectedFont.composeFontFamily,
+                            shadow = androidx.compose.ui.graphics.Shadow(color = Color(0xBA000000), offset = androidx.compose.ui.geometry.Offset(4f, 4f), blurRadius = 8f)
+                        )
+                    )
                 }
             }
         }
     }
 }
+

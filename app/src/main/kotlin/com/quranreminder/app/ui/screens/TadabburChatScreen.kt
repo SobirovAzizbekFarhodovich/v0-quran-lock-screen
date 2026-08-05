@@ -112,7 +112,10 @@ fun TadabburChatScreen(navController: NavHostController, language: String = "uz_
         ) {
             if (messages.isEmpty()) {
                 item {
-                    EmptyChatState()
+                    EmptyChatState(onSuggestionClick = { selected ->
+                        input = selected
+                        send()
+                    })
                 }
             }
             items(messages) { message ->
@@ -168,37 +171,80 @@ fun TadabburChatScreen(navController: NavHostController, language: String = "uz_
 }
 
 @Composable
-private fun EmptyChatState() {
-    NurSurfaceCard(
+private fun EmptyChatState(onSuggestionClick: (String) -> Unit) {
+    val suggestions = listOf(
+        "Assalomu alaykum",
+        "Sabr va shukr haqida oyat",
+        "G'am va tashvishda duo",
+        "Ota-onaga yaxshilik hadis"
+    )
+
+    Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(top = 28.dp),
-        containerColor = MaterialTheme.colorScheme.surface
+            .padding(top = 20.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        Column(
-            modifier = Modifier.padding(22.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+        NurSurfaceCard(
+            modifier = Modifier.fillMaxWidth(),
+            containerColor = MaterialTheme.colorScheme.surface
         ) {
-            Box(
-                modifier = Modifier
-                    .size(48.dp)
-                    .background(NurColors.Ink, androidx.compose.foundation.shape.CircleShape),
-                contentAlignment = Alignment.Center
+            Column(
+                modifier = Modifier.padding(22.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                NurEmblem(size = 24.dp, color = NurColors.GoldSoft)
+                Box(
+                    modifier = Modifier
+                        .size(48.dp)
+                        .background(NurColors.Ink, androidx.compose.foundation.shape.CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    NurEmblem(size = 24.dp, color = NurColors.GoldSoft)
+                }
+                Text(
+                    text = "Assalomu alaykum",
+                    style = MaterialTheme.typography.headlineSmall,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = "Savolingizni yozing — AI Qur'on, hadis va duolardan mos manbalarni topib beradi.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                )
             }
+        }
+
+        Column(
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
             Text(
-                text = "Assalomu alaykum",
-                style = MaterialTheme.typography.headlineSmall,
-                color = MaterialTheme.colorScheme.onSurface
+                text = "Tavsiya etilgan savollar:",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
+                modifier = Modifier.padding(start = 4.dp)
             )
-            Text(
-                text = "Savolingizni yozing — AI Qur'on va hadisdan mos dalillarni topib beradi.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center
-            )
+            suggestions.forEach { suggestion ->
+                NurSurfaceCard(
+                    modifier = Modifier.fillMaxWidth(),
+                    onClick = { onSuggestionClick(suggestion) }
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            text = "✦ $suggestion",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                }
+            }
         }
     }
 }
