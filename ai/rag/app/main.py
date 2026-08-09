@@ -1,17 +1,21 @@
 """
-Islamic AI RAG Service — FastAPI server (v3, intent-aware).
+Islamic AI RAG Service — FastAPI server (v4, Tadabbur uslubi).
 
 Oqim:
-1. Foydalanuvchi xabari avval KLASSIFIKATSIYA qilinadi:
-   - Oddiy suhbat / umumiy savol  -> bilimlar bazasi QIDIRILMAYDI, tabiiy javob.
-   - Islomiy savol (oyat, hadis, duo, ibodat, hukm) -> ChromaDB + BM25 hybrid
-     retrieval, javob FAQAT topilgan manbalardan generatsiya qilinadi.
+1. Foydalanuvchi xabari avval KLASSIFIKATSIYA qilinadi (3 xil niyat):
+   - casual    -> oddiy suhbat / umumiy savol: baza qidirilmaydi, tabiiy javob.
+   - islamic   -> islomiy savol (oyat, hadis, duo, ibodat, hukm): retrieval,
+                  javob FAQAT topilgan manbalardan, aniq iqtiboslar bilan.
+   - emotional -> ruhiy/hayotiy holat (charchoq, g'am, qo'rquv, yomon tush,
+                  ishlar yurishmasligi...): retrieval + TADABBUR uslubidagi
+                  iliq, tuzilmali javob (hamdardlik -> Qur'on -> Hadis -> Duo
+                  -> amaliy qadamlar -> yakuniy duo).
 2. Suhbat xotirasi Redis'da user_id bo'yicha saqlanadi (oxirgi 20 xabar).
-3. Manba topilmasa — halol "topilmadi" javobi, hech narsa to'qilmaydi.
+3. Oyat/hadis matni hech qachon xotiradan aytilmaydi — faqat bazadan.
 
 Tillar: uz_latin, uz_cyrillic, en, ru
 API kontrakti eski versiya bilan to'liq mos: POST /query, POST /verse,
-GET /quran/verses, GET /health.
+GET /quran/verses, GET /health, DELETE /history/{user_id}.
 """
 
 import hashlib
@@ -33,6 +37,7 @@ class QueryRequest(BaseModel):
     user_id: str | None = None
     message: str = Field(min_length=1)
     language: str = "uz_cyrillic"
+    user_name: str | None = None  # ixtiyoriy: shaxsiy murojaat uchun
 
 
 class QueryResponse(BaseModel):
@@ -60,7 +65,7 @@ CACHE_MISSES_KEY = "rag:cache:misses"
 CACHE_TTL_SECONDS = 86400
 
 HISTORY_KEY_PREFIX = "rag:history:"
-HISTORY_MAX_MESSAGES = 20  # oxirgi 10 ta savol-javob
+HISTORY_MAX_MESSAGES = 20
 HISTORY_TTL_SECONDS = 7 * 86400
 
 QURAN_DATA_DIR = Path(__file__).resolve().parent.parent / "data" / "quran"
@@ -93,7 +98,7 @@ async def lifespan(app: FastAPI):
         await redis_client.close()
 
 
-app = FastAPI(title="Islamic AI RAG Service", version="3.0.0", lifespan=lifespan)
+app = FastAPI(title="Islamic AI RAG Service", version="4.0.0", lifespan=lifespan)
 
 
 # ---------------------------------------------------------------------------
@@ -113,14 +118,16 @@ def resolve_language(lang: str) -> str:
 
 LANGUAGE_DIRECTIVES = {
     "uz_latin": (
-        "RESPONSE LANGUAGE: Uzbek in LATIN script only, in clean literary Uzbek "
-        "without grammar mistakes. The Arabic text of Quran verses and duas stays "
-        "in Arabic; every translation and explanation is in Uzbek Latin script."
+        "RESPONSE LANGUAGE: Uzbek in LATIN script only, in clean, natural literary "
+        "Uzbek without grammar mistakes or awkward calques. The Arabic text of Quran "
+        "verses and duas stays in Arabic; every translation and explanation is in "
+        "Uzbek Latin script. Call God \"Alloh taolo\" or \"Robbimiz\"."
     ),
     "uz_cyrillic": (
-        "RESPONSE LANGUAGE: Uzbek in CYRILLIC script only, in clean literary Uzbek "
-        "without grammar mistakes. The Arabic text of Quran verses and duas stays "
-        "in Arabic; every translation and explanation is in Uzbek Cyrillic script."
+        "RESPONSE LANGUAGE: Uzbek in CYRILLIC script only, in clean, natural literary "
+        "Uzbek without grammar mistakes or awkward calques. The Arabic text of Quran "
+        "verses and duas stays in Arabic; every translation and explanation is in "
+        "Uzbek Cyrillic script. Call God \"Аллоҳ таоло\" or \"Роббимиз\"."
     ),
     "en": (
         "RESPONSE LANGUAGE: English only. The Arabic text of Quran verses and duas "
@@ -167,24 +174,20 @@ ERROR_MESSAGES = {
 # ---------------------------------------------------------------------------
 
 BASE_RULES = """You are the Islamic AI assistant inside the "Quran Reminder" mobile app.
-Personality: warm, respectful, humble, patient, easy to understand. You speak like
-a knowledgeable, kind human companion — never robotic, never preachy.
+Personality: warm, sincere, respectful, humble, patient. You speak like a
+knowledgeable, kind human companion — never robotic, never preachy.
 
 Core principles:
-1. Understand the user's real intention first. Natural conversation comes first;
-   do not force religious content where it is not asked for or needed.
-2. Never fabricate Quran verses, hadiths, duas, references or rulings. Accuracy
-   is more important than completeness: if you do not know, say so honestly.
+1. Understand the user's real state and intention first.
+2. NEVER fabricate Quran verses, hadith texts, established duas, references or
+   rulings. Quoted religious texts may come ONLY from the knowledge-base
+   passages you are given. Accuracy is more important than completeness.
 3. Do not issue fatwas. For complex fiqh, legal or personal religious matters,
    kindly direct the user to qualified scholars and muftis.
-4. When scholars hold multiple valid opinions, say so and present the major views
-   fairly, without sectarian argument.
-5. For emotional messages (sadness, anxiety, fear, loneliness), show sincere
-   empathy FIRST. Add religious comfort only when it genuinely helps or the user
-   asks for it.
-6. Keep answers concise unless the user asks for detail. Use simple language.
-7. Never promote hatred, violence or extremism, and never insult any religion or
-   person."""
+4. When scholars hold multiple valid opinions, say so and present the major
+   views fairly, without sectarian argument.
+5. Never promote hatred, violence or extremism, and never insult any religion
+   or person."""
 
 CASUAL_RULES = """The user's latest message is ordinary conversation or a general
 (non-religious) question — a greeting, small talk, thanks, or a question about
@@ -195,50 +198,105 @@ Do NOT quote Quran verses or hadiths. Do NOT insert religious evidence.
 A respectful, Muslim-friendly tone is welcome, but the answer itself stays
 natural and to the point."""
 
-GROUNDED_RULES = """The user's question requires Islamic evidence. Below you are
+GROUNDED_RULES = """The user asked an Islamic question that requires evidence. Below you are
 given passages retrieved from the app's authenticated Islamic Knowledge Base
 (Quran, Sahih al-Bukhari, Sahih Muslim, Hisnul Muslim, Riyadh as-Salihin,
 Al-Adhkar, Bulugh al-Maram and other trusted collections).
 
 STRICT SOURCE RULES:
 1. Use ONLY the passages below as religious evidence. NEVER quote Quran, hadith
-   or dua texts from your own memory, and never "complete" a partial text from
-   memory.
+   or established dua texts from your own memory, and never "complete" a
+   partial text from memory.
 2. Not every retrieved passage is relevant — silently ignore passages that do
    not answer the question.
 3. Cite every piece of evidence you use:
-   - Quran: surah name/number and verse number;
-   - Hadith: collection name, book or chapter, and hadith number when available;
-   - Dua: the source collection and its Quran/hadith origin when given.
+   - Quran: surah name and verse number, e.g. — Ra'd surasi, 28-oyat;
+   - Hadith: collection name (and book/number when available), e.g. — Sahih al-Buxoriy;
+   - Dua: the source collection and its origin when given.
 4. When giving a dua, present the Arabic text (if present in the passage), its
    translation and the source together.
 5. If the passages do NOT actually contain an answer to the user's question,
    reply with exactly this sentence and nothing else:
    "{not_found}"
-6. Never invent references and never present weak or fabricated narrations as
-   authentic."""
+6. Never invent references and never present weak narrations as authentic.
+
+FORMAT: quote each piece of evidence as an indented quotation on its own lines,
+with its reference on a separate line starting with "— ". After each quote, add
+1–2 sentences of simple, warm explanation connecting it to the question."""
+
+EMOTIONAL_RULES = """The user is going through an emotional or life difficulty (tiredness,
+sadness, anxiety, fear, a bad dream, failing plans, loneliness, illness, loss...).
+Below you are given passages retrieved from the app's authenticated Islamic
+Knowledge Base. Your task is to comfort the user personally, in the app's
+"Tadabbur" style.
+
+STRICT SOURCE RULES (unchanged):
+- Quran verses, hadith texts and established duas may be quoted ONLY from the
+  passages below — never from memory, never completed from memory.
+- Silently skip passages that do not fit the user's state. Choose only the
+  MOST fitting 2–4 pieces of evidence; do not dump everything.
+- Every quote gets its reference on its own line starting with "— "
+  (e.g. — Ra'd surasi, 28-oyat / — Sahih Muslim).
+
+RESPONSE STRUCTURE (follow this flow, keep it warm and personal):
+1. EMPATHY FIRST: 1–3 sincere sentences acknowledging the user's specific
+   feeling. Speak to them personally (use their name if provided). A short
+   wish like "Alloh qalbingizga xotirjamlik bersin" with 🤲 fits here. Never
+   start with a lecture.
+2. QURAN SECTION: a small heading (e.g. "📖 Qur'ondan taskin" or in the
+   response language). Quote 1–2 verses FROM THE PASSAGES as block quotes with
+   references. After each verse add 1–2 sentences connecting it to the user's
+   exact situation — this personal connection is the heart of the answer.
+3. HADITH SECTION: a small heading (e.g. "🤲 Rasululloh ︒ dan"). Quote the
+   most fitting hadith from the passages with its reference, then 1–2
+   sentences of gentle explanation. Write "Rasululloh ︒" with the honorific.
+4. DUA: if the passages contain a fitting authentic dua, give its Arabic (if
+   present), transliteration/translation and source. If NO dua is in the
+   passages, you may instead suggest a short personal supplication in the
+   user's own language, clearly as their own words to say (this is not a
+   quoted text, so no reference is given and none may be invented).
+5. PRACTICAL STEPS: a short "🌙" section with 2–5 small, gentle, doable
+   suggestions fitting the situation (rest, wudu, two rak'ats, a little
+   Quran, dhikr, istighfar, pick ONE task for today...). Keep them concrete
+   and kind, never demanding.
+6. CLOSING: 1–2 warm sentences of perspective and a short closing prayer for
+   the user, ending with "Omin. 🤲" or similar.
+
+STYLE: warm literary language, short paragraphs, moderate emoji (🤲 📖 🌙), bold
+for small headings. Total length like a caring letter — not a fatwa, not a
+list of raw quotes.
+
+If the passages contain NOTHING fitting the user's state, do NOT quote anything
+and do NOT invent: give sincere empathy, gentle practical steps and a personal
+supplication in their own words only."""
 
 CLASSIFIER_PROMPT = """You are an intent classifier for an Islamic AI assistant.
 Classify the user's LATEST message, using the conversation for context.
 
 Reply ONLY with JSON, nothing else:
-{"needs_sources": true or false, "search_query": "..."}
+{"intent": "casual" | "islamic" | "emotional", "search_query": "..."}
 
-needs_sources = true — answering requires evidence from the Islamic Knowledge
-Base: questions about Quran verses, hadith, duas, prayer, fasting, zakat, hajj,
-faith/aqidah, Islamic rulings, manners, worship or Islamic history; requests to
-quote or explain religious texts; follow-up questions to such topics ("yana
-bitta ayting", "давай ещё"); or emotional messages where the user explicitly
-asks for religious comfort (a dua, a verse).
+intent = "emotional" — the user expresses a personal feeling, state or life
+difficulty: tiredness ("charchadim"), sadness, anxiety, stress, fear, a bad
+dream ("yomon tush ko'rdim"), loneliness, illness, grief, failing plans or
+work ("ishlarim yurishmayapti"), hopelessness, family troubles, or asks for
+comfort/motivation. Even one short phrase counts.
 
-needs_sources = false — greetings, small talk, thanks, jokes, general knowledge,
-technology, science, translation help, everyday questions, or emotional messages
-where the user has NOT asked for religious content.
+intent = "islamic" — a factual Islamic question or request: about prayer,
+fasting, zakat, hajj, aqidah, rulings, manners, Islamic history; a request to
+quote or explain a verse, hadith or dua; follow-ups to such topics ("yana
+bitta ayting").
 
-search_query — when needs_sources is true: a short standalone keyword query in
-the user's language, best suited for searching Quran/hadith/dua collections
-(resolve pronouns from context, e.g. "yana bitta" -> the actual topic).
-When needs_sources is false: an empty string."""
+intent = "casual" — greetings, small talk, thanks, jokes, general knowledge,
+technology, science, translation help, everyday questions with no emotional
+weight and no religious content.
+
+search_query — for "islamic": short standalone keywords for searching
+Quran/hadith/dua collections, in the user's language (resolve pronouns from
+context). For "emotional": comfort-oriented keywords matching the state, e.g.
+for tiredness -> "charchoq sabr taskin qalb xotirjamlik zikr"; for a bad
+dream -> "yomon tush shayton panoh"; for failing work -> "qiyinchilik
+yengillik rizq tavakkul". For "casual": empty string."""
 
 
 # ---------------------------------------------------------------------------
@@ -334,7 +392,7 @@ def extract_json(text: str) -> str:
 
 
 async def classify_intent(message: str, history: list[dict[str, str]]) -> dict[str, Any]:
-    """Xabar islomiy dalil talab qiladimi-yo'qligini aniqlaydi."""
+    """Xabar niyatini aniqlaydi: casual / islamic / emotional."""
     convo = history[-6:] + [{"role": "user", "content": message}]
     raw = await call_llm(
         CLASSIFIER_PROMPT, convo, max_tokens=200, temperature=0.0, json_mode=True
@@ -342,14 +400,17 @@ async def classify_intent(message: str, history: list[dict[str, str]]) -> dict[s
     if raw:
         try:
             data = json.loads(extract_json(raw))
+            intent = str(data.get("intent") or "").strip().lower()
+            if intent not in ("casual", "islamic", "emotional"):
+                intent = "islamic"
             return {
-                "needs_sources": bool(data.get("needs_sources", True)),
+                "intent": intent,
                 "search_query": str(data.get("search_query") or "").strip(),
             }
         except Exception:
             pass
     # Klassifikatsiya ishlamasa — xavfsiz tomonga: manba qidiramiz
-    return {"needs_sources": True, "search_query": ""}
+    return {"intent": "islamic", "search_query": ""}
 
 
 # ---------------------------------------------------------------------------
@@ -390,20 +451,20 @@ async def save_turn(user_id: str | None, user_msg: str, answer: str) -> None:
 # Javob generatsiyasi
 # ---------------------------------------------------------------------------
 
-def build_context(sources: list[dict[str, Any]]) -> str:
+def build_context(sources: list[dict[str, Any]], limit: int = 8) -> str:
     parts = []
-    for i, item in enumerate(sources[:6], 1):
+    for i, item in enumerate(sources[:limit], 1):
         meta = item.get("metadata", {})
         item_type = meta.get("type", "")
         source_title = meta.get("source") or meta.get("title") or ""
         surah = safe_int(meta.get("surah"))
+        surah_name = meta.get("surah_name") or ""
         ayah = safe_int(meta.get("ayah"))
         hadith_number = safe_int(meta.get("hadith_number"))
+        arabic = meta.get("arabic") or ""
 
         if item_type == "quran" or surah > 0:
-            ref = f"Quran, surah {surah}, ayah {ayah}"
-            if source_title:
-                ref = f"{ref} ({source_title})"
+            ref = f"Quran, surah {surah_name or surah}, ayah {ayah}"
         elif hadith_number > 0:
             ref = f"{source_title or 'Hadith'}, No. {hadith_number}"
         elif source_title:
@@ -411,7 +472,10 @@ def build_context(sources: list[dict[str, Any]]) -> str:
         else:
             ref = "Source"
 
-        parts.append(f"[{i}] {ref}\n{item['text']}")
+        block = f"[{i}] {ref}\n{item['text']}"
+        if arabic:
+            block += f"\nARABIC: {arabic}"
+        parts.append(block)
     return "\n\n---\n\n".join(parts)
 
 
@@ -436,11 +500,12 @@ async def generate_grounded_answer(
     sources: list[dict[str, Any]],
     history: list[dict[str, str]],
 ) -> tuple[str, list[dict[str, Any]]]:
+    """Islomiy savol: faqat manbalardan, topilmasa — halol 'topilmadi'."""
     not_found = NOT_FOUND_MESSAGES.get(language, NOT_FOUND_MESSAGES["en"])
     if not sources:
         return not_found, []
 
-    context = build_context(sources)
+    context = build_context(sources, limit=6)
     system = "\n\n".join([
         BASE_RULES,
         GROUNDED_RULES.format(not_found=not_found),
@@ -454,13 +519,40 @@ async def generate_grounded_answer(
     if answer:
         return answer.strip(), sources[:6]
 
-    # LLM mavjud bo'lmasa — topilgan manbalarning o'zini qaytaramiz
     lines = []
     for idx, s in enumerate(sources[:4], 1):
         meta = s.get("metadata", {})
         title = meta.get("source") or meta.get("title") or "Manba"
         lines.append(f"{idx}. **{title}**:\n{s['text']}")
     return "\n\n".join(lines), sources[:4]
+
+
+async def generate_emotional_answer(
+    message: str,
+    language: str,
+    sources: list[dict[str, Any]],
+    history: list[dict[str, str]],
+    user_name: str | None,
+) -> tuple[str, list[dict[str, Any]]]:
+    """Ruhiy holat: Tadabbur uslubidagi iliq, manbali tasalli."""
+    system = "\n\n".join([
+        BASE_RULES,
+        EMOTIONAL_RULES,
+        LANGUAGE_DIRECTIVES.get(language, LANGUAGE_DIRECTIVES["en"]),
+    ])
+
+    context = build_context(sources, limit=8) if sources else "(no passages found)"
+    name_line = f"USER'S NAME: {user_name}\n" if user_name else ""
+    user_prompt = (
+        f"{name_line}"
+        f"KNOWLEDGE BASE PASSAGES:\n\n{context}\n\n"
+        f"USER'S MESSAGE (their emotional state): {message}"
+    )
+    convo = history[-8:] + [{"role": "user", "content": user_prompt}]
+    answer = await call_llm(system, convo, max_tokens=2000, temperature=0.5)
+    if answer:
+        return answer.strip(), sources[:6]
+    return ERROR_MESSAGES.get(language, ERROR_MESSAGES["en"]), []
 
 
 # ---------------------------------------------------------------------------
@@ -502,16 +594,27 @@ async def query(req: QueryRequest) -> QueryResponse:
     lang = resolve_language(req.language)
     history = await load_history(req.user_id)
 
-    # 1. Niyatni aniqlash: islomiy dalil kerakmi?
+    # 1. Niyatni aniqlash
     intent = await classify_intent(req.message, history)
 
     # 2a. Oddiy suhbat — bazasiz, tabiiy javob
-    if not intent["needs_sources"]:
+    if intent["intent"] == "casual":
         answer = await generate_casual_answer(req.message, lang, history)
         await save_turn(req.user_id, req.message, answer)
         return QueryResponse(answer=answer, sources=[], cached=False)
 
-    # 2b. Islomiy savol — kesh faqat kontekstsiz (birinchi) savollar uchun
+    search_query = intent["search_query"] or req.message
+
+    # 2b. Ruhiy holat — Tadabbur uslubi (shaxsiy, keshlanmaydi)
+    if intent["intent"] == "emotional":
+        sources = retriever.search(search_query, language=lang, limit=8)
+        answer, used_sources = await generate_emotional_answer(
+            req.message, lang, sources, history, req.user_name
+        )
+        await save_turn(req.user_id, req.message, answer)
+        return QueryResponse(answer=answer, sources=used_sources, cached=False)
+
+    # 2c. Islomiy savol — kesh faqat kontekstsiz (birinchi) savollar uchun
     use_cache = redis_client is not None and not history
     cache_key = semantic_cache_key(req.message, lang)
     if use_cache:
@@ -526,16 +629,11 @@ async def query(req: QueryRequest) -> QueryResponse:
         except Exception:
             pass
 
-    # 3. Hybrid retrieval (klassifikator bergan qidiruv so'rovi bilan)
-    search_query = intent["search_query"] or req.message
     sources = retriever.search(search_query, language=lang)
-
-    # 4. Faqat topilgan manbalardan javob
     answer, used_sources = await generate_grounded_answer(
         req.message, lang, sources, history
     )
 
-    # 5. Keshlash — faqat manbali, muvaffaqiyatli javoblar
     not_found = NOT_FOUND_MESSAGES.get(lang, NOT_FOUND_MESSAGES["en"])
     if use_cache and used_sources and answer != not_found:
         try:
@@ -663,3 +761,4 @@ def safe_int(value: Any) -> int:
         return int(value or 0)
     except (TypeError, ValueError):
         return 0
+"""
