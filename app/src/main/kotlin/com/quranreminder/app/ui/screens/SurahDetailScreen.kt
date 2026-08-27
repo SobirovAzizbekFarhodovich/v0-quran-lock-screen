@@ -42,6 +42,7 @@ import com.quranreminder.app.ui.theme.NurPill
 import com.quranreminder.app.ui.theme.NurScreenHeader
 import com.quranreminder.app.ui.theme.NurSectionTitle
 import com.quranreminder.app.ui.theme.NurSurfaceCard
+import com.quranreminder.app.ui.theme.t
 import com.quranreminder.app.ui.viewmodel.QuranViewModel
 import kotlinx.coroutines.launch
 
@@ -58,6 +59,20 @@ fun SurahDetailScreen(
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
 
+    val loadingText = t("surahDetail.loading")
+    val eyebrowFallbackText = t("surahDetail.eyebrowFallback")
+    val backText = t("common.back")
+    val translationLabelText = t("surahDetail.translationLabel")
+    val maddText = t("surahDetail.tajwid.madd")
+    val ikhfaText = t("surahDetail.tajwid.ikhfa")
+    val lockScreenSelectedText = t("surahDetail.lockScreenSelected")
+    val lockScreenFailedText = t("surahDetail.lockScreenFailed")
+    val shareFailedText = t("surahDetail.shareFailed")
+    val ayahPrefixText = t("surahDetail.ayahPrefix")
+    val shareImageDesc = t("surahDetail.shareImage")
+    val selectLockScreenDesc = t("surahDetail.selectLockScreen")
+    val saveDesc = t("surahDetail.save")
+
     LaunchedEffect(surahNumber) { viewModel.loadSurahVerses(surahNumber) }
 
     if (verses.isEmpty()) {
@@ -71,7 +86,7 @@ fun SurahDetailScreen(
             NurEmblem(size = 46.dp)
             Spacer(modifier = Modifier.height(16.dp))
             Text(
-                text = "Oyatlar yuklanmoqda...",
+                text = loadingText,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f)
             )
@@ -93,11 +108,11 @@ fun SurahDetailScreen(
     ) {
         NurScreenHeader(
             title = firstVerse.surahName,
-            eyebrow = firstVerse.surahNameArabic.ifBlank { "Qur'oni Karim" },
+            eyebrow = firstVerse.surahNameArabic.ifBlank { eyebrowFallbackText },
             leading = {
                 NurIconButton(
                     icon = Icons.Default.ArrowBack,
-                    contentDescription = "Orqaga",
+                    contentDescription = backText,
                     onClick = { navController.popBackStack() }
                 )
             }
@@ -115,11 +130,11 @@ fun SurahDetailScreen(
         ) {
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    NurPill(text = "O'ZBEK TARJIMASI")
+                    NurPill(text = translationLabelText)
                     if (verses.any { it.ayahTextArabic.isNotBlank() }) {
                         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            TajwidLegend("Madd", NurColors.Terracotta)
-                            TajwidLegend("Ixfo", NurColors.Sage)
+                            TajwidLegend(maddText, NurColors.Terracotta)
+                            TajwidLegend(ikhfaText, NurColors.Sage)
                         }
                     }
                 }
@@ -127,6 +142,10 @@ fun SurahDetailScreen(
             items(verses, key = { it.id }) { verse ->
                 VerseDetailCard(
                     verse = verse,
+                    ayahPrefix = ayahPrefixText,
+                    shareImageDesc = shareImageDesc,
+                    selectLockScreenDesc = selectLockScreenDesc,
+                    saveDesc = saveDesc,
                     isBookmarked = QuranViewModel.verseKey(verse.surahNumber, verse.ayahNumber) in bookmarkedVerseKeys,
                     onBookmarkClick = { viewModel.toggleBookmark(verse.surahNumber, verse.ayahNumber) },
                     onLockScreenClick = {
@@ -135,9 +154,9 @@ fun SurahDetailScreen(
                                 LockScreenWallpaperApplier.saveSelectedVerse(context, verse)
                                 LockScreenWallpaperApplier.apply(context, verse, rememberForHour = true)
                             }.onSuccess {
-                                Toast.makeText(context, "Lock-screen uchun shu oyat tanlandi", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, lockScreenSelectedText, Toast.LENGTH_SHORT).show()
                             }.onFailure {
-                                Toast.makeText(context, "Lock-screen yangilanmadi", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, lockScreenFailedText, Toast.LENGTH_SHORT).show()
                             }
                         }
                     },
@@ -145,7 +164,7 @@ fun SurahDetailScreen(
                         scope.launch {
                             runCatching { LockScreenWallpaperApplier.shareImage(context, verse) }
                                 .onFailure {
-                                    Toast.makeText(context, "Rasm ulashilmadi", Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(context, shareFailedText, Toast.LENGTH_SHORT).show()
                                 }
                         }
                     }
@@ -175,6 +194,10 @@ private fun TajwidLegend(label: String, color: androidx.compose.ui.graphics.Colo
 @Composable
 fun VerseDetailCard(
     verse: QuranVerse,
+    ayahPrefix: String,
+    shareImageDesc: String,
+    selectLockScreenDesc: String,
+    saveDesc: String,
     isBookmarked: Boolean,
     onBookmarkClick: () -> Unit,
     onLockScreenClick: () -> Unit,
@@ -203,14 +226,14 @@ fun VerseDetailCard(
                     )
                 }
                 Spacer(modifier = Modifier.width(8.dp))
-                NurSectionTitle("Oyat ${verse.ayahNumber}", modifier = Modifier.weight(1f))
-                NurIconButton(Icons.Default.Share, "Rasm qilib ulashish", onShareClick)
+                NurSectionTitle("$ayahPrefix${verse.ayahNumber}", modifier = Modifier.weight(1f))
+                NurIconButton(Icons.Default.Share, shareImageDesc, onShareClick)
                 Spacer(modifier = Modifier.width(6.dp))
-                NurIconButton(Icons.Default.Lock, "Lock-screen uchun tanlash", onLockScreenClick)
+                NurIconButton(Icons.Default.Lock, selectLockScreenDesc, onLockScreenClick)
                 Spacer(modifier = Modifier.width(6.dp))
                 NurIconButton(
                     if (isBookmarked) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
-                    "Saqlash",
+                    saveDesc,
                     onBookmarkClick,
                     emphasized = isBookmarked
                 )

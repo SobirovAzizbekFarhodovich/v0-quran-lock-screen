@@ -8,12 +8,21 @@ import com.quranreminder.app.data.QuranDataLoader
 import com.quranreminder.app.database.Bookmark
 import com.quranreminder.app.database.QuranVerse
 import com.quranreminder.app.database.SurahHeader
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+
+sealed interface LanguageDownloadState {
+    data object Idle : LanguageDownloadState
+    data object InProgress : LanguageDownloadState
+    data class Success(val language: String) : LanguageDownloadState
+    data class Failure(val language: String, val message: String) : LanguageDownloadState
+}
 
 class QuranViewModel(private val repository: QuranRepository) : ViewModel() {
     
@@ -125,20 +134,25 @@ class QuranViewModel(private val repository: QuranRepository) : ViewModel() {
         _error.value = null
     }
 
-    fun downloadSelectedLanguage(language: String) {
+    private val _languageDownloadState = MutableStateFlow<LanguageDownloadState>(LanguageDownloadState.Idle)
+    val languageDownloadState: StateFlow<LanguageDownloadState> = _languageDownloadState.asStateFlow()
+
+    fun downloadLanguageContent(language: String) {
+        if (_languageDownloadState.value == LanguageDownloadState.InProgress) return
         viewModelScope.launch {
-            _isLoading.value = true
-            _error.value = null
+            _languageDownloadState.value = LanguageDownloadState.InProgress
             try {
-                val verses = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                val verses = withContext(Dispatchers.IO) {
                     QuranDataLoader.loadFromServer(language)
                 }
                 check(verses.size >= 6236) { "Qur’on tarjimasi to‘liq yuklanmadi" }
                 repository.replaceVerses(verses)
+                _languageDownloadState.value = LanguageDownloadState.Success(language)
             } catch (error: Exception) {
-                _error.value = error.message ?: "Qur’onni serverdan yuklab bo‘lmadi"
-            } finally {
-                _isLoading.value = false
+                _languageDownloadState.value = LanguageDownloadState.Failure(
+                    language,
+                    error.message ?: "Qur’onni serverdan yuklab bo‘lmadi"
+                )
             }
         }
     }

@@ -14,6 +14,7 @@ var ErrCircuitOpen = errors.New("rag circuit open")
 
 type QueryRequest struct {
 	UserID   string `json:"user_id,omitempty"`
+	UserName string `json:"user_name,omitempty"`
 	Message  string `json:"message" binding:"required"`
 	Language string `json:"language"`
 }

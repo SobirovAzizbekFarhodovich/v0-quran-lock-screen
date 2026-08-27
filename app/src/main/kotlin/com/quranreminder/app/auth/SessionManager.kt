@@ -20,11 +20,36 @@ class SessionManager(context: Context) {
     val isSignedIn: Boolean
         get() = !accessToken.isNullOrBlank()
 
+    val displayName: String
+        get() = prefs.getString(KEY_NAME, "") ?: ""
+
     suspend fun signIn(email: String, password: String): Result<AuthUser> =
         authenticate("/api/v1/auth/login", AuthRequest(email = email, password = password))
 
     suspend fun signUp(name: String, email: String, password: String): Result<AuthUser> =
         authenticate("/api/v1/auth/register", AuthRequest(name = name, email = email, password = password))
+
+    suspend fun signInWithGoogle(idToken: String): Result<AuthUser> =
+        authenticate("/api/v1/auth/oauth/google", mapOf("id_token" to idToken))
+
+    suspend fun requestPasswordReset(email: String): Result<Unit> = withContext(Dispatchers.IO) {
+        runCatching { request("/api/v1/auth/password-reset/request", "POST", mapOf("email" to email)); Unit }
+    }
+
+    suspend fun confirmPasswordReset(token: String, newPassword: String): Result<Unit> = withContext(Dispatchers.IO) {
+        runCatching {
+            request("/api/v1/auth/password-reset/confirm", "POST", mapOf("token" to token, "password" to newPassword))
+            Unit
+        }
+    }
+
+    var contentReadyLanguage: String?
+        get() = prefs.getString(KEY_CONTENT_READY_LANGUAGE, null)
+        private set(value) { prefs.edit().putString(KEY_CONTENT_READY_LANGUAGE, value).apply() }
+
+    fun markContentReady(language: String) {
+        contentReadyLanguage = language
+    }
 
     suspend fun updateLanguage(language: String): Result<AuthUser> = withContext(Dispatchers.IO) {
         val token = accessToken ?: return@withContext Result.failure(IllegalStateException("Sessiya topilmadi"))
@@ -46,9 +71,9 @@ class SessionManager(context: Context) {
         prefs.edit().clear().apply()
     }
 
-    private suspend fun authenticate(path: String, request: AuthRequest): Result<AuthUser> = withContext(Dispatchers.IO) {
+    private suspend fun authenticate(path: String, body: Any): Result<AuthUser> = withContext(Dispatchers.IO) {
         runCatching {
-            val response = request(path, "POST", request)
+            val response = request(path, "POST", body)
             val auth = gson.fromJson(response, AuthResponse::class.java)
             require(!auth.accessToken.isNullOrBlank() && auth.user != null) { "Server noto‘g‘ri javob qaytardi" }
             prefs.edit()
@@ -96,6 +121,7 @@ class SessionManager(context: Context) {
         const val KEY_NAME = "name"
         const val KEY_EMAIL = "email"
         const val KEY_LANGUAGE = "language"
+        const val KEY_CONTENT_READY_LANGUAGE = "content_ready_language"
     }
 }
 

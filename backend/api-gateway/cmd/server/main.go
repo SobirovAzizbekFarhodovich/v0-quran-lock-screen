@@ -58,7 +58,10 @@ func main() {
 	tokenService := auth.NewTokenService(cfg.JWTSecret, cfg.AccessTTL, cfg.RefreshTTL)
 	authHandler := httpapi.NewAuthHandler(db, tokenService, redisClient, httpapi.NewResendEmailSender(cfg.ResendAPIKey, cfg.EmailFrom), cfg.PasswordResetURL, cfg.GoogleClientIDs, cfg.AppleClientID)
 	profileHandler := httpapi.NewProfileHandler(db)
-	ragClient := rag.NewClient(cfg.AIRAGURL, 5*time.Second)
+	// Matches the Android client's readTimeout: classify_intent + answer
+	// generation each chain a primary LLM call with a fallback, so a slow
+	// round trip can legitimately take tens of seconds.
+	ragClient := rag.NewClient(cfg.AIRAGURL, 90*time.Second)
 	ragHandler := httpapi.NewRAGHandler(ragClient)
 	legacyChatHandler := httpapi.NewLegacyChatHandler(ragClient)
 	wsHandler := ws.NewHandler(redisClient, db, cfg.CORSOrigins)
@@ -134,7 +137,7 @@ func main() {
 	protected.GET("/sessions", profileHandler.Sessions)
 	protected.POST("/sessions", profileHandler.CreateSession)
 	protected.POST("/spiritual/query",
-		ratelimit.RedisTokenBucket(redisClient, 2, 30*time.Second),
+		ratelimit.RedisTokenBucket(redisClient, 20, time.Minute),
 		ragHandler.Query,
 	)
 

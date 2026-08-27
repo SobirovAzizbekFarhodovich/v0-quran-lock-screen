@@ -21,6 +21,7 @@ GET /quran/verses, GET /health, DELETE /history/{user_id}.
 import hashlib
 import json
 import os
+import re
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
@@ -119,23 +120,27 @@ def resolve_language(lang: str) -> str:
 LANGUAGE_DIRECTIVES = {
     "uz_latin": (
         "RESPONSE LANGUAGE: Uzbek in LATIN script only, in clean, natural literary "
-        "Uzbek without grammar mistakes or awkward calques. The Arabic text of Quran "
-        "verses and duas stays in Arabic; every translation and explanation is in "
-        "Uzbek Latin script. Call God \"Alloh taolo\" or \"Robbimiz\"."
+        "Uzbek without grammar mistakes or awkward calques — regardless of what "
+        "script or language the user typed in. The Arabic text of Quran verses and "
+        "duas stays in Arabic; every translation and explanation is in Uzbek Latin "
+        "script. Call God \"Alloh taolo\" or \"Robbimiz\"."
     ),
     "uz_cyrillic": (
-        "RESPONSE LANGUAGE: Uzbek in CYRILLIC script only, in clean, natural literary "
-        "Uzbek without grammar mistakes or awkward calques. The Arabic text of Quran "
-        "verses and duas stays in Arabic; every translation and explanation is in "
-        "Uzbek Cyrillic script. Call God \"Аллоҳ таоло\" or \"Роббимиз\"."
+        "RESPONSE LANGUAGE: Uzbek in CYRILLIC script only, in clean, natural "
+        "literary Uzbek without grammar mistakes or awkward calques — regardless of "
+        "what script or language the user typed in. The Arabic text of Quran verses "
+        "and duas stays in Arabic; every translation and explanation is in Uzbek "
+        "Cyrillic script. Call God \"Аллоҳ таоло\" or \"Роббимиз\"."
     ),
     "en": (
-        "RESPONSE LANGUAGE: English only. The Arabic text of Quran verses and duas "
-        "stays in Arabic; translations and explanations are in English."
+        "RESPONSE LANGUAGE: English only, regardless of what language the user "
+        "typed in. The Arabic text of Quran verses and duas stays in Arabic; "
+        "translations and explanations are in English."
     ),
     "ru": (
-        "RESPONSE LANGUAGE: Russian only. The Arabic text of Quran verses and duas "
-        "stays in Arabic; translations and explanations are in Russian."
+        "RESPONSE LANGUAGE: Russian only, regardless of what language the user "
+        "typed in. The Arabic text of Quran verses and duas stays in Arabic; "
+        "translations and explanations are in Russian."
     ),
 }
 
@@ -409,8 +414,82 @@ async def classify_intent(message: str, history: list[dict[str, str]]) -> dict[s
             }
         except Exception:
             pass
-    # Klassifikatsiya ishlamasa — xavfsiz tomonga: manba qidiramiz
-    return {"intent": "islamic", "search_query": ""}
+    # LLM vaqtincha mavjud bo'lmasa ham oddiy suhbatni RAG/fatvo rejimiga
+    # majburlamaymiz. Diniy signal bo'lsa xavfsiz taraf — manbali rejim.
+    return heuristic_intent(message)
+
+
+def heuristic_intent(message: str) -> dict[str, Any]:
+    text = " ".join(message.lower().split())
+    islamic_terms = (
+        "qur'on", "quron", "oyat", "hadis", "hadith", "sunnat", "sunnah",
+        "namoz", "salat", "ro'za", "roza", "zakat", "haj", "umra", "duo",
+        "zikr", "tavba", "halol", "harom", "fiqh", "fatvo", "mazhab",
+        "islom", "alloh", "rasululloh", "payg'ambar", "paygambar",
+    )
+    emotional_terms = (
+        "charchadim", "tushkun", "qo'rqyap", "qorqyap", "xavotir", "g'am",
+        "gam", "yolg'iz", "yolgiz", "siqilyap", "siqildim", "zerikdim",
+        "ishlarim yurishmay", "kasal", "yo'qotdim", "yoqotdim", "stress",
+    )
+    if any(term in text for term in islamic_terms):
+        return {"intent": "islamic", "search_query": message}
+    if any(term in text for term in emotional_terms):
+        return {"intent": "emotional", "search_query": message}
+    return {"intent": "casual", "search_query": ""}
+
+
+# Instant, LLM-free replies for the most common trivial chitchat (greetings,
+# thanks) so a plain "salom" does not have to pay for two sequential LLM
+# calls (classify_intent + generate_casual_answer). Anything less obvious
+# still goes through the full intent-aware flow. Turns are still saved to
+# Redis history so conversation continuity is unaffected.
+QUICK_CASUAL_MAX_CHARS = 40
+
+QUICK_CASUAL_PATTERNS: dict[str, tuple[str, ...]] = {
+    "greeting": (
+        "salom", "assalom", "assalamu", "hi", "hello", "xayrli", "privet", "selam",
+    ),
+    "thanks": (
+        "rahmat", "tashakkur", "jazakallah", "barakalloh", "spasibo", "minnatdor",
+    ),
+}
+
+QUICK_CASUAL_REPLIES: dict[str, dict[str, str]] = {
+    "greeting": {
+        "uz_latin": (
+            "Assalomu alaykum va rahmatulloohi va barakatuh! Sizga Qur'on oyatlari, "
+            "sahih hadislar va duolar bo'yicha qanday yordam bera olaman?"
+        ),
+        "uz_cyrillic": (
+            "Ассалому алайкум ва раҳматуллоҳи ва баракатуҳ! Сизга Қуръон оятлари, "
+            "саҳиҳ ҳадислар ва дуолар бўйича қандай ёрдам бера оламан?"
+        ),
+        "en": "Wa alaykum assalam! How can I help you with the Quran, hadith or duas today?",
+        "ru": "Ва алейкум ассалам! Чем могу помочь по Корану, хадисам или дуа?",
+    },
+    "thanks": {
+        "uz_latin": (
+            "Arzimaydi! Jazakallohu xayran. Yana savollaringiz bo'lsa, bemalol yozavering."
+        ),
+        "uz_cyrillic": (
+            "Арзимайди! Жазакаллоҳу хайран. Яна саволларингиз бўлса, бемалол ёзаверинг."
+        ),
+        "en": "You're welcome! Feel free to ask anytime.",
+        "ru": "Пожалуйста! Обращайтесь, если будут ещё вопросы.",
+    },
+}
+
+
+def quick_casual_reply(message: str, language: str) -> str | None:
+    text = " ".join(message.lower().split())
+    if not text or len(text) > QUICK_CASUAL_MAX_CHARS:
+        return None
+    for category, terms in QUICK_CASUAL_PATTERNS.items():
+        if any(re.search(rf"\b{re.escape(term)}\b", text) for term in terms):
+            replies = QUICK_CASUAL_REPLIES[category]
+            return replies.get(language, replies["en"])
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -594,6 +673,12 @@ async def query(req: QueryRequest) -> QueryResponse:
     lang = resolve_language(req.language)
     history = await load_history(req.user_id)
 
+    # 0. Oddiy salomlashuv/rahmat — ikkita LLM chaqiruvisiz darhol javob.
+    quick_reply = quick_casual_reply(req.message, lang)
+    if quick_reply:
+        await save_turn(req.user_id, req.message, quick_reply)
+        return QueryResponse(answer=quick_reply, sources=[], cached=False)
+
     # 1. Niyatni aniqlash
     intent = await classify_intent(req.message, history)
 
@@ -605,7 +690,8 @@ async def query(req: QueryRequest) -> QueryResponse:
 
     search_query = intent["search_query"] or req.message
 
-    # 2b. Ruhiy holat — Tadabbur uslubi (shaxsiy, keshlanmaydi)
+    # 2b. Ruhiy holat: har doim bazadan olingan manbalar bilan Tadabbur
+    # uslubidagi tasalli (hech qachon taxmin/o'zidan to'qib chiqarilmaydi).
     if intent["intent"] == "emotional":
         sources = retriever.search(search_query, language=lang, limit=8)
         answer, used_sources = await generate_emotional_answer(
@@ -761,4 +847,3 @@ def safe_int(value: Any) -> int:
         return int(value or 0)
     except (TypeError, ValueError):
         return 0
-"""

@@ -44,12 +44,17 @@ class Settings:
     # A complete surah can take several minutes.  Analysis is intentionally
     # performed only after the reader taps Stop, not after a short silence.
     max_analysis_seconds: float = float(os.getenv("RECITATION_MAX_ANALYSIS_SECONDS", "900"))
+    # How often (in seconds of newly buffered audio) a fast, non-final partial
+    # transcription is produced so the client can highlight words live, karaoke
+    # style, while the reader is still speaking.
+    partial_interval_seconds: float = float(os.getenv("RECITATION_PARTIAL_INTERVAL_SECONDS", "1.5"))
 
 
 settings = Settings()
 client: redis.Redis | None = None
 model = None
 session_buffers: dict[str, bytearray] = {}
+session_last_partial_bytes: dict[str, int] = {}
 
 
 @dataclass(frozen=True)
@@ -195,10 +200,32 @@ async def process_chunk(fields: dict[str, str]) -> dict | None:
     elif not final:
         return None
 
-    # Do not score while the user is still reciting.  Early partial results
-    # made the Android UI look as if it had stopped listening after ~1.5 sec.
     if not final:
-        return None
+        # Fast, non-final transcription so the client can highlight words
+        # live while the reader is still speaking (karaoke-style progress),
+        # without paying for the full tajweed analysis on every chunk.
+        last_bytes = session_last_partial_bytes.get(session_id, 0)
+        if len(buffer) < min_analysis_bytes():
+            return None
+        if len(buffer) - last_bytes < partial_interval_bytes():
+            return None
+        session_last_partial_bytes[session_id] = len(buffer)
+        transcription = transcribe(bytes(buffer), fast=True)
+        if not transcription.text:
+            return None
+        return {
+            "type": "result",
+            "status": "in_progress",
+            "final": False,
+            "session_id": session_id,
+            "user_id": fields.get("user_id"),
+            "surah": int(fields.get("surah") or 0),
+            "ayah": int(fields.get("ayah") or 0),
+            "transcript": transcription.text,
+            "transcription": transcription.text,
+            "errors": [],
+            "score": 0,
+        }
 
     transcription = transcribe(bytes(buffer))
     transcript = transcription.text
@@ -219,6 +246,7 @@ async def process_chunk(fields: dict[str, str]) -> dict | None:
     }
     if final:
         session_buffers.pop(session_id, None)
+        session_last_partial_bytes.pop(session_id, None)
     return result
 
 
@@ -240,14 +268,23 @@ def max_analysis_bytes() -> int:
     return int(settings.max_analysis_seconds * SAMPLE_RATE * SAMPLE_WIDTH_BYTES)
 
 
+def partial_interval_bytes() -> int:
+    return int(settings.partial_interval_seconds * SAMPLE_RATE * SAMPLE_WIDTH_BYTES)
+
+
 def trim_buffer(buffer: bytearray) -> None:
     max_bytes = max_analysis_bytes()
     if len(buffer) > max_bytes:
         del buffer[: len(buffer) - max_bytes]
 
 
-def transcribe(audio: bytes) -> Transcription:
-    """Transcribe raw PCM 16-bit 16kHz mono audio using faster-whisper."""
+def transcribe(audio: bytes, fast: bool = False) -> Transcription:
+    """Transcribe raw PCM 16-bit 16kHz mono audio using faster-whisper.
+
+    `fast=True` trades accuracy for latency (lower beam size, no VAD pass) —
+    used for the live, non-final partial transcriptions that drive word
+    highlighting while the reader is still speaking.
+    """
     if model is None or not audio or len(audio) < 1600:
         return Transcription("")
 
@@ -265,8 +302,8 @@ def transcribe(audio: bytes) -> Transcription:
             tmp.name,
             language="ar",
             task="transcribe",
-            beam_size=5,
-            vad_filter=True,
+            beam_size=1 if fast else 5,
+            vad_filter=not fast,
             vad_parameters=dict(min_silence_duration_ms=500),
         )
         segment_list = list(segments)

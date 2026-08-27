@@ -40,6 +40,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.quranreminder.app.ui.theme.NurColors
 import com.quranreminder.app.ui.theme.NurEmblem
+import com.quranreminder.app.ui.theme.t
 import com.quranreminder.app.ui.viewmodel.SettingsViewModel
 
 private data class AppLanguage(val code: String, val label: String)
@@ -76,13 +77,13 @@ fun LanguageSelectionScreen(
             NurEmblem(size = 56.dp)
             Spacer(modifier = Modifier.height(16.dp))
             Text(
-                text = "Nur",
+                text = "Noorain",
                 style = MaterialTheme.typography.displaySmall,
                 color = MaterialTheme.colorScheme.primary
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
-                text = "Qur'oni Karim va tajvid yordamchisi",
+                text = t("languageSelect.tagline"),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.65f),
                 textAlign = TextAlign.Center
@@ -120,7 +121,7 @@ fun LanguageSelectionScreen(
                     contentColor = NurColors.Charcoal
                 )
             ) {
-                Text("Davom etish", style = MaterialTheme.typography.labelLarge)
+                Text(t("languageSelect.continue"), style = MaterialTheme.typography.labelLarge)
             }
         }
     }

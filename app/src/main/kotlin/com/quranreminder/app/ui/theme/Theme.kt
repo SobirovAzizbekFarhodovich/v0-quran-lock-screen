@@ -1,3 +1,4 @@
+
 package com.quranreminder.app.ui.theme
 
 import androidx.compose.foundation.isSystemInDarkTheme

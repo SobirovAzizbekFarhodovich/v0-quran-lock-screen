@@ -42,6 +42,7 @@ import androidx.navigation.NavHostController
 import com.quranreminder.app.database.Reminder
 import com.quranreminder.app.ui.theme.NurIconButton
 import com.quranreminder.app.ui.theme.NurScreenHeader
+import com.quranreminder.app.ui.theme.t
 import com.quranreminder.app.ui.viewmodel.ReminderViewModel
 
 @Composable
@@ -58,10 +59,10 @@ fun RemindersScreen(
             .background(MaterialTheme.colorScheme.background)
     ) {
         NurScreenHeader(
-            title = "Eslatmalar",
-            eyebrow = "Tilovat vaqtlari",
+            title = t("reminders.title"),
+            eyebrow = t("reminders.eyebrow"),
             leading = {
-                NurIconButton(Icons.Default.ArrowBack, "Orqaga", onClick = { navController.popBackStack() })
+                NurIconButton(Icons.Default.ArrowBack, t("common.back"), onClick = { navController.popBackStack() })
             }
         )
 
@@ -74,12 +75,12 @@ fun RemindersScreen(
                 verticalArrangement = Arrangement.Center
             ) {
                 Text(
-                    text = "Hali eslatma yo'q",
+                    text = t("reminders.empty.title"),
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onBackground
                 )
                 Text(
-                    text = "+ tugmasi orqali yangi eslatma qo'shing",
+                    text = t("reminders.empty.body"),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
                 )
@@ -112,7 +113,7 @@ fun RemindersScreen(
                 .padding(16.dp),
             containerColor = MaterialTheme.colorScheme.primary
         ) {
-            Icon(Icons.Default.Add, contentDescription = "Eslatma qo'shish")
+            Icon(Icons.Default.Add, contentDescription = t("reminders.add"))
         }
 
         if (showDialog.value) {
@@ -133,6 +134,9 @@ fun ReminderCard(
     onToggle: (Reminder) -> Unit,
     onDelete: () -> Unit
 ) {
+    val suraLabel = t("reminders.suraLabel")
+    val ayahLabel = t("reminders.ayahLabel")
+    val deleteLabel = t("reminders.delete")
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
@@ -149,7 +153,7 @@ fun ReminderCard(
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = "Sura ${reminder.surahNumber}, Oyat ${reminder.ayahNumber}",
+                    text = "$suraLabel${reminder.surahNumber}$ayahLabel${reminder.ayahNumber}",
                     style = MaterialTheme.typography.headlineSmall,
                     color = MaterialTheme.colorScheme.primary
                 )
@@ -170,7 +174,7 @@ fun ReminderCard(
                 IconButton(onClick = onDelete) {
                     Icon(
                         Icons.Default.Close,
-                        contentDescription = "Delete",
+                        contentDescription = deleteLabel,
                         tint = MaterialTheme.colorScheme.error
                     )
                 }
@@ -194,23 +198,30 @@ fun AddReminderDialog(
     val hour = selectedHour.value.toIntOrNull()?.coerceIn(0, 23)
     val minute = selectedMinute.value.toIntOrNull()?.coerceIn(0, 59)
     val canAdd = surah != null && ayah != null && hour != null && minute != null
+    val addTitle = t("reminders.add")
+    val surahFieldLabel = t("reminders.field.surah")
+    val ayahFieldLabel = t("reminders.field.ayah")
+    val hourFieldLabel = t("reminders.field.hour")
+    val minuteFieldLabel = t("reminders.field.minute")
+    val confirmLabel = t("reminders.confirm")
+    val cancelLabel = t("reminders.cancel")
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Eslatma qo'shish") },
+        title = { Text(addTitle) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 OutlinedTextField(
                     value = selectedSurah.value,
                     onValueChange = { selectedSurah.value = it.filter(Char::isDigit).take(3) },
-                    label = { Text("Sura (1-114)") },
+                    label = { Text(surahFieldLabel) },
                     keyboardOptions = keyboardOptions,
                     singleLine = true
                 )
                 OutlinedTextField(
                     value = selectedAyah.value,
                     onValueChange = { selectedAyah.value = it.filter(Char::isDigit).take(3) },
-                    label = { Text("Oyat") },
+                    label = { Text(ayahFieldLabel) },
                     keyboardOptions = keyboardOptions,
                     singleLine = true
                 )
@@ -218,7 +229,7 @@ fun AddReminderDialog(
                     OutlinedTextField(
                         value = selectedHour.value,
                         onValueChange = { selectedHour.value = it.filter(Char::isDigit).take(2) },
-                        label = { Text("Soat") },
+                        label = { Text(hourFieldLabel) },
                         keyboardOptions = keyboardOptions,
                         singleLine = true,
                         modifier = Modifier.weight(1f)
@@ -226,7 +237,7 @@ fun AddReminderDialog(
                     OutlinedTextField(
                         value = selectedMinute.value,
                         onValueChange = { selectedMinute.value = it.filter(Char::isDigit).take(2) },
-                        label = { Text("Daqiqa") },
+                        label = { Text(minuteFieldLabel) },
                         keyboardOptions = keyboardOptions,
                         singleLine = true,
                         modifier = Modifier.weight(1f)
@@ -250,12 +261,12 @@ fun AddReminderDialog(
                     }
                 }
             ) {
-                Text("Qo'shish")
+                Text(confirmLabel)
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Bekor qilish")
+                Text(cancelLabel)
             }
         }
     )

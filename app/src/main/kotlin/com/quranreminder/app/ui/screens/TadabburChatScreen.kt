@@ -52,6 +52,7 @@ import com.quranreminder.app.ui.theme.NurPill
 import com.quranreminder.app.ui.theme.NurScreenHeader
 import com.quranreminder.app.ui.theme.NurSectionTitle
 import com.quranreminder.app.ui.theme.NurSurfaceCard
+import com.quranreminder.app.ui.theme.t
 import kotlinx.coroutines.launch
 
 @Composable
@@ -62,6 +63,7 @@ fun TadabburChatScreen(navController: NavHostController, language: String = "uz_
     val messages = remember { mutableStateListOf<ChatMessage>() }
     var input by remember { mutableStateOf("") }
     var isLoading by remember { mutableStateOf(false) }
+    val errorMessage = t("tadabbur.error")
 
     fun send() {
         val query = input.trim()
@@ -72,7 +74,7 @@ fun TadabburChatScreen(navController: NavHostController, language: String = "uz_
         scope.launch {
             val answer = runCatching { repository.answer(query, language) }.getOrElse {
                 TadabburAnswer(
-                    intro = "Javob tayyorlashda xatolik bo'ldi. Qayta urinib ko'ring.",
+                    intro = errorMessage,
                     evidence = emptyList()
                 )
             }
@@ -87,12 +89,12 @@ fun TadabburChatScreen(navController: NavHostController, language: String = "uz_
             .background(MaterialTheme.colorScheme.background)
     ) {
         NurScreenHeader(
-            title = "Islomiy AI yordamchi",
-            eyebrow = "Nur AI · ishonchli manbalar",
+            title = t("tadabbur.title"),
+            eyebrow = t("tadabbur.eyebrow"),
             leading = {
                 NurIconButton(
                     icon = Icons.Default.ArrowBack,
-                    contentDescription = "Orqaga",
+                    contentDescription = t("common.back"),
                     onClick = { navController.popBackStack() }
                 )
             }
@@ -132,7 +134,7 @@ fun TadabburChatScreen(navController: NavHostController, language: String = "uz_
                     ) {
                         NurEmblem(size = 26.dp)
                         Text(
-                            text = "AI tahlil qilmoqda...",
+                            text = t("tadabbur.analyzing"),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.67f)
                         )
@@ -153,7 +155,7 @@ fun TadabburChatScreen(navController: NavHostController, language: String = "uz_
                 value = input,
                 onValueChange = { input = it },
                 modifier = Modifier.weight(1f),
-                placeholder = { Text("Savolingizni yozing...") },
+                placeholder = { Text(t("tadabbur.placeholder")) },
                 shape = RoundedCornerShape(20.dp),
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
                 keyboardActions = KeyboardActions(onSend = { send() }),
@@ -161,7 +163,7 @@ fun TadabburChatScreen(navController: NavHostController, language: String = "uz_
             )
             NurIconButton(
                 icon = Icons.Default.Send,
-                contentDescription = "Yuborish",
+                contentDescription = t("tadabbur.send"),
                 onClick = { send() },
                 modifier = Modifier.size(48.dp),
                 emphasized = true
@@ -173,10 +175,10 @@ fun TadabburChatScreen(navController: NavHostController, language: String = "uz_
 @Composable
 private fun EmptyChatState(onSuggestionClick: (String) -> Unit) {
     val suggestions = listOf(
-        "Assalomu alaykum",
-        "Sabr va shukr haqida oyat",
-        "G'am va tashvishda duo",
-        "Ota-onaga yaxshilik hadis"
+        t("tadabbur.suggestion1"),
+        t("tadabbur.suggestion2"),
+        t("tadabbur.suggestion3"),
+        t("tadabbur.suggestion4")
     )
 
     Column(
@@ -203,12 +205,12 @@ private fun EmptyChatState(onSuggestionClick: (String) -> Unit) {
                     NurEmblem(size = 24.dp, color = NurColors.GoldSoft)
                 }
                 Text(
-                    text = "Assalomu alaykum",
+                    text = t("tadabbur.empty.greeting"),
                     style = MaterialTheme.typography.headlineSmall,
                     color = MaterialTheme.colorScheme.onSurface
                 )
                 Text(
-                    text = "Savolingizni yozing — AI Qur'on, hadis va duolardan mos manbalarni topib beradi.",
+                    text = t("tadabbur.empty.body"),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = androidx.compose.ui.text.style.TextAlign.Center
@@ -220,7 +222,7 @@ private fun EmptyChatState(onSuggestionClick: (String) -> Unit) {
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Text(
-                text = "Tavsiya etilgan savollar:",
+                text = t("tadabbur.empty.suggestionsLabel"),
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
                 modifier = Modifier.padding(start = 4.dp)
@@ -287,11 +289,7 @@ private fun AssistantAnswer(answer: TadabburAnswer) {
         ) {
             NurSurfaceCard(modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(14.dp)) {
-                    Text(
-                        text = answer.intro,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
+                    FormattedAnswer(text = answer.intro)
                     if (answer.aiInsight.isNotBlank()) {
                         Spacer(modifier = Modifier.height(10.dp))
                         Box(
@@ -302,7 +300,7 @@ private fun AssistantAnswer(answer: TadabburAnswer) {
                         ) {
                             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                 Text(
-                                    text = "AI tavsiyasi",
+                                    text = t("tadabbur.aiInsight"),
                                     style = MaterialTheme.typography.labelSmall,
                                     color = NurColors.Sage
                                 )
@@ -317,6 +315,98 @@ private fun AssistantAnswer(answer: TadabburAnswer) {
                 }
             }
             answer.evidence.forEach { EvidenceCard(it) }
+        }
+    }
+}
+
+private val HEADING_EMOJI = listOf("📖", "🤲", "🌙", "🕌", "✨", "🤍")
+
+/**
+ * Renders the AI's lightly-markdown-formatted answer (headings, **bold**,
+ * "— Reference" citation lines, block quotes, bullet steps) since it arrives
+ * as one free-form string from the server, not structured fields.
+ */
+@Composable
+private fun FormattedAnswer(text: String, modifier: Modifier = Modifier) {
+    val lines = remember(text) { text.trim().lines() }
+    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(3.dp)) {
+        lines.forEach { rawLine ->
+            val line = rawLine.trim()
+            when {
+                line.isBlank() -> Spacer(modifier = Modifier.height(6.dp))
+
+                line.startsWith("#") -> Text(
+                    text = boldAnnotated(line.trimStart('#', ' ').removeSurrounding("**")),
+                    style = MaterialTheme.typography.titleSmall,
+                    color = NurColors.Gold,
+                    modifier = Modifier.padding(top = 4.dp)
+                )
+
+                line.length <= 60 && HEADING_EMOJI.any { line.startsWith(it) } -> Text(
+                    text = boldAnnotated(line.removeSurrounding("**")),
+                    style = MaterialTheme.typography.titleSmall,
+                    color = NurColors.Gold,
+                    modifier = Modifier.padding(top = 4.dp)
+                )
+
+                line.startsWith("—") -> Text(
+                    text = line,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
+                    modifier = Modifier.padding(start = 8.dp, bottom = 4.dp)
+                )
+
+                line.startsWith(">") -> Row(modifier = Modifier.padding(vertical = 2.dp)) {
+                    Box(
+                        modifier = Modifier
+                            .width(3.dp)
+                            .background(NurColors.Sage)
+                    ) { Text("", style = MaterialTheme.typography.bodyMedium) }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = boldAnnotated(line.trimStart('>', ' ')),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        fontStyle = androidx.compose.ui.text.font.FontStyle.Italic
+                    )
+                }
+
+                line.startsWith("- ") || line.startsWith("* ") -> Row(
+                    modifier = Modifier.padding(start = 4.dp)
+                ) {
+                    Text("•  ", style = MaterialTheme.typography.bodyMedium, color = NurColors.Gold)
+                    Text(
+                        text = boldAnnotated(line.removePrefix("- ").removePrefix("* ")),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+
+                else -> Text(
+                    text = boldAnnotated(line),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            }
+        }
+    }
+}
+
+/** Turns `**bold**` markers into an AnnotatedString instead of showing them literally. */
+private fun boldAnnotated(line: String): androidx.compose.ui.text.AnnotatedString {
+    return androidx.compose.ui.text.buildAnnotatedString {
+        var rest = line
+        while (true) {
+            val start = rest.indexOf("**")
+            if (start == -1) { append(rest); break }
+            val end = rest.indexOf("**", start + 2)
+            if (end == -1) { append(rest); break }
+            append(rest.substring(0, start))
+            pushStyle(androidx.compose.ui.text.SpanStyle(fontWeight = FontWeight.Bold))
+            append(rest.substring(start + 2, end))
+            pop()
+            rest = rest.substring(end + 2)
         }
     }
 }
@@ -344,14 +434,14 @@ private fun EvidenceCard(evidence: TadabburEvidence) {
             if (canExpand) {
                 TextButton(onClick = { expanded = !expanded }) {
                     Text(
-                        text = if (expanded) "Kamroq ko'rsatish" else "Ko'proq ko'rsatish",
+                        text = if (expanded) t("tadabbur.showLess") else t("tadabbur.showMore"),
                         color = tone
                     )
                 }
             }
             if (evidence.narrator.isNotBlank()) {
                 Text(
-                    text = "Roviy: ${evidence.narrator}",
+                    text = "${t("tadabbur.narrator")}${evidence.narrator}",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

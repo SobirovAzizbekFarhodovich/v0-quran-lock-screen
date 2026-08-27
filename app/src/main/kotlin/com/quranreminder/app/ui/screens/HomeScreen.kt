@@ -45,6 +45,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
+import androidx.navigation.compose.currentBackStackEntryAsState
 import com.quranreminder.app.database.SurahHeader
 import com.quranreminder.app.database.QuranDatabase
 import com.quranreminder.app.database.QuranVerse
@@ -55,6 +56,7 @@ import com.quranreminder.app.ui.theme.NurIconButton
 import com.quranreminder.app.ui.theme.NurPill
 import com.quranreminder.app.ui.theme.NurSectionTitle
 import com.quranreminder.app.ui.theme.NurSurfaceCard
+import com.quranreminder.app.ui.theme.t
 import com.quranreminder.app.ui.viewmodel.QuranViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -104,8 +106,8 @@ fun HomeScreen(
                 ) {
                     HomeFeatureTile(
                         icon = Icons.Default.MenuBook,
-                        title = "Qur'oni Karim",
-                        description = "O'qing va qidiring",
+                        title = t("home.quran"),
+                        description = t("home.quran.desc"),
                         iconBackground = MaterialTheme.colorScheme.surfaceVariant,
                         iconTint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.weight(1f),
@@ -113,8 +115,8 @@ fun HomeScreen(
                     )
                     HomeFeatureTile(
                         icon = Icons.Default.NotificationsActive,
-                        title = "Eslatmalar",
-                        description = "Tilovat vaqtini belgilang",
+                        title = t("home.reminders"),
+                        description = t("home.reminders.desc"),
                         iconBackground = NurColors.TerracottaSoft,
                         iconTint = NurColors.Terracotta,
                         modifier = Modifier.weight(1f),
@@ -126,8 +128,8 @@ fun HomeScreen(
             item {
                 HomeFeatureTile(
                     icon = Icons.Default.Mic,
-                    title = "Tilovat tekshiruvi",
-                    description = "AI bilan qiroatni tekshiring",
+                    title = t("home.recitation"),
+                    description = t("home.recitation.desc"),
                     iconBackground = NurColors.TerracottaSoft,
                     iconTint = NurColors.Terracotta,
                     modifier = Modifier.fillMaxWidth(),
@@ -142,8 +144,8 @@ fun HomeScreen(
                 ) {
                     HomeFeatureTile(
                         icon = Icons.Default.ChatBubble,
-                        title = "Islomiy AI",
-                        description = "Ishonchli manbalar asosida",
+                        title = t("home.islamicAi"),
+                        description = t("home.islamicAi.desc"),
                         iconBackground = NurColors.SageSoft,
                         iconTint = NurColors.Sage,
                         modifier = Modifier.weight(1f),
@@ -151,8 +153,8 @@ fun HomeScreen(
                     )
                     HomeFeatureTile(
                         icon = Icons.Default.Wallpaper,
-                        title = "Lock-screen",
-                        description = "Oyatni ekran foniga qo'ying",
+                        title = t("home.lockScreen"),
+                        description = t("home.lockScreen.desc"),
                         iconBackground = MaterialTheme.colorScheme.surfaceVariant,
                         iconTint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.weight(1f),
@@ -172,16 +174,16 @@ fun HomeScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Column {
-                        NurSectionTitle("Suralar")
+                        NurSectionTitle(t("home.surahs"))
                         Text(
-                            text = if (surahs.isEmpty()) "Suralar yuklanmoqda" else "${surahs.size} ta sura",
+                            text = if (surahs.isEmpty()) t("home.surahs.loading") else "${surahs.size}" + t("home.surahs.countSuffix"),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.62f)
                         )
                     }
                     NurIconButton(
                         icon = Icons.Default.Search,
-                        contentDescription = "Sura qidirish",
+                        contentDescription = t("home.search"),
                         onClick = { navController.navigate("search") }
                     )
                 }
@@ -191,7 +193,7 @@ fun HomeScreen(
                 item {
                     NurSurfaceCard(modifier = Modifier.fillMaxWidth()) {
                         Text(
-                            text = "Qur'on ma'lumotlari tayyorlanmoqda...",
+                            text = t("home.dataPreparing"),
                             modifier = Modifier.padding(18.dp),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -223,18 +225,18 @@ private fun HomeHeader(
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column(modifier = Modifier.weight(1f)) {
-            NurSectionTitle("Qur'on bilan bugun")
+            NurSectionTitle(t("home.today"))
             Text(
-                text = "Assalomu alaykum!",
+                text = t("home.greeting"),
                 style = MaterialTheme.typography.headlineLarge,
                 color = MaterialTheme.colorScheme.onBackground
             )
         }
-        NurIconButton(Icons.Default.NotificationsActive, "Eslatmalar", onReminders)
+        NurIconButton(Icons.Default.NotificationsActive, t("home.reminders"), onReminders)
         Spacer(modifier = Modifier.width(8.dp))
-        NurIconButton(Icons.Default.Search, "Qidirish", onSearch)
+        NurIconButton(Icons.Default.Search, t("home.searchIcon"), onSearch)
         Spacer(modifier = Modifier.width(8.dp))
-        NurIconButton(Icons.Default.Settings, "Sozlamalar", onSettings, emphasized = true)
+        NurIconButton(Icons.Default.Settings, t("home.settings"), onSettings, emphasized = true)
     }
 }
 
@@ -252,6 +254,8 @@ private fun DailyAyahCard(onClick: (QuranVerse) -> Unit) {
         }
     }
     val currentVerse = verse
+    val hourlyAyahLabel = t("home.hourlyAyah")
+    val hourlyAyahPreparing = t("home.hourlyAyah.preparing")
     NurSurfaceCard(
         modifier = Modifier.fillMaxWidth(),
         containerColor = NurColors.Ink,
@@ -259,8 +263,8 @@ private fun DailyAyahCard(onClick: (QuranVerse) -> Unit) {
     ) {
         Column(modifier = Modifier.padding(18.dp)) {
             Text(
-                text = currentVerse?.let { "SOATLIK OYAT · ${it.surahName.uppercase()}, ${it.surahNumber}:${it.ayahNumber}" }
-                    ?: "SOATLIK OYAT",
+                text = currentVerse?.let { "$hourlyAyahLabel · ${it.surahName.uppercase()}, ${it.surahNumber}:${it.ayahNumber}" }
+                    ?: hourlyAyahLabel,
                 style = MaterialTheme.typography.labelSmall,
                 color = NurColors.GoldSoft
             )
@@ -274,7 +278,7 @@ private fun DailyAyahCard(onClick: (QuranVerse) -> Unit) {
             )
             Spacer(modifier = Modifier.height(10.dp))
             Text(
-                text = currentVerse?.translation ?: "Lock-screen bilan bir xil oyat tayyorlanmoqda...",
+                text = currentVerse?.translation ?: hourlyAyahPreparing,
                 style = MaterialTheme.typography.bodySmall,
                 color = NurColors.Cream.copy(alpha = 0.78f)
             )
@@ -335,7 +339,7 @@ private fun ContinueReadingCard(onClick: () -> Unit) {
             NurEmblem(size = 34.dp)
             Spacer(modifier = Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
-                Text("Davom eting", style = MaterialTheme.typography.titleSmall)
+                Text(t("home.continueReading"), style = MaterialTheme.typography.titleSmall)
                 Text(
                     "Al-Fotiha, 1-oyat",
                     style = MaterialTheme.typography.bodySmall,
@@ -379,7 +383,7 @@ fun NurSurahRow(surah: SurahHeader, onClick: () -> Unit) {
                     color = MaterialTheme.colorScheme.onSurface
                 )
                 Text(
-                    text = "Sura ${surah.surahNumber}",
+                    text = t("home.sura") + surah.surahNumber,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -393,7 +397,7 @@ fun NurSurahRow(surah: SurahHeader, onClick: () -> Unit) {
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
-                NurPill(text = "Qur'on")
+                NurPill(text = t("home.quranPill"))
             }
         }
     }
@@ -401,6 +405,7 @@ fun NurSurahRow(surah: SurahHeader, onClick: () -> Unit) {
 
 @Composable
 private fun NurBottomNavigation(navController: NavHostController) {
+    val currentRoute = navController.currentBackStackEntryAsState().value?.destination?.route
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -409,11 +414,11 @@ private fun NurBottomNavigation(navController: NavHostController) {
         horizontalArrangement = Arrangement.SpaceEvenly,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        BottomNavItem(Icons.Default.Home, "Bosh", true) { navController.navigate("home") }
-        BottomNavItem(Icons.Default.MenuBook, "Qur'on", false) { navController.navigate("search") }
-        BottomNavItem(Icons.Default.Bookmark, "Saqlangan", false) { navController.navigate("bookmarks") }
-        BottomNavItem(Icons.Default.ChatBubble, "Yordamchi", false) { navController.navigate("tadabbur_chat") }
-        BottomNavItem(Icons.Default.Settings, "Sozlama", false) { navController.navigate("settings") }
+        BottomNavItem(Icons.Default.Home, t("nav.home"), currentRoute == "home") { navController.navigate("home") }
+        BottomNavItem(Icons.Default.MenuBook, t("nav.quran"), currentRoute == "search") { navController.navigate("search") }
+        BottomNavItem(Icons.Default.Bookmark, t("nav.bookmarks"), currentRoute == "bookmarks") { navController.navigate("bookmarks") }
+        BottomNavItem(Icons.Default.ChatBubble, t("nav.assistant"), currentRoute == "tadabbur_chat") { navController.navigate("tadabbur_chat") }
+        BottomNavItem(Icons.Default.Settings, t("nav.settings"), currentRoute == "settings") { navController.navigate("settings") }
     }
 }
 

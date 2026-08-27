@@ -1,7 +1,9 @@
 package com.quranreminder.app.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -11,6 +13,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.Button
@@ -25,31 +28,58 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
+import com.quranreminder.app.auth.SessionManager
 import com.quranreminder.app.database.AppSettings
 import com.quranreminder.app.lockscreen.DailyAyahScheduler
 import com.quranreminder.app.lockscreen.LockScreenAyahCategory
 import com.quranreminder.app.lockscreen.LockScreenWallpaperApplier
+import com.quranreminder.app.ui.theme.NurColors
 import com.quranreminder.app.ui.theme.NurScreenHeader
 import com.quranreminder.app.ui.theme.NurSectionTitle
+import com.quranreminder.app.ui.theme.t
 import com.quranreminder.app.ui.viewmodel.SettingsViewModel
 
 @Composable
 fun SettingsScreen(
     navController: NavHostController,
-    viewModel: SettingsViewModel
+    viewModel: SettingsViewModel,
+    session: SessionManager
 ) {
     val settings = viewModel.settings.collectAsState().value ?: AppSettings()
     val context = LocalContext.current
     val selectedCategory = remember {
         mutableStateOf(LockScreenWallpaperApplier.getSelectedCategory(context))
+    }
+    var showLogoutConfirm by remember { mutableStateOf(false) }
+
+    if (showLogoutConfirm) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { showLogoutConfirm = false },
+            title = { Text(t("settings.logout.confirmTitle")) },
+            text = { Text(t("settings.logout.confirmBody")) },
+            confirmButton = {
+                androidx.compose.material3.TextButton(onClick = {
+                    session.signOut()
+                    showLogoutConfirm = false
+                    navController.navigate("auth") { popUpTo(0) }
+                }) { Text(t("settings.logout"), color = NurColors.Terracotta) }
+            },
+            dismissButton = {
+                androidx.compose.material3.TextButton(onClick = { showLogoutConfirm = false }) {
+                    Text(t("settings.logout.cancel"))
+                }
+            }
+        )
     }
 
     Column(
@@ -58,13 +88,13 @@ fun SettingsScreen(
             .background(MaterialTheme.colorScheme.background)
     ) {
         NurScreenHeader(
-            title = "Sozlamalar",
-            eyebrow = "Nur",
+            title = t("settings.title"),
+            eyebrow = "Noorain",
             leading = {
                 androidx.compose.material3.IconButton(onClick = { navController.popBackStack() }) {
                     Icon(
                         Icons.Default.ArrowBack,
-                        contentDescription = "Orqaga",
+                        contentDescription = t("settings.back"),
                         tint = MaterialTheme.colorScheme.primary
                     )
                 }
@@ -78,24 +108,24 @@ fun SettingsScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             item {
-                SettingSection(title = "Bildirishnomalar")
+                SettingSection(title = t("settings.notifications"))
                 SettingToggle(
-                    label = "Bildirishnomalarni yoqish",
+                    label = t("settings.notifications.enable"),
                     isChecked = settings.notificationsEnabled,
                     onCheckedChange = { viewModel.toggleNotifications() }
                 )
                 SettingToggle(
-                    label = "Eslatmada vibratsiya",
+                    label = t("settings.notifications.vibrate"),
                     isChecked = settings.vibrateOnReminder,
                     onCheckedChange = { viewModel.toggleVibration() }
                 )
                 SettingToggle(
-                    label = "Ovozli eslatma",
+                    label = t("settings.notifications.sound"),
                     isChecked = settings.soundEnabled,
                     onCheckedChange = { viewModel.toggleSound() }
                 )
                 SettingToggle(
-                    label = "Lock-screen bildirishnomalari",
+                    label = t("settings.notifications.lockScreen"),
                     isChecked = settings.lockScreenNotifications,
                     onCheckedChange = { viewModel.toggleLockScreenNotifications() }
                 )
@@ -103,14 +133,14 @@ fun SettingsScreen(
 
             item {
                 Spacer(modifier = Modifier.height(16.dp))
-                SettingSection(title = "Ko'rinish")
+                SettingSection(title = t("settings.appearance"))
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                     shape = RoundedCornerShape(18.dp)
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
-                        Text("Ilova va Qur’on tili", style = MaterialTheme.typography.titleMedium)
+                        Text(t("settings.language.title"), style = MaterialTheme.typography.titleMedium)
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
                             text = when (settings.language) {
@@ -123,28 +153,27 @@ fun SettingsScreen(
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f)
                         )
                         Spacer(modifier = Modifier.height(10.dp))
-                        OutlinedButton(onClick = { navController.navigate("language_selection") }) {
-                            Text("Tilni o‘zgartirish")
+                        OutlinedButton(onClick = { navController.navigate("language_selection?isFirstRun=false") }) {
+                            Text(t("settings.language.change"))
                         }
                     }
                 }
                 Spacer(modifier = Modifier.height(12.dp))
                 SettingSlider(
-                    label = "Matn kattaligi",
+                    label = t("settings.fontSize"),
                     value = settings.fontSize.toFloat(),
                     onValueChange = { viewModel.setFontSize(it.toInt()) },
                     valueRange = 12f..24f
                 )
-                SettingToggle(
-                    label = "Tungi ko'rinish",
-                    isChecked = settings.darkMode,
-                    onCheckedChange = { viewModel.toggleDarkMode() }
+                AppearanceControl(
+                    isDark = settings.darkMode,
+                    onSelect = { dark -> if (dark != settings.darkMode) viewModel.toggleDarkMode() }
                 )
             }
 
             item {
                 Spacer(modifier = Modifier.height(16.dp))
-                SettingSection(title = "Lock-screen")
+                SettingSection(title = t("settings.lockScreen"))
                 LockScreenControls(
                     selectedCategory = selectedCategory.value,
                     onPreview = { navController.navigate("lock_preview") },
@@ -163,7 +192,7 @@ fun SettingsScreen(
 
             item {
                 Spacer(modifier = Modifier.height(16.dp))
-                SettingSection(title = "Ilova haqida")
+                SettingSection(title = t("settings.about"))
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     colors = CardDefaults.cardColors(
@@ -173,22 +202,32 @@ fun SettingsScreen(
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Text(
-                            text = "Nur",
+                            text = "Noorain",
                             style = MaterialTheme.typography.headlineSmall,
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
-                            text = "Qur'oni Karim yordamchisi · 1.0.0",
+                            text = t("settings.about.tagline"),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
-                            text = "Qur'on o'qish, eslatmalar, lock-screen oyati va ishonchli manbalarga asoslangan yordamchi.",
+                            text = t("settings.about.description"),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                         )
                     }
+                }
+            }
+
+            item {
+                Spacer(modifier = Modifier.height(16.dp))
+                OutlinedButton(
+                    onClick = { showLogoutConfirm = true },
+                    modifier = Modifier.fillMaxWidth().height(52.dp)
+                ) {
+                    Text(t("settings.logout"), color = NurColors.Terracotta)
                 }
             }
         }
@@ -217,7 +256,7 @@ fun LockScreenControls(
                     modifier = Modifier.weight(1f),
                     onClick = onPreview
                 ) {
-                    Text("Preview")
+                    Text(t("settings.lockScreen.preview"))
                 }
                 OutlinedButton(
                     modifier = Modifier.weight(1f),
@@ -226,17 +265,17 @@ fun LockScreenControls(
                         onRandom()
                     }
                 ) {
-                    Text("Randomga qaytish")
+                    Text(t("settings.lockScreen.random"))
                 }
             }
             Text(
-                text = "Lock-screen tili ilova va Qur’on tili bilan bir xil. Uni yuqoridagi “Tilni o‘zgartirish” orqali almashtiring.",
+                text = t("settings.lockScreen.languageNote"),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
             )
 
             Text(
-                text = "Kategoriya",
+                text = t("settings.lockScreen.category"),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurface
             )
@@ -266,6 +305,56 @@ fun LockScreenControls(
                 }
             }
         }
+    }
+}
+
+@Composable
+fun AppearanceControl(
+    isDark: Boolean,
+    onSelect: (Boolean) -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        shape = RoundedCornerShape(18.dp)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(t("settings.appearance"), style = MaterialTheme.typography.titleMedium)
+            Spacer(modifier = Modifier.height(10.dp))
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(MaterialTheme.colorScheme.background, RoundedCornerShape(14.dp))
+                    .padding(4.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                AppearanceOption(label = t("settings.appearance.light"), selected = !isDark, modifier = Modifier.weight(1f)) { onSelect(false) }
+                AppearanceOption(label = t("settings.appearance.dark"), selected = isDark, modifier = Modifier.weight(1f)) { onSelect(true) }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AppearanceOption(
+    label: String,
+    selected: Boolean,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(12.dp))
+            .background(if (selected) MaterialTheme.colorScheme.primary else androidx.compose.ui.graphics.Color.Transparent)
+            .clickable(onClick = onClick)
+            .padding(vertical = 10.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelLarge,
+            color = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
 }
 

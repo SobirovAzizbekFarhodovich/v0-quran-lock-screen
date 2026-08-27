@@ -45,6 +45,7 @@ import com.quranreminder.app.lockscreen.LockScreenWallpaperApplier
 import com.quranreminder.app.lockscreen.LockScreenWallpaperRenderer
 import com.quranreminder.app.ui.theme.NurIconButton
 import com.quranreminder.app.ui.theme.NurScreenHeader
+import com.quranreminder.app.ui.theme.t
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -81,6 +82,11 @@ fun LockScreenPreviewScreen(navController: NavHostController) {
 
     val pagerState = rememberPagerState(pageCount = { allOptions.size })
 
+    val gallerySetMessage = t("lockPreview.gallerySet")
+    val noImageChosenMessage = t("lockPreview.noImageChosen")
+    val imageLoadedMessage = t("lockPreview.imageLoaded")
+    val appliedMessage = t("lockPreview.applied")
+
     val galleryLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
         scope.launch {
@@ -89,9 +95,9 @@ fun LockScreenPreviewScreen(navController: NavHostController) {
             }
             if (saved) {
                 refreshKey++
-                Toast.makeText(context, "Gallery rasmi o'rnatildi", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, gallerySetMessage, Toast.LENGTH_SHORT).show()
             } else {
-                Toast.makeText(context, "Rasm tanlanmadi", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, noImageChosenMessage, Toast.LENGTH_SHORT).show()
             }
         }
     }
@@ -115,7 +121,7 @@ fun LockScreenPreviewScreen(navController: NavHostController) {
                         remoteDownloads = remoteDownloads + (option.sample.id to true)
                         LockScreenBackgroundManager.setRemoteSample(context, option.sample)
                         refreshKey++
-                        Toast.makeText(context, "Rasm yuklandi", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, imageLoadedMessage, Toast.LENGTH_SHORT).show()
                     }
                 }
             }
@@ -190,13 +196,13 @@ fun LockScreenPreviewScreen(navController: NavHostController) {
         // Header and Font Selector overlay
         Column(modifier = Modifier.fillMaxWidth()) {
             NurScreenHeader(
-                title = "Fon tanlash",
-                eyebrow = "Lock-screen",
+                title = t("lockPreview.title"),
+                eyebrow = t("lockPreview.eyebrow"),
                 leading = {
-                    NurIconButton(Icons.Default.ArrowBack, "Orqaga", onClick = { navController.popBackStack() })
+                    NurIconButton(Icons.Default.ArrowBack, t("common.back"), onClick = { navController.popBackStack() })
                 },
                 trailing = {
-                    NurIconButton(Icons.Default.Refresh, "Yangi oyat", onClick = { refreshKey++ })
+                    NurIconButton(Icons.Default.Refresh, t("lockPreview.newAyah"), onClick = { refreshKey++ })
                 }
             )
 
@@ -275,13 +281,13 @@ fun LockScreenPreviewScreen(navController: NavHostController) {
                     val selected = verse ?: return@Button
                     scope.launch {
                         LockScreenWallpaperApplier.apply(context, selected, rememberForHour = true)
-                        Toast.makeText(context, "Lock-screen yangilandi", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, appliedMessage, Toast.LENGTH_SHORT).show()
                     }
                 }
             ) {
                 Icon(Icons.Default.Wallpaper, contentDescription = null)
                 Spacer(modifier = Modifier.width(6.dp))
-                Text("Fon qilish", fontWeight = FontWeight.Bold)
+                Text(t("lockPreview.apply"), fontWeight = FontWeight.Bold)
             }
 
             IconButton(
@@ -291,7 +297,7 @@ fun LockScreenPreviewScreen(navController: NavHostController) {
                     .border(1.dp, Color.White.copy(alpha = 0.2f), RoundedCornerShape(14.dp))
                     .padding(4.dp)
             ) {
-                Icon(Icons.Default.PhotoLibrary, contentDescription = "Galereya", tint = Color.White)
+                Icon(Icons.Default.PhotoLibrary, contentDescription = t("lockPreview.gallery"), tint = Color.White)
             }
             
             IconButton(
@@ -305,7 +311,7 @@ fun LockScreenPreviewScreen(navController: NavHostController) {
                     .border(1.dp, Color.White.copy(alpha = 0.2f), RoundedCornerShape(14.dp))
                     .padding(4.dp)
             ) {
-                Icon(Icons.Default.Share, contentDescription = "Ulashish", tint = Color.White)
+                Icon(Icons.Default.Share, contentDescription = t("lockPreview.share"), tint = Color.White)
             }
         }
     }

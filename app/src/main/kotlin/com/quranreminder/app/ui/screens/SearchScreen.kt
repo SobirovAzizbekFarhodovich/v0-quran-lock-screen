@@ -35,6 +35,7 @@ import androidx.navigation.NavHostController
 import com.quranreminder.app.database.SurahHeader
 import com.quranreminder.app.ui.theme.NurIconButton
 import com.quranreminder.app.ui.theme.NurScreenHeader
+import com.quranreminder.app.ui.theme.t
 import com.quranreminder.app.ui.viewmodel.QuranViewModel
 import java.util.Locale
 
@@ -55,10 +56,10 @@ fun SearchScreen(
             .background(MaterialTheme.colorScheme.background)
     ) {
         NurScreenHeader(
-            title = "Qur'oni Karim",
-            eyebrow = "Sura va oyat qidirish",
+            title = t("search.title"),
+            eyebrow = t("search.eyebrow"),
             leading = {
-                NurIconButton(Icons.Default.ArrowBack, "Orqaga", onClick = { navController.popBackStack() })
+                NurIconButton(Icons.Default.ArrowBack, t("common.back"), onClick = { navController.popBackStack() })
             }
         )
 
@@ -92,7 +93,7 @@ fun SearchScreen(
                 decorationBox = { innerTextField ->
                     if (searchQuery.isEmpty()) {
                         Text(
-                            text = "Sura nomi, raqami yoki 64:9...",
+                            text = t("search.placeholder"),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
                         )
@@ -105,7 +106,7 @@ fun SearchScreen(
         when {
             searchQuery.isBlank() -> {
                 Text(
-                    text = "Faqat sura nomi, sura raqami yoki sura:oyat formatida qidiring.",
+                    text = t("search.hint"),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
                     modifier = Modifier.padding(horizontal = 16.dp)
@@ -120,7 +121,7 @@ fun SearchScreen(
                     verticalArrangement = Arrangement.Center
                 ) {
                     Text(
-                        text = "Sura topilmadi",
+                        text = t("search.noResults"),
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.onBackground
                     )

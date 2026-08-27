@@ -14,7 +14,12 @@ import okhttp3.WebSocketListener
 import okio.ByteString
 import java.util.concurrent.TimeUnit
 
-data class RecitationResult(val score: Int = 0, val transcript: String = "", val issues: List<String> = emptyList())
+data class RecitationResult(
+    val score: Int = 0,
+    val transcript: String = "",
+    val issues: List<String> = emptyList(),
+    val final: Boolean = true
+)
 
 class RecitationClient(private val token: String) {
     private val gson = Gson()
@@ -23,7 +28,18 @@ class RecitationClient(private val token: String) {
     private var recorder: AudioRecord? = null
     @Volatile private var recording = false
 
-    fun start(surah: Int, ayah: Int, onResult: (RecitationResult) -> Unit, onError: (String) -> Unit) {
+    /**
+     * [onPartial] fires for live, non-final transcripts while the reader is still
+     * speaking (drives word-by-word highlighting); [onResult] fires once, with the
+     * scored final transcript, after Stop.
+     */
+    fun start(
+        surah: Int,
+        ayah: Int,
+        onPartial: (RecitationResult) -> Unit,
+        onResult: (RecitationResult) -> Unit,
+        onError: (String) -> Unit
+    ) {
         val wsUrl = BuildConfig.SERVER_BASE_URL
             .replaceFirst("https://", "wss://")
             .replaceFirst("http://", "ws://") + "/ws/recitation?surah=$surah&ayah=$ayah"
@@ -37,7 +53,9 @@ class RecitationClient(private val token: String) {
                         val issues = json.getAsJsonArray("errors")?.mapNotNull { item ->
                             if (item.isJsonPrimitive) item.asString else null
                         }.orEmpty()
-                        onResult(RecitationResult(json.get("score")?.asInt ?: 0, json.get("transcript")?.asString.orEmpty(), issues))
+                        val final = json.get("final")?.asBoolean ?: true
+                        val result = RecitationResult(json.get("score")?.asInt ?: 0, json.get("transcript")?.asString.orEmpty(), issues, final)
+                        if (final) onResult(result) else onPartial(result)
                     } else if (json.get("type")?.asString == "error") onError(json.get("message")?.asString ?: "Tilovat xatosi")
                 }
             }

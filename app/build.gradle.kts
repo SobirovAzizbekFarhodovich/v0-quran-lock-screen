@@ -47,6 +47,18 @@ android {
             (project.findProperty("SERVER_BASE_URL") as? String) ?: "http://18.195.218.23"
         }.trimEnd('/')
         buildConfigField("String", "SERVER_BASE_URL", "\"$serverBaseUrl\"")
+
+        // Google OAuth "Web client" ID (Google Cloud Console), used with Credential Manager
+        // for "Continue with Google". Must match a value in the backend's GOOGLE_CLIENT_IDS
+        // env var. Empty until supplied — the Google button hides itself when blank.
+        val googleWebClientId = if (localPropsFile.exists()) {
+            val props = Properties()
+            localPropsFile.inputStream().use { props.load(it) }
+            props.getProperty("GOOGLE_WEB_CLIENT_ID") ?: (project.findProperty("GOOGLE_WEB_CLIENT_ID") as? String) ?: ""
+        } else {
+            (project.findProperty("GOOGLE_WEB_CLIENT_ID") as? String) ?: ""
+        }
+        buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"$googleWebClientId\"")
     }
 
     buildTypes {
@@ -109,6 +121,11 @@ dependencies {
     // JSON serialization
     implementation("com.google.code.gson:gson:2.10.1")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
+
+    // Google Sign-In (Credential Manager)
+    implementation("androidx.credentials:credentials:1.3.0")
+    implementation("androidx.credentials:credentials-play-services-auth:1.3.0")
+    implementation("com.google.android.libraries.identity.googleid:googleid:1.1.1")
 
     // Testing
     testImplementation("junit:junit:4.13.2")

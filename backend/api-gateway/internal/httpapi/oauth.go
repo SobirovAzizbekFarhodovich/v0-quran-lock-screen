@@ -223,7 +223,7 @@ func (h *AuthHandler) findOrCreateOAuthUser(c *gin.Context, provider, subject, e
 		if hashErr != nil {
 			return user, hashErr
 		}
-		err = tx.QueryRow(c.Request.Context(), `INSERT INTO users (name, email, password_hash, language) VALUES ($1, lower($2), $3, 'uz') RETURNING id::text, name, email, language`, name, email, string(hash)).Scan(&user.ID, &user.Name, &user.Email, &user.Language)
+		err = tx.QueryRow(c.Request.Context(), `INSERT INTO users (name, email, password_hash, language) VALUES ($1, lower($2), $3, '') RETURNING id::text, name, email, language`, name, email, string(hash)).Scan(&user.ID, &user.Name, &user.Email, &user.Language)
 		if err != nil {
 			return user, err
 		}

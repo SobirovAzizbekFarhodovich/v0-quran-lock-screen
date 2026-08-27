@@ -31,6 +31,7 @@ import androidx.navigation.NavHostController
 import com.quranreminder.app.database.Bookmark
 import com.quranreminder.app.ui.theme.NurIconButton
 import com.quranreminder.app.ui.theme.NurScreenHeader
+import com.quranreminder.app.ui.theme.t
 import com.quranreminder.app.ui.viewmodel.QuranViewModel
 
 @Composable
@@ -45,11 +46,12 @@ fun BookmarksScreen(
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
     ) {
+        val backLabel = t("common.back")
         NurScreenHeader(
-            title = "Saqlangan oyatlar",
-            eyebrow = "Kitob belgilari",
+            title = t("bookmarks.title"),
+            eyebrow = t("bookmarks.eyebrow"),
             leading = {
-                NurIconButton(Icons.Default.ArrowBack, "Orqaga", onClick = { navController.popBackStack() })
+                NurIconButton(Icons.Default.ArrowBack, backLabel, onClick = { navController.popBackStack() })
             }
         )
 
@@ -62,12 +64,12 @@ fun BookmarksScreen(
                 verticalArrangement = Arrangement.Center
             ) {
                 Text(
-                    text = "Hali saqlangan oyatlar yo'q",
+                    text = t("bookmarks.empty.title"),
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onBackground
                 )
                 Text(
-                    text = "Sura ichidan kerakli oyatni saqlang",
+                    text = t("bookmarks.empty.body"),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
                 )
@@ -112,7 +114,7 @@ fun BookmarkCard(
                 .padding(16.dp)
         ) {
             Text(
-                text = "Sura ${bookmark.surahNumber}, Oyat ${bookmark.ayahNumber}",
+                text = "${t("reminders.suraLabel")}${bookmark.surahNumber}${t("reminders.ayahLabel")}${bookmark.ayahNumber}",
                 style = MaterialTheme.typography.headlineSmall,
                 color = MaterialTheme.colorScheme.primary
             )

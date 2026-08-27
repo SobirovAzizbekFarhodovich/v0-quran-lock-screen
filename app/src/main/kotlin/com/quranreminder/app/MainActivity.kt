@@ -8,6 +8,7 @@ import androidx.activity.compose.setContent
 import androidx.compose.runtime.collectAsState
 import androidx.core.content.ContextCompat
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.lifecycle.ViewModelProvider
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
@@ -22,16 +23,20 @@ import com.quranreminder.app.lockscreen.DailyAyahScheduler
 import com.quranreminder.app.ui.screens.BookmarksScreen
 import com.quranreminder.app.ui.screens.LanguageSelectionScreen
 import com.quranreminder.app.ui.screens.AuthScreen
+import com.quranreminder.app.ui.screens.ForgotPasswordScreen
+import com.quranreminder.app.ui.screens.LoadingScreen
+import com.quranreminder.app.ui.screens.OnboardingScreen
 import com.quranreminder.app.ui.screens.RecitationScreen
 import com.quranreminder.app.ui.screens.HomeScreen
 import com.quranreminder.app.ui.screens.LockScreenPreviewScreen
 import com.quranreminder.app.ui.screens.RemindersScreen
 import com.quranreminder.app.ui.screens.SearchScreen
 import com.quranreminder.app.ui.screens.SettingsScreen
+import com.quranreminder.app.ui.screens.SplashScreen
 import com.quranreminder.app.ui.screens.SurahDetailScreen
 import com.quranreminder.app.ui.screens.TadabburChatScreen
 import com.quranreminder.app.ui.theme.QuranReminderTheme
-import com.quranreminder.app.ui.theme.NurColors
+import com.quranreminder.app.ui.viewmodel.LanguageDownloadState
 import com.quranreminder.app.ui.viewmodel.QuranViewModel
 import com.quranreminder.app.ui.viewmodel.QuranViewModelFactory
 import com.quranreminder.app.ui.viewmodel.ReminderViewModel
@@ -42,12 +47,6 @@ import androidx.lifecycle.lifecycleScope
 import com.quranreminder.app.database.DatabaseInitializer
 import com.quranreminder.app.auth.SessionManager
 import kotlinx.coroutines.launch
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.material3.CircularProgressIndicator
 
 class MainActivity : ComponentActivity() {
     private lateinit var quranViewModel: QuranViewModel
@@ -94,11 +93,12 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             val settings = settingsViewModel.settings.collectAsState().value
-            
+
             if (settings != null) {
                 val startDest = when {
                     !sessionManager.isSignedIn -> "auth"
                     settings.language.isEmpty() -> "language_selection"
+                    sessionManager.contentReadyLanguage != settings.language -> "loading/${settings.language}"
                     else -> "home"
                 }
                 QuranReminderTheme(darkTheme = settings.darkMode) {
@@ -106,21 +106,23 @@ class MainActivity : ComponentActivity() {
                     androidx.compose.runtime.LaunchedEffect(intent) {
                         handleDeepLink(intent)
                     }
-                    AppNavigation(
-                        navController = navController,
-                        startDestination = startDest,
-                        quranViewModel = quranViewModel,
-                        reminderViewModel = reminderViewModel,
-                        settingsViewModel = settingsViewModel,
-                        sessionManager = sessionManager
-                    )
+                    androidx.compose.runtime.CompositionLocalProvider(
+                        com.quranreminder.app.ui.theme.LocalAppStrings provides
+                            com.quranreminder.app.ui.theme.AppStrings.forLanguage(settings.language)
+                    ) {
+                        AppNavigation(
+                            navController = navController,
+                            startDestination = startDest,
+                            quranViewModel = quranViewModel,
+                            reminderViewModel = reminderViewModel,
+                            settingsViewModel = settingsViewModel,
+                            sessionManager = sessionManager
+                        )
+                    }
                 }
             } else {
-                Box(
-                    modifier = Modifier.fillMaxSize().background(NurColors.Parchment),
-                    contentAlignment = Alignment.Center
-                ) {
-                    CircularProgressIndicator(color = NurColors.Gold)
+                QuranReminderTheme {
+                    SplashScreen()
                 }
             }
         }
@@ -166,32 +168,98 @@ fun AppNavigation(
     val appContext = androidx.compose.ui.platform.LocalContext.current
     NavHost(navController = navController, startDestination = startDestination) {
         composable("auth") {
-            AuthScreen(session = sessionManager) { user, isNewAccount ->
-                if (!isNewAccount && user.language.isNotBlank()) {
+            AuthScreen(
+                session = sessionManager,
+                onForgotPassword = { navController.navigate("forgot_password") }
+            ) { user, isNewAccount ->
+                // The backend currently seeds a default language for brand-new accounts
+                // (never truly blank), so isNewAccount from the button pressed is the
+                // primary signal; user.language.isBlank() is kept as a fallback in case
+                // that default is ever removed server-side.
+                if (isNewAccount || user.language.isBlank()) {
+                    navController.navigate("language_selection") { popUpTo("auth") { inclusive = true } }
+                } else {
                     val language = when (user.language) {
                         "uz" -> "uz_latin"
                         else -> user.language
                     }
                     settingsViewModel.setLanguage(language)
                     com.quranreminder.app.lockscreen.LockScreenWallpaperApplier.setLockScreenLanguage(appContext, language)
-                    quranViewModel.downloadSelectedLanguage(language)
-                    navController.navigate("home") { popUpTo("auth") { inclusive = true } }
-                } else {
-                    navController.navigate("language_selection") { popUpTo("auth") { inclusive = true } }
+                    val dest = if (sessionManager.contentReadyLanguage == language) {
+                        "home"
+                    } else {
+                        quranViewModel.downloadLanguageContent(language)
+                        "loading/$language"
+                    }
+                    navController.navigate(dest) { popUpTo("auth") { inclusive = true } }
                 }
             }
         }
-        composable("language_selection") {
+        composable(
+            route = "forgot_password?token={token}",
+            arguments = listOf(
+                navArgument("token") {
+                    type = NavType.StringType
+                    defaultValue = ""
+                }
+            )
+        ) { backStackEntry ->
+            val token = backStackEntry.arguments?.getString("token").orEmpty()
+            ForgotPasswordScreen(
+                session = sessionManager,
+                initialToken = token,
+                onDone = { navController.popBackStack() }
+            )
+        }
+        composable(
+            route = "language_selection?isFirstRun={isFirstRun}",
+            arguments = listOf(
+                navArgument("isFirstRun") {
+                    type = NavType.BoolType
+                    defaultValue = true
+                }
+            )
+        ) { backStackEntry ->
+            val isFirstRun = backStackEntry.arguments?.getBoolean("isFirstRun") ?: true
             LanguageSelectionScreen(
                 viewModel = settingsViewModel,
                 onLanguageSelected = { language ->
-                    quranViewModel.downloadSelectedLanguage(language)
                     com.quranreminder.app.lockscreen.LockScreenWallpaperApplier.setLockScreenLanguage(appContext, language)
                     DailyAyahScheduler.updateToday(appContext)
                     scope.launch { sessionManager.updateLanguage(language) }
-                    navController.navigate("home") {
-                        popUpTo("language_selection") { inclusive = true }
+                    // Start the download now — it runs in the background while the user
+                    // reads the onboarding slides (first run) or immediately gates (settings change).
+                    quranViewModel.downloadLanguageContent(language)
+                    val nextDestination = if (isFirstRun) "onboarding" else "loading/$language"
+                    navController.navigate(nextDestination) {
+                        popUpTo("language_selection?isFirstRun={isFirstRun}") { inclusive = true }
                     }
+                }
+            )
+        }
+        composable("onboarding") {
+            val downloadState by quranViewModel.languageDownloadState.collectAsState()
+            val language = settingsViewModel.settings.collectAsState().value?.language ?: "uz_latin"
+            OnboardingScreen(onFinish = {
+                if (downloadState is LanguageDownloadState.Success) {
+                    sessionManager.markContentReady(language)
+                    navController.navigate("home") { popUpTo(0) }
+                } else {
+                    navController.navigate("loading/$language") { popUpTo("onboarding") { inclusive = true } }
+                }
+            })
+        }
+        composable(
+            route = "loading/{language}",
+            arguments = listOf(navArgument("language") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val language = backStackEntry.arguments?.getString("language") ?: "uz_latin"
+            LoadingScreen(
+                language = language,
+                viewModel = quranViewModel,
+                onDownloadComplete = {
+                    sessionManager.markContentReady(language)
+                    navController.navigate("home") { popUpTo(0) }
                 }
             )
         }
@@ -222,7 +290,8 @@ fun AppNavigation(
         composable("settings") {
             SettingsScreen(
                 navController = navController,
-                viewModel = settingsViewModel
+                viewModel = settingsViewModel,
+                session = sessionManager
             )
         }
         composable("lock_preview") {
@@ -235,7 +304,7 @@ fun AppNavigation(
             )
         }
         composable("recitation") {
-            RecitationScreen(navController)
+            RecitationScreen(navController, quranViewModel)
         }
         composable(
             route = "surah_detail/{surahNumber}?ayah={ayahNumber}",

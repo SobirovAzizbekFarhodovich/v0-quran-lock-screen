@@ -26,6 +26,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
@@ -39,7 +40,8 @@ import kotlin.math.sin
 fun NurEmblem(
     modifier: Modifier = Modifier,
     size: Dp = 32.dp,
-    color: Color = NurColors.Gold
+    color: Color = NurColors.Gold,
+    ringColor: Color = color
 ) {
     Canvas(modifier = modifier.size(size)) {
         val radius = size.toPx() / 2f
@@ -47,7 +49,7 @@ fun NurEmblem(
         val path = Path()
         repeat(16) { index ->
             val angle = -PI / 2 + index * PI / 8
-            val pointRadius = if (index % 2 == 0) radius else radius * 0.43f
+            val pointRadius = if (index % 2 == 0) radius * 0.86f else radius * 0.37f
             val point = Offset(
                 x = center.x + pointRadius * cos(angle).toFloat(),
                 y = center.y + pointRadius * sin(angle).toFloat()
@@ -55,8 +57,9 @@ fun NurEmblem(
             if (index == 0) path.moveTo(point.x, point.y) else path.lineTo(point.x, point.y)
         }
         path.close()
+        drawCircle(ringColor.copy(alpha = 0.3f), radius * 0.92f, center, style = Stroke(width = radius * 0.045f))
         drawPath(path, color)
-        drawCircle(NurColors.Parchment.copy(alpha = 0.55f), radius * 0.16f, center)
+        drawCircle(NurColors.Parchment.copy(alpha = 0.9f), radius * 0.14f, center)
     }
 }
 
