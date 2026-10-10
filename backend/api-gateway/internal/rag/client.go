@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"sync"
 	"time"
@@ -12,11 +13,27 @@ import (
 
 var ErrCircuitOpen = errors.New("rag circuit open")
 
+// StatusError is a non-2xx answer from the RAG service.
+type StatusError struct {
+	Code int
+}
+
+func (e *StatusError) Error() string { return fmt.Sprintf("rag bad status %d", e.Code) }
+
+// IsClientError reports a 4xx rejection of the request itself (e.g. the
+// message exceeds the RAG service's length limit).
+func (e *StatusError) IsClientError() bool { return e.Code >= 400 && e.Code < 500 }
+
+const (
+	failureThreshold = 5
+	openDuration     = 30 * time.Second
+)
+
 type QueryRequest struct {
 	UserID   string `json:"user_id,omitempty"`
-	UserName string `json:"user_name,omitempty"`
-	Message  string `json:"message" binding:"required"`
-	Language string `json:"language"`
+	UserName string `json:"user_name,omitempty" binding:"max=64"`
+	Message  string `json:"message" binding:"required,max=2000"`
+	Language string `json:"language" binding:"max=16"`
 }
 
 type QueryResponse struct {
@@ -39,7 +56,7 @@ func NewClient(baseURL string, timeout time.Duration) *Client {
 
 func (c *Client) Query(ctx context.Context, req QueryRequest) (QueryResponse, error) {
 	c.mu.Lock()
-	if c.fails >= 5 && time.Since(c.opened) < 30*time.Second {
+	if c.fails >= failureThreshold && time.Since(c.opened) < openDuration {
 		c.mu.Unlock()
 		return QueryResponse{}, ErrCircuitOpen
 	}
@@ -53,13 +70,22 @@ func (c *Client) Query(ctx context.Context, req QueryRequest) (QueryResponse, er
 	httpReq.Header.Set("Content-Type", "application/json")
 	resp, err := c.http.Do(httpReq)
 	if err != nil {
-		c.recordFailure()
+		// A caller that gave up (client disconnected / its own deadline) says
+		// nothing about the RAG service's health; don't trip the breaker.
+		if ctx.Err() == nil {
+			c.recordFailure()
+		}
 		return QueryResponse{}, err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		c.recordFailure()
-		return QueryResponse{}, errors.New("rag bad status")
+		statusErr := &StatusError{Code: resp.StatusCode}
+		// A 4xx is a bad request from one user (too long, blank...), not an
+		// unhealthy service: it must not open the breaker for everyone.
+		if !statusErr.IsClientError() {
+			c.recordFailure()
+		}
+		return QueryResponse{}, statusErr
 	}
 	c.recordSuccess()
 
@@ -74,7 +100,9 @@ func (c *Client) recordFailure() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.fails++
-	if c.fails == 5 {
+	// >= rather than ==: after the open window elapses a half-open probe that
+	// fails again must re-open the circuit (fails is already past 5 by then).
+	if c.fails >= failureThreshold {
 		c.opened = time.Now()
 	}
 }

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.QuranReminder" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:colorAccent">@color/noorain_gold</item>
+        <item name="android:windowBackground">@color/noorain_green</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <!-- System splash: the two lights at rest on deep green — the first frame of
+             NurLogoIntro («two lights»), which continues the moment the app draws. -->
+        <item name="android:windowSplashScreenBackground">@color/noorain_green</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/splash_two_lights</item>
+    </style>
+
+    <style name="Theme.QuranReminder.NoActionBar" parent="Theme.QuranReminder" />
+</resources>

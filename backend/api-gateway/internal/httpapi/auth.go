@@ -4,13 +4,16 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"net/url"
 	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
 	"golang.org/x/crypto/bcrypt"
@@ -32,11 +35,39 @@ func NewAuthHandler(db *pgxpool.Pool, tokens *auth.TokenService, redisClient *re
 	return &AuthHandler{db: db, tokens: tokens, redis: redisClient, email: email, passwordResetURL: strings.TrimRight(passwordResetURL, "/"), googleClientIDs: googleClientIDs, appleClientID: appleClientID}
 }
 
+// bcrypt only hashes the first 72 bytes (and x/crypto rejects longer input),
+// so every password entry point caps it there.
 type authRequest struct {
 	Name     string `json:"name"`
 	Email    string `json:"email" binding:"required,email"`
-	Password string `json:"password" binding:"required,min=8"`
+	Password string `json:"password" binding:"required,min=8,max=72"`
 	Language string `json:"language"`
+}
+
+const (
+	defaultLanguage   = "uz"
+	maxPasswordBytes  = 72
+	passwordLengthMsg = "password must be 8-72 bytes"
+)
+
+// passwordTooLong checks the byte length: the validator's max counts runes, so
+// a 72-character non-ASCII password can still exceed bcrypt's 72-byte limit.
+func passwordTooLong(pw string) bool { return len(pw) > maxPasswordBytes }
+
+// normalizeLanguage keeps the schema default ('uz') when the client sends no
+// language instead of storing an empty string over it.
+func normalizeLanguage(lang string) string {
+	lang = strings.TrimSpace(lang)
+	if lang == "" {
+		return defaultLanguage
+	}
+	return lang
+}
+
+// isUniqueViolation reports whether err is a Postgres unique_violation (23505).
+func isUniqueViolation(err error) bool {
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && pgErr.Code == "23505"
 }
 
 // RequestPasswordReset deliberately gives the same response for every email so
@@ -70,10 +101,14 @@ func (h *AuthHandler) RequestPasswordReset(c *gin.Context) {
 func (h *AuthHandler) ConfirmPasswordReset(c *gin.Context) {
 	var req struct {
 		Token    string `json:"token" binding:"required,len=64"`
-		Password string `json:"password" binding:"required,min=8,max=128"`
+		Password string `json:"password" binding:"required,min=8,max=72"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "a valid token and password of at least 8 characters are required"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "a valid token and a password of 8-72 characters are required"})
+		return
+	}
+	if passwordTooLong(req.Password) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": passwordLengthMsg})
 		return
 	}
 	tx, err := h.db.Begin(c.Request.Context())
@@ -126,6 +161,10 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	if passwordTooLong(req.Password) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": passwordLengthMsg})
+		return
+	}
 	hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), 12)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "password hash failed"})
@@ -136,10 +175,15 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		`INSERT INTO users (name, email, password_hash, language)
 		 VALUES ($1, lower($2), $3, $4)
 		 RETURNING id::text, name, email, language`,
-		req.Name, req.Email, string(hash), req.Language,
+		req.Name, req.Email, string(hash), normalizeLanguage(req.Language),
 	).Scan(&user.ID, &user.Name, &user.Email, &user.Language)
 	if err != nil {
-		c.JSON(http.StatusConflict, gin.H{"error": "email already registered"})
+		if isUniqueViolation(err) {
+			c.JSON(http.StatusConflict, gin.H{"error": "email already registered"})
+			return
+		}
+		log.Printf("register: insert user failed: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "registration failed"})
 		return
 	}
 	h.respondWithTokens(c, user)
@@ -177,19 +221,29 @@ func (h *AuthHandler) Refresh(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid refresh token"})
 		return
 	}
+	// Revoke-and-read in one statement: two concurrent refreshes with the same
+	// token can no longer both pass a SELECT before either UPDATE lands, so a
+	// refresh token is redeemable exactly once.
 	var user userDTO
 	err = h.db.QueryRow(c.Request.Context(),
-		`SELECT u.id::text, u.name, u.email, u.language
-		 FROM refresh_tokens rt
-		 JOIN users u ON u.id = rt.user_id
-		 WHERE rt.token_hash = $1 AND rt.revoked_at IS NULL AND rt.expires_at > now()`,
+		`WITH revoked AS (
+		   UPDATE refresh_tokens SET revoked_at = now()
+		   WHERE token_hash = $1 AND revoked_at IS NULL AND expires_at > now()
+		   RETURNING user_id
+		 )
+		 SELECT u.id::text, u.name, u.email, u.language
+		 FROM revoked JOIN users u ON u.id = revoked.user_id`,
 		auth.HashToken(req.RefreshToken),
 	).Scan(&user.ID, &user.Name, &user.Email, &user.Language)
 	if err != nil {
+		if !errors.Is(err, pgx.ErrNoRows) {
+			log.Printf("refresh: token rotation failed: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "refresh failed"})
+			return
+		}
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "refresh token expired"})
 		return
 	}
-	_, _ = h.db.Exec(c.Request.Context(), `UPDATE refresh_tokens SET revoked_at = now() WHERE token_hash = $1`, auth.HashToken(req.RefreshToken))
 	h.respondWithTokens(c, user)
 }
 

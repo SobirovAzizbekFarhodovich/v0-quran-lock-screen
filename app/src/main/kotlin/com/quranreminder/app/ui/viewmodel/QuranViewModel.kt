@@ -1,5 +1,6 @@
 package com.quranreminder.app.ui.viewmodel
 
+import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -8,7 +9,14 @@ import com.quranreminder.app.data.QuranDataLoader
 import com.quranreminder.app.database.Bookmark
 import com.quranreminder.app.database.QuranVerse
 import com.quranreminder.app.database.SurahHeader
+import com.quranreminder.app.data.ContentLoadException
+import com.quranreminder.app.util.NetworkStatus
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -17,14 +25,21 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
+/** Content-load state, always tagged with the language it belongs to. */
 sealed interface LanguageDownloadState {
     data object Idle : LanguageDownloadState
-    data object InProgress : LanguageDownloadState
+    data class InProgress(val language: String) : LanguageDownloadState
     data class Success(val language: String) : LanguageDownloadState
-    data class Failure(val language: String, val message: String) : LanguageDownloadState
+    /** [messageKey] is an AppStrings key (e.g. `loading.error.offline`). */
+    data class Failure(val language: String, val messageKey: String) : LanguageDownloadState
 }
 
-class QuranViewModel(private val repository: QuranRepository) : ViewModel() {
+class QuranViewModel(
+    private val repository: QuranRepository,
+    private val appContext: Context,
+    /** Persists which language is now stored in the database (called right after the swap). */
+    private val onContentReady: (String) -> Unit = {}
+) : ViewModel() {
     
     private val _surahs = MutableStateFlow<List<SurahHeader>>(emptyList())
     val surahs: StateFlow<List<SurahHeader>> = _surahs.asStateFlow()
@@ -91,6 +106,9 @@ class QuranViewModel(private val repository: QuranRepository) : ViewModel() {
         }
         searchJob?.cancel()
         searchJob = viewModelScope.launch {
+            // Debounce: the DAO search is an unindexed LIKE scan over ~6k rows,
+            // so only run it once typing pauses.
+            delay(SEARCH_DEBOUNCE_MS)
             try {
                 repository.searchVerses(query).collect { results ->
                     _searchResults.value = results
@@ -137,27 +155,67 @@ class QuranViewModel(private val repository: QuranRepository) : ViewModel() {
     private val _languageDownloadState = MutableStateFlow<LanguageDownloadState>(LanguageDownloadState.Idle)
     val languageDownloadState: StateFlow<LanguageDownloadState> = _languageDownloadState.asStateFlow()
 
+    private var downloadJob: Job? = null
+    private val replaceMutex = Mutex()
+
+    /**
+     * Loads [language]'s Quran content into the database. Bundled languages (Uzbek
+     * Latin/Cyrillic) come from assets with no network; others are downloaded. A new
+     * request for a different language cancels the one in flight; a repeat request for
+     * the language already loading/loaded is a no-op. The previous content stays in the
+     * database until the new one is fully loaded and validated.
+     */
     fun downloadLanguageContent(language: String) {
-        if (_languageDownloadState.value == LanguageDownloadState.InProgress) return
-        viewModelScope.launch {
-            _languageDownloadState.value = LanguageDownloadState.InProgress
-            try {
+        when (val current = _languageDownloadState.value) {
+            is LanguageDownloadState.InProgress ->
+                if (current.language == language && downloadJob?.isActive == true) return
+            is LanguageDownloadState.Success -> if (current.language == language) return
+            else -> Unit
+        }
+        downloadJob?.cancel()
+        _languageDownloadState.value = LanguageDownloadState.InProgress(language)
+        downloadJob = viewModelScope.launch {
+            val outcome = try {
                 val verses = withContext(Dispatchers.IO) {
-                    QuranDataLoader.loadFromServer(language)
+                    if (QuranDataLoader.isBundled(language)) {
+                        QuranDataLoader.loadFromAssets(appContext, language)
+                    } else {
+                        // A language downloaded before loads from its on-disk copy: instant, offline.
+                        QuranDataLoader.loadFromDiskCache(appContext, language) ?: run {
+                            if (!NetworkStatus.isServerReachable(appContext)) {
+                                throw ContentLoadException("loading.error.offline")
+                            }
+                            QuranDataLoader.loadFromServer(appContext, language)
+                        }
+                    }
                 }
-                check(verses.size >= 6236) { "Qur’on tarjimasi to‘liq yuklanmadi" }
-                repository.replaceVerses(verses)
-                _languageDownloadState.value = LanguageDownloadState.Success(language)
+                if (verses.size < QuranDataLoader.EXPECTED_VERSE_COUNT) {
+                    throw ContentLoadException("loading.error.incomplete")
+                }
+                replaceMutex.withLock {
+                    ensureActive()
+                    repository.replaceVerses(verses)
+                    onContentReady(language)
+                }
+                LanguageDownloadState.Success(language)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: ContentLoadException) {
+                LanguageDownloadState.Failure(language, error.code)
             } catch (error: Exception) {
-                _languageDownloadState.value = LanguageDownloadState.Failure(
+                android.util.Log.e("QuranViewModel", "Loading $language failed", error)
+                LanguageDownloadState.Failure(
                     language,
-                    error.message ?: "Qur’onni serverdan yuklab bo‘lmadi"
+                    if (QuranDataLoader.isBundled(language)) "loading.error.bundled" else "loading.error.server"
                 )
             }
+            _languageDownloadState.value = outcome
         }
     }
 
     companion object {
+        private const val SEARCH_DEBOUNCE_MS = 300L
+
         fun verseKey(surahNumber: Int, ayahNumber: Int): String = "$surahNumber:$ayahNumber"
     }
 }
@@ -165,9 +223,13 @@ class QuranViewModel(private val repository: QuranRepository) : ViewModel() {
 private val Bookmark.key: String
     get() = QuranViewModel.verseKey(surahNumber, ayahNumber)
 
-class QuranViewModelFactory(private val repository: QuranRepository) : ViewModelProvider.Factory {
+class QuranViewModelFactory(
+    private val repository: QuranRepository,
+    private val appContext: Context,
+    private val onContentReady: (String) -> Unit = {}
+) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
-        return QuranViewModel(repository) as T
+        return QuranViewModel(repository, appContext.applicationContext, onContentReady) as T
     }
 }

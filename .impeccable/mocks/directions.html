@@ -1,0 +1,263 @@
+<!doctype html>
+<html lang="uz">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Noorain — yo'nalishlar</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Amiri+Quran&family=Golos+Text:wght@400;500;600;700&family=Unbounded:wght@500;700;800&family=Oswald:wght@500;700&family=PT+Serif:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root { --page:#e9e6e1; --ink:#1b1916; }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { background:var(--page); color:var(--ink); font-family:"Golos Text",system-ui,sans-serif; padding:32px 16px 64px; }
+  header.top { max-width:1320px; margin:0 auto 28px; }
+  header.top h1 { font:700 26px/1.2 "Golos Text"; }
+  header.top p { margin-top:6px; color:#5b5650; max-width:760px; line-height:1.5; }
+  .row { display:flex; gap:36px; justify-content:center; flex-wrap:wrap; max-width:1320px; margin:0 auto; }
+  .col { width:390px; }
+  .col h2 { font:700 17px/1.3 "Golos Text"; margin:0 0 4px; }
+  .col .kick { font:600 11px/1 "Golos Text"; letter-spacing:.12em; text-transform:uppercase; color:#8a8378; margin-bottom:6px; }
+  .col .why { font-size:13.5px; line-height:1.5; color:#5b5650; margin:0 0 14px; min-height:60px; }
+  .phone { width:390px; height:844px; border-radius:46px; overflow:hidden; position:relative; box-shadow:0 0 0 10px #111, 0 30px 60px rgba(0,0,0,.25); }
+  .status { height:44px; display:flex; justify-content:space-between; align-items:center; padding:0 26px; font:600 14px "Golos Text"; }
+  .nav { position:absolute; left:0; right:0; bottom:0; height:84px; display:flex; justify-content:space-around; align-items:flex-start; padding-top:12px; }
+  .nav div { display:flex; flex-direction:column; align-items:center; gap:5px; font-size:11.5px; font-weight:600; width:70px; }
+  .nav i { width:26px; height:26px; display:block; border-radius:8px; }
+  .ar { font-family:"Amiri Quran",serif; direction:rtl; }
+
+  /* ---------- ABR ---------- */
+  .abr { background:#FBF7F0; color:#14110F; }
+  .abr .status { color:#FBF7F0; position:absolute; top:0; left:0; right:0; z-index:3; }
+  .abr .hero { position:relative; height:430px; background:#1F2A6B; color:#FBF7F0; overflow:hidden; }
+  .abr .hero svg.ikat { position:absolute; inset:0; }
+  .abr .hero .inner { position:absolute; left:22px; right:84px; top:62px; }
+  .abr .brand { display:flex; align-items:center; gap:10px; }
+  .abr .brand span { font:800 15px/1 "Unbounded"; letter-spacing:.06em; }
+  .abr .tag { margin-top:30px; font:600 11px/1 "Golos Text"; letter-spacing:.14em; text-transform:uppercase; color:#F2B705; }
+  .abr .hero .ar { font-size:34px; line-height:1.75; margin-top:10px; text-align:right; }
+  .abr .hero .tr { font-size:16px; line-height:1.5; margin-top:8px; color:#E9E4F5; }
+  .abr .hero .ref { margin-top:12px; font:700 12px/1 "Unbounded"; color:#F2B705; }
+  .abr .edge { position:absolute; left:0; right:0; bottom:-1px; height:26px; }
+  .abr .tiles { display:grid; grid-template-columns:1fr 1fr; gap:10px; padding:16px 14px 0; }
+  .abr .tile { height:118px; border-radius:6px; position:relative; overflow:hidden; padding:14px; color:#fff; }
+  .abr .tile b { font:700 16px/1.15 "Unbounded"; display:block; position:relative; z-index:2; }
+  .abr .tile small { font-size:12.5px; opacity:.92; position:relative; z-index:2; display:block; margin-top:6px; line-height:1.35; }
+  .abr .tile svg { position:absolute; right:-6px; top:0; bottom:0; height:100%; z-index:1; }
+  .abr .t1 { background:#1F2A6B; } .abr .t2 { background:#C2185B; } .abr .t3 { background:#0B6E4F; } .abr .t4 { background:#F2B705; color:#14110F; }
+  .abr .nav { background:#FBF7F0; border-top:1px solid #E6DED0; color:#6b645b; }
+  .abr .nav .on { color:#14110F; } .abr .nav .on i { background:#C2185B; } .abr .nav i { background:#DCD3C3; }
+
+  /* ---------- CALENDAR ---------- */
+  .cal { background:#E9E4DA; color:#1B1B1B; }
+  .cal .status { color:#1B1B1B; }
+  .cal .pad { padding:2px 16px; }
+  .cal .brandline { display:flex; justify-content:space-between; align-items:baseline; padding:4px 4px 10px; }
+  .cal .brandline b { font:700 20px/1 "Oswald"; letter-spacing:.08em; text-transform:uppercase; }
+  .cal .brandline span { font:500 13px "Golos Text"; color:#6d675d; }
+  .cal .sheet { background:#F4F1EA; position:relative; box-shadow:0 2px 0 #d8d1c3, 0 4px 0 #cfc7b6, 0 6px 0 #c6bda9; }
+  .cal .holes { height:22px; background:#2E5E3A; display:flex; justify-content:center; gap:44px; align-items:center; }
+  .cal .holes i { width:9px; height:9px; border-radius:50%; background:#E9E4DA; display:block; }
+  .cal .head { display:flex; border-bottom:2px solid #1B1B1B; }
+  .cal .head div { padding:8px 12px; font:500 13px "Oswald"; letter-spacing:.06em; text-transform:uppercase; }
+  .cal .head div + div { border-left:2px solid #1B1B1B; margin-left:auto; }
+  .cal .big { display:flex; align-items:flex-end; gap:12px; padding:10px 14px 0; }
+  .cal .big .n { font:700 120px/0.9 "Oswald"; color:#D7261E; }
+  .cal .big .m { font:500 15px/1.3 "Oswald"; text-transform:uppercase; letter-spacing:.05em; padding-bottom:10px; }
+  .cal .times { display:grid; grid-template-columns:repeat(5,1fr); border-top:1px solid #1B1B1B; border-bottom:1px solid #1B1B1B; margin:12px 0 0; }
+  .cal .times div { text-align:center; padding:6px 0; font:500 11px/1.3 "Golos Text"; }
+  .cal .times div + div { border-left:1px solid #1B1B1B; }
+  .cal .times b { display:block; font:700 15px "Oswald"; }
+  .cal .ayah { padding:12px 14px 14px; }
+  .cal .ayah .ar { font-size:24px; line-height:1.8; text-align:right; }
+  .cal .ayah p { font:400 14.5px/1.5 "PT Serif"; margin-top:4px; }
+  .cal .ayah small { display:block; margin-top:8px; font:700 12px "Oswald"; letter-spacing:.08em; color:#D7261E; text-transform:uppercase; }
+  .cal .perf { height:14px; background:radial-gradient(circle at 7px 0, transparent 5px, #F4F1EA 5.5px) repeat-x; background-size:14px 14px; }
+  .cal .list { margin-top:16px; background:#F4F1EA; }
+  .cal .list div { display:flex; justify-content:space-between; align-items:center; padding:14px; border-bottom:1px solid #d9d2c4; font:600 15px "Golos Text"; }
+  .cal .list div span { font:500 12px "Golos Text"; color:#6d675d; }
+  .cal .list em { font-style:normal; font:700 12px "Oswald"; color:#fff; background:#D7261E; padding:3px 7px; }
+  .cal .nav { background:#1B1B1B; color:#a39d92; }
+  .cal .nav .on { color:#fff; } .cal .nav .on i { background:#D7261E; } .cal .nav i { background:#3a3833; border-radius:0; }
+
+  /* ---------- CANON ---------- */
+  .can { background:#F7F3E8; color:#1d2a24; }
+  .can .status { color:#F7F3E8; position:absolute; top:0; left:0; right:0; z-index:2; }
+  .can .top { background:#0F3D2E; color:#F7F3E8; padding:58px 20px 70px; position:relative; overflow:hidden; }
+  .can .top svg { position:absolute; right:-40px; top:20px; opacity:.16; }
+  .can .top b { font:700 26px/1.2 "PT Serif"; display:block; }
+  .can .top span { font-size:14px; color:#C9A646; }
+  .can .card { margin:-48px 16px 0; background:#fff; border:1.5px solid #C9A646; border-radius:18px; padding:18px; position:relative; box-shadow:0 8px 24px rgba(15,61,46,.12); }
+  .can .card small { font:700 11px "Golos Text"; letter-spacing:.12em; color:#C9A646; text-transform:uppercase; }
+  .can .card .ar { font-size:26px; line-height:1.8; text-align:right; margin-top:6px; color:#0F3D2E; }
+  .can .card p { font:400 14.5px/1.5 "PT Serif"; color:#3b4a43; }
+  .can .grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; padding:16px; }
+  .can .grid div { background:#fff; border-radius:16px; padding:16px; border:1px solid #e7dfc9; height:104px; }
+  .can .grid i { display:block; width:34px; height:34px; border-radius:50%; background:#E8EFE9; margin-bottom:10px; border:1.5px solid #C9A646; }
+  .can .grid b { font:700 14.5px "Golos Text"; }
+  .can .nav { background:#fff; border-top:1px solid #e7dfc9; color:#7d8a83; }
+  .can .nav .on { color:#0F3D2E; } .can .nav .on i { background:#0F3D2E; } .can .nav i { background:#e5ecE6; border-radius:50%; }
+
+  .note { max-width:1320px; margin:30px auto 0; font-size:13px; color:#6d675d; line-height:1.6; }
+</style>
+</head>
+<body>
+<header class="top">
+  <h1>Noorain: uchta yo'nalish, bitta ekran</h1>
+  <p>Har biri bir xil ma'lumot bilan chizilgan bosh ekran: soatlik oyat (Baqara 2:255) va asosiy bo'limlar (AI yordamchi, Wallpaper, Tilovat, Qur'on). Ranglar, shriftlar va kayfiyatni solishtiring, keyin tanlov sahifasida bittasini tanlang.</p>
+</header>
+
+<div class="row">
+  <!-- ABR -->
+  <div class="col">
+    <div class="kick">Tasodif tanlovi</div>
+    <h2>Abr: Marg'ilon atlasi</h2>
+    <p class="why">Har bir bo'lim o'z rangidagi ipak tanda. Rang maydonlari orasidagi chegara atlasning "abr" deb ataladigan patlangan, zinapoyasimon qirrasi. Logo: ikki atlas bodom naqshi, ya'ni "ikki nur".</p>
+    <div class="phone abr">
+      <div class="status"><span>09:41</span><span>●●● 82%</span></div>
+      <div class="hero">
+        <svg class="ikat" id="ikatHero" width="390" height="430"></svg>
+        <div class="inner">
+          <div class="brand">
+            <svg width="34" height="34" viewBox="0 0 64 64" id="logoA"></svg>
+            <span>NOORAIN</span>
+          </div>
+          <div class="tag">Soatlik oyat · 10:00 gacha</div>
+          <div class="ar">ٱللَّهُ لَآ إِلَٰهَ إِلَّا هُوَ ٱلْحَىُّ ٱلْقَيُّومُ</div>
+          <div class="tr">Alloh — Undan o'zga iloh yo'q. U tirik va qayyumdir.</div>
+          <div class="ref">BAQARA · 2:255</div>
+        </div>
+        <svg class="edge" id="abrEdge" viewBox="0 0 390 26" preserveAspectRatio="none"></svg>
+      </div>
+      <div class="tiles">
+        <div class="tile t1"><b>Islomiy AI</b><small>Qur'on va hadisdan javob</small><svg class="motif" data-c="#3d4a9a" width="70"></svg></div>
+        <div class="tile t2"><b>Wallpaper</b><small>Oyat qulf ekranida</small><svg class="motif" data-c="#e0457f" width="70"></svg></div>
+        <div class="tile t3"><b>Tilovat</b><small>Qiroatni tekshiring</small><svg class="motif" data-c="#2a9a74" width="70"></svg></div>
+        <div class="tile t4"><b>Qur'on</b><small>114 sura, offline</small><svg class="motif" data-c="#ffd34d" width="70"></svg></div>
+      </div>
+      <div class="nav"><div class="on"><i></i>Bosh</div><div><i></i>Qur'on</div><div><i></i>AI</div><div><i></i>Tilovat</div><div><i></i>Sozlama</div></div>
+    </div>
+  </div>
+
+  <!-- CALENDAR -->
+  <div class="col">
+    <div class="kick">Impeccable tanlovi</div>
+    <h2>Yirtma kalendar</h2>
+    <p class="why">O'zbek uylaridagi devoriy kalendar: katta qizil sana, namoz vaqtlari va kunning oyati. Har soatda yangi varaq. Tanish va iliq, lekin qog'oz ohangi boshqa ilovalarga yaqin.</p>
+    <div class="phone cal">
+      <div class="status"><span>09:41</span><span>●●● 82%</span></div>
+      <div class="pad">
+        <div class="brandline"><b>Noorain</b><span>Shanba, 10-oktabr</span></div>
+        <div class="sheet">
+          <div class="holes"><i></i><i></i></div>
+          <div class="head"><div>Rabiul-avval 1448</div><div>Soat 09:00</div></div>
+          <div class="big"><div class="n">10</div><div class="m">Oktabr<br>Shanba</div></div>
+          <div class="times"><div>Bomdod<b>05:21</b></div><div>Peshin<b>12:24</b></div><div>Asr<b>15:48</b></div><div>Shom<b>17:58</b></div><div>Xufton<b>19:20</b></div></div>
+          <div class="ayah">
+            <div class="ar">ٱللَّهُ لَآ إِلَٰهَ إِلَّا هُوَ ٱلْحَىُّ ٱلْقَيُّومُ</div>
+            <p>Alloh — Undan o'zga iloh yo'q. U tirik va qayyumdir.</p>
+            <small>Baqara · 2:255</small>
+          </div>
+          <div class="perf"></div>
+        </div>
+        <div class="list">
+          <div>Islomiy AI <span>Savol bering</span></div>
+          <div>Wallpaper <em>YANGI</em></div>
+          <div>Tilovat <span>Fotiha 1:1</span></div>
+        </div>
+      </div>
+      <div class="nav"><div class="on"><i></i>Bosh</div><div><i></i>Qur'on</div><div><i></i>AI</div><div><i></i>Tilovat</div><div><i></i>Sozlama</div></div>
+    </div>
+  </div>
+
+  <!-- CANON -->
+  <div class="col">
+    <div class="kick">Toifa standarti</div>
+    <h2>Odatiy islomiy ilova</h2>
+    <p class="why">To'q yashil, oltin hoshiya, arabesk naqsh. Ishonchli va tanish, lekin boshqa o'nlab ilovalardan farqlanmaydi. Hozirgi dizayningiz ham shu toifaga yaqin.</p>
+    <div class="phone can">
+      <div class="status"><span>09:41</span><span>●●● 82%</span></div>
+      <div class="top">
+        <svg width="220" height="220" viewBox="0 0 100 100"><g fill="none" stroke="#C9A646" stroke-width="1.2"><rect x="20" y="20" width="60" height="60"/><rect x="20" y="20" width="60" height="60" transform="rotate(45 50 50)"/><circle cx="50" cy="50" r="18"/></g></svg>
+        <span>Assalomu alaykum</span>
+        <b>Noorain</b>
+      </div>
+      <div class="card">
+        <small>Soatlik oyat</small>
+        <div class="ar">ٱللَّهُ لَآ إِلَٰهَ إِلَّا هُوَ ٱلْحَىُّ ٱلْقَيُّومُ</div>
+        <p>Alloh — Undan o'zga iloh yo'q. U tirik va qayyumdir. <br><span style="color:#C9A646;font-weight:700">Baqara 2:255</span></p>
+      </div>
+      <div class="grid">
+        <div><i></i><b>Islomiy AI</b></div>
+        <div><i></i><b>Wallpaper</b></div>
+        <div><i></i><b>Tilovat</b></div>
+        <div><i></i><b>Qur'on</b></div>
+      </div>
+      <div class="nav"><div class="on"><i></i>Bosh</div><div><i></i>Qur'on</div><div><i></i>AI</div><div><i></i>Tilovat</div><div><i></i>Sozlama</div></div>
+    </div>
+  </div>
+</div>
+<p class="note">Bu faqat yo'nalish maketlari: tanlangan variant butun ilovaga (login, onboarding, o'quvchi, AI suhbat, tilovat, wallpaper, sozlamalar) va yangi logoga qo'llanadi. Namoz vaqtlari namunaviy, haqiqiy hisob emas.</p>
+
+<script>
+// Seeded random so the ikat looks the same on every load.
+let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+const NS = "http://www.w3.org/2000/svg";
+function el(tag, attrs, parent) { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); parent && parent.appendChild(e); return e; }
+
+// Abr edge: a stepped, feathered boundary between two dyed fields (warp threads bunch unevenly).
+function abrEdge(svg, fill) {
+  const defs = el("defs", {}, svg);
+  const f = el("filter", { id: "feather", x: "-5%", y: "-50%", width: "110%", height: "200%" }, defs);
+  el("feGaussianBlur", { stdDeviation: "0.6 1.4" }, f);
+  let d = "M0 26 L0 14 ";
+  for (let x = 0; x <= 390; x += 3) { const y = 8 + Math.sin(x / 23) * 4 + rnd() * 7; d += `L${x} ${y.toFixed(1)} L${x + 3} ${y.toFixed(1)} `; }
+  d += "L390 26 Z";
+  el("path", { d, fill, filter: "url(#feather)" }, svg);
+}
+
+// Ikat motif: an elongated lozenge whose outline steps on the warp (vertical threads).
+function lozenge(svg, cx, cy, w, h, fill, blurId) {
+  let left = "", right = "";
+  const rows = 46;
+  for (let i = 0; i <= rows; i++) {
+    const t = i / rows, y = cy - h / 2 + t * h;
+    const half = Math.sin(Math.PI * t) ** 0.8 * (w / 2) + (rnd() - 0.5) * w * 0.12;
+    left = `L${(cx - half).toFixed(1)} ${y.toFixed(1)} ` + left;
+    right += `L${(cx + half).toFixed(1)} ${y.toFixed(1)} `;
+  }
+  el("path", { d: "M" + right.slice(1) + left + "Z", fill, filter: `url(#${blurId})` }, svg);
+}
+
+const hero = document.getElementById("ikatHero");
+const hd = el("defs", {}, hero);
+const hf = el("filter", { id: "hb", x: "-20%", y: "-5%", width: "140%", height: "110%" }, hd);
+el("feGaussianBlur", { stdDeviation: "2.2 0.4" }, hf);
+// warp stripes
+for (let x = 0; x < 390; x += 6) el("rect", { x, y: 0, width: 3, height: 430, fill: "#26337a", opacity: (0.25 + rnd() * 0.35).toFixed(2) }, hero);
+// columns of lozenges, fading toward the text
+el("rect", { x: 326, y: 0, width: 64, height: 430, fill: "#14110F" }, hero);
+const cols = [[358, "#C2185B", 0], [358, "#F2B705", 75], [358, "#0B6E4F", 150]];
+cols.forEach(([cx, c, off]) => { for (let cy = 20 + off; cy < 470; cy += 225) { lozenge(hero, cx, cy, 50, 140, c, "hb"); lozenge(hero, cx, cy, 18, 70, "#FBF7F0", "hb"); } });
+const lg = el("linearGradient", { id: "fade", x1: "0", x2: "1" }, hd);
+el("stop", { offset: "0", "stop-color": "#1F2A6B", "stop-opacity": "1" }, lg);
+el("stop", { offset: "0.72", "stop-color": "#1F2A6B", "stop-opacity": "0.92" }, lg);
+el("stop", { offset: "1", "stop-color": "#1F2A6B", "stop-opacity": "0" }, lg);
+abrEdge(document.getElementById("abrEdge"), "#FBF7F0");
+
+// tile motifs
+document.querySelectorAll("svg.motif").forEach((s, i) => {
+  s.setAttribute("viewBox", "0 0 70 118"); s.setAttribute("height", "118");
+  const d = el("defs", {}, s); const f = el("filter", { id: "tb" + i, x: "-30%", y: "-5%", width: "160%", height: "110%" }, d);
+  el("feGaussianBlur", { stdDeviation: "1.6 0.3" }, f);
+  lozenge(s, 42, 59, 44, 104, s.dataset.c, "tb" + i);
+  lozenge(s, 42, 59, 16, 50, i === 3 ? "#14110F" : "#FBF7F0", "tb" + i);
+});
+
+// Logo sketch: two ikat lozenges leaning together, a light between them.
+const L = document.getElementById("logoA");
+const ld = el("defs", {}, L); const lf = el("filter", { id: "lb" }, ld); el("feGaussianBlur", { stdDeviation: "0.5 0.1" }, lf);
+seed = 3; lozenge(L, 24, 32, 22, 56, "#F2B705", "lb"); lozenge(L, 40, 32, 22, 56, "#C2185B", "lb");
+el("circle", { cx: 32, cy: 32, r: 4.5, fill: "#FBF7F0" }, L);
+</script>
+</body>
+</html>

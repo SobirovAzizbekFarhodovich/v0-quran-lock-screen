@@ -1,15 +1,20 @@
 package com.quranreminder.app.ui.screens
 
 import android.widget.Toast
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -30,21 +35,37 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
 import com.quranreminder.app.database.QuranVerse
 import com.quranreminder.app.lockscreen.LockScreenWallpaperApplier
-import com.quranreminder.app.ui.theme.NurColors
+import com.quranreminder.app.ui.theme.NurBand
+import com.quranreminder.app.ui.theme.NurDivider
 import com.quranreminder.app.ui.theme.NurEmblem
 import com.quranreminder.app.ui.theme.NurIconButton
-import com.quranreminder.app.ui.theme.NurPill
-import com.quranreminder.app.ui.theme.NurScreenHeader
-import com.quranreminder.app.ui.theme.NurSectionTitle
 import com.quranreminder.app.ui.theme.NurSurfaceCard
+import com.quranreminder.app.ui.theme.nurColors
+import com.quranreminder.app.ui.theme.quranTextStyle
+import com.quranreminder.app.ui.theme.starPath
 import com.quranreminder.app.ui.theme.t
 import com.quranreminder.app.ui.viewmodel.QuranViewModel
 import kotlinx.coroutines.launch
+
+private const val BASMALA = "بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ"
+
+/** Arabic size in the reader; the screen does not read the user's font-size setting. */
+private const val READER_ARABIC_SP = 28
+
+/** Items in the list before the first ayah (the opening card). Used for the target-ayah scroll. */
+private const val ITEMS_BEFORE_AYAHS = 1
 
 @Composable
 fun SurahDetailScreen(
@@ -53,18 +74,17 @@ fun SurahDetailScreen(
     viewModel: QuranViewModel,
     navController: NavHostController
 ) {
-    val verses = viewModel.currentSurahVerses.collectAsState().value
+    val loadedVerses = viewModel.currentSurahVerses.collectAsState().value
+    // currentSurahVerses still holds the previous surah until this one loads; don't show it.
+    val verses = if (loadedVerses.firstOrNull()?.surahNumber == surahNumber) loadedVerses else emptyList()
     val bookmarkedVerseKeys = viewModel.bookmarkedVerseKeys.collectAsState().value
-    val context = androidx.compose.ui.platform.LocalContext.current
+    val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
 
     val loadingText = t("surahDetail.loading")
     val eyebrowFallbackText = t("surahDetail.eyebrowFallback")
     val backText = t("common.back")
-    val translationLabelText = t("surahDetail.translationLabel")
-    val maddText = t("surahDetail.tajwid.madd")
-    val ikhfaText = t("surahDetail.tajwid.ikhfa")
     val lockScreenSelectedText = t("surahDetail.lockScreenSelected")
     val lockScreenFailedText = t("surahDetail.lockScreenFailed")
     val shareFailedText = t("surahDetail.shareFailed")
@@ -72,81 +92,76 @@ fun SurahDetailScreen(
     val shareImageDesc = t("surahDetail.shareImage")
     val selectLockScreenDesc = t("surahDetail.selectLockScreen")
     val saveDesc = t("surahDetail.save")
+    val removeBookmarkDesc = t("surahDetail.removeBookmark")
+    val metaText = t("home.sura") + surahNumber + " · " +
+        t("surah.ayahCount").replace("{n}", verses.size.toString())
 
     LaunchedEffect(surahNumber) { viewModel.loadSurahVerses(surahNumber) }
 
-    if (verses.isEmpty()) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(MaterialTheme.colorScheme.background),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
-        ) {
-            NurEmblem(size = 46.dp)
-            Spacer(modifier = Modifier.height(16.dp))
-            Text(
-                text = loadingText,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f)
-            )
-        }
-        return
-    }
-
-    val firstVerse = verses.first()
     LaunchedEffect(verses, targetAyahNumber) {
         val target = targetAyahNumber ?: return@LaunchedEffect
         val index = verses.indexOfFirst { it.ayahNumber == target }
-        if (index >= 0) listState.scrollToItem(index)
+        // The opening card precedes the ayahs in the list.
+        if (index >= 0) listState.scrollToItem(index + ITEMS_BEFORE_AYAHS)
     }
+
+    val firstVerse = verses.firstOrNull()
 
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
     ) {
-        NurScreenHeader(
-            title = firstVerse.surahName,
-            eyebrow = firstVerse.surahNameArabic.ifBlank { eyebrowFallbackText },
-            leading = {
-                NurIconButton(
-                    icon = Icons.Default.ArrowBack,
-                    contentDescription = backText,
-                    onClick = { navController.popBackStack() }
-                )
-            }
+        ReaderHeader(
+            title = firstVerse?.surahName ?: eyebrowFallbackText,
+            arabicName = firstVerse?.surahNameArabic.orEmpty(),
+            fallbackSubtitle = eyebrowFallbackText,
+            backText = backText,
+            onBack = { navController.popBackStack() }
         )
 
+        if (verses.isEmpty()) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .navigationBarsPadding(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                NurEmblem(size = 46.dp, onDark = nurColors.isDark)
+                Spacer(modifier = Modifier.height(16.dp))
+                Text(
+                    text = loadingText,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        } else {
         LazyColumn(
             state = listState,
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = androidx.compose.foundation.layout.PaddingValues(
-                start = 20.dp,
-                end = 20.dp,
-                bottom = 24.dp
-            ),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            modifier = Modifier
+                .fillMaxSize()
+                .navigationBarsPadding(),
+            contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 20.dp, bottom = 24.dp)
         ) {
-            item {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    NurPill(text = translationLabelText)
-                    if (verses.any { it.ayahTextArabic.isNotBlank() }) {
-                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            TajwidLegend(maddText, NurColors.Terracotta)
-                            TajwidLegend(ikhfaText, NurColors.Sage)
-                        }
-                    }
-                }
+            item(key = "opening") {
+                OpeningCard(
+                    showBasmala = surahNumber != 1 && surahNumber != 9,
+                    meta = metaText,
+                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp)
+                )
+                Spacer(Modifier.height(12.dp))
             }
             items(verses, key = { it.id }) { verse ->
-                VerseDetailCard(
+                val isBookmarked = QuranViewModel.verseKey(verse.surahNumber, verse.ayahNumber) in bookmarkedVerseKeys
+                AyahBlock(
                     verse = verse,
-                    ayahPrefix = ayahPrefixText,
+                    highlighted = verse.ayahNumber == targetAyahNumber,
+                    ayahLabel = "$ayahPrefixText${verse.ayahNumber}",
                     shareImageDesc = shareImageDesc,
                     selectLockScreenDesc = selectLockScreenDesc,
-                    saveDesc = saveDesc,
-                    isBookmarked = QuranViewModel.verseKey(verse.surahNumber, verse.ayahNumber) in bookmarkedVerseKeys,
+                    bookmarkDesc = if (isBookmarked) removeBookmarkDesc else saveDesc,
+                    isBookmarked = isBookmarked,
                     onBookmarkClick = { viewModel.toggleBookmark(verse.surahNumber, verse.ayahNumber) },
                     onLockScreenClick = {
                         scope.launch {
@@ -169,96 +184,173 @@ fun SurahDetailScreen(
                         }
                     }
                 )
+                if (verse != verses.last()) NurDivider(inset = 16.dp)
+            }
+        }
+        }
+    }
+}
+
+/** Band header: back, surah name, and the Arabic surah name beneath it in gold. */
+@Composable
+private fun ReaderHeader(
+    title: String,
+    arabicName: String,
+    fallbackSubtitle: String,
+    backText: String,
+    onBack: () -> Unit
+) {
+    NurBand(bottomPadding = 16.dp) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = 12.dp, end = 20.dp, top = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            NurIconButton(icon = Icons.Default.ArrowBack, contentDescription = backText, onClick = onBack)
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.headlineMedium,
+                    color = nurColors.onBand,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+                if (arabicName.isNotBlank()) {
+                    Text(
+                        text = arabicName,
+                        style = quranTextStyle(20).copy(lineHeight = 32.sp),
+                        color = nurColors.ornament,
+                        maxLines = 1
+                    )
+                } else {
+                    Text(
+                        text = fallbackSubtitle,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = nurColors.onBandMuted
+                    )
+                }
             }
         }
     }
 }
 
+/** Opening card: the Basmala (except where it is the first ayah, or absent) and the surah's size. */
 @Composable
-private fun TajwidLegend(label: String, color: androidx.compose.ui.graphics.Color) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Box(
+private fun OpeningCard(showBasmala: Boolean, meta: String, modifier: Modifier = Modifier) {
+    NurSurfaceCard(modifier = modifier.fillMaxWidth(), shape = MaterialTheme.shapes.large) {
+        Column(
             modifier = Modifier
-                .size(8.dp)
-                .background(color, androidx.compose.foundation.shape.CircleShape)
-        )
-        Spacer(modifier = Modifier.width(5.dp))
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp, vertical = 20.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            if (showBasmala) {
+                Text(
+                    text = BASMALA,
+                    style = quranTextStyle(26),
+                    color = MaterialTheme.colorScheme.onSurface,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+            StarRule()
+            Text(
+                text = meta,
+                style = MaterialTheme.typography.labelLarge,
+                color = nurColors.goldText,
+                textAlign = TextAlign.Center
+            )
+        }
+    }
+}
+
+/** A hairline broken by a small gold star. */
+@Composable
+private fun StarRule() {
+    val c = nurColors
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.width(44.dp).height(1.dp).background(c.frame))
+        Canvas(Modifier.padding(horizontal = 10.dp).size(10.dp)) {
+            drawPath(starPath(center, size.minDimension / 2f), c.ornament)
+        }
+        Box(Modifier.width(44.dp).height(1.dp).background(c.frame))
     }
 }
 
 @Composable
-fun VerseDetailCard(
+private fun AyahBlock(
     verse: QuranVerse,
-    ayahPrefix: String,
+    highlighted: Boolean,
+    ayahLabel: String,
     shareImageDesc: String,
     selectLockScreenDesc: String,
-    saveDesc: String,
+    bookmarkDesc: String,
     isBookmarked: Boolean,
     onBookmarkClick: () -> Unit,
     onLockScreenClick: () -> Unit,
     onShareClick: () -> Unit
 ) {
-    NurSurfaceCard(modifier = Modifier.fillMaxWidth()) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Box(
-                    modifier = Modifier.size(30.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    NurEmblem(size = 30.dp)
-                    Text(
-                        text = verse.ayahNumber.toString(),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = NurColors.Ink
-                    )
-                }
-                Spacer(modifier = Modifier.width(8.dp))
-                NurSectionTitle("$ayahPrefix${verse.ayahNumber}", modifier = Modifier.weight(1f))
-                NurIconButton(Icons.Default.Share, shareImageDesc, onShareClick)
-                Spacer(modifier = Modifier.width(6.dp))
-                NurIconButton(Icons.Default.Lock, selectLockScreenDesc, onLockScreenClick)
-                Spacer(modifier = Modifier.width(6.dp))
-                NurIconButton(
-                    if (isBookmarked) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
-                    saveDesc,
-                    onBookmarkClick,
-                    emphasized = isBookmarked
-                )
-            }
-
-            if (verse.ayahTextArabic.isNotBlank()) {
-                Text(
-                    text = verse.ayahTextArabic,
-                    modifier = Modifier.fillMaxWidth(),
-                    style = MaterialTheme.typography.titleLarge,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    textAlign = TextAlign.End
-                )
-            }
-            if (verse.transliteration.isNotBlank()) {
-                Text(
-                    text = verse.transliteration,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
+    val shape = MaterialTheme.shapes.large
+    val scheme = MaterialTheme.colorScheme
+    val container = if (highlighted) {
+        Modifier
+            .padding(vertical = 4.dp)
+            .clip(shape)
+            .background(lerp(scheme.surface, scheme.secondaryContainer, 0.55f))
+            .border(BorderStroke(1.dp, nurColors.frame), shape)
+    } else {
+        Modifier
+    }
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .then(container)
+            .padding(horizontal = 14.dp, vertical = 18.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        if (verse.ayahTextArabic.isNotBlank()) {
             Text(
-                text = verse.translation,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface
+                text = verse.ayahTextArabic,
+                modifier = Modifier.fillMaxWidth(),
+                style = quranTextStyle(READER_ARABIC_SP),
+                color = scheme.onSurface,
+                textAlign = TextAlign.Right
+            )
+        }
+        if (verse.transliteration.isNotBlank()) {
+            Text(
+                text = verse.transliteration,
+                style = MaterialTheme.typography.bodySmall,
+                color = scheme.onSurfaceVariant
+            )
+        }
+        Text(
+            text = verse.translation,
+            style = MaterialTheme.typography.bodyLarge,
+            color = scheme.onSurface
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            QuranStarNumber(
+                number = verse.ayahNumber,
+                size = 40.dp,
+                gold = true,
+                modifier = Modifier.semantics { contentDescription = ayahLabel }
+            )
+            Spacer(Modifier.weight(1f))
+            NurIconButton(Icons.Default.Share, shareImageDesc, onShareClick)
+            NurIconButton(Icons.Default.Lock, selectLockScreenDesc, onLockScreenClick)
+            NurIconButton(
+                icon = if (isBookmarked) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
+                contentDescription = bookmarkDesc,
+                onClick = onBookmarkClick,
+                emphasized = isBookmarked
             )
         }
     }

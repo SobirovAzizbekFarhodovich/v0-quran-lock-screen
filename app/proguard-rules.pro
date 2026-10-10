@@ -28,9 +28,7 @@
     @androidx.room.Relation <fields>;
 }
 
-# Keep Compose
--keep class androidx.compose.runtime.** { *; }
--keep interface androidx.compose.runtime.** { *; }
+# Compose ships its own consumer rules; keeping its runtime wholesale only blocks R8.
 
 # Keep ViewModel
 -keep class * extends androidx.lifecycle.ViewModel

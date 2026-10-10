@@ -37,12 +37,14 @@ object LockScreenVerseSelector {
 
         val selectedCategory = LockScreenWallpaperApplier.getSelectedCategory(context)
         if (selectedCategory != null) {
-            val matchingVerses = database.quranVerseDao()
-                .getAllVersesOnce()
+            val dao = database.quranVerseDao()
+            // Curated references work for every language; try them in random order.
+            val curated = selectedCategory.references.shuffled()
+                .firstNotNullOfOrNull { (surah, ayah) -> dao.getVerseOnce(surah, ayah) }
+            val newVerse = curated ?: dao.getAllVersesOnce()
                 .filter { verse -> selectedCategory.matches(verse.translation) }
-
-            if (matchingVerses.isNotEmpty()) {
-                val newVerse = matchingVerses.random()
+                .randomOrNull()
+            if (newVerse != null) {
                 LockScreenWallpaperApplier.rememberHourlyVerse(context, newVerse)
                 return newVerse
             }
@@ -54,7 +56,15 @@ object LockScreenVerseSelector {
     }
 }
 
+/** Keyword fallback: any supported-language keyword at the start of a word. */
 fun LockScreenAyahCategory.matches(text: String): Boolean {
     val normalized = text.lowercase()
-    return keywords.any { keyword -> normalized.contains(keyword) }
+    return keywords.any { keyword ->
+        var index = normalized.indexOf(keyword)
+        while (index >= 0) {
+            if (index == 0 || !normalized[index - 1].isLetter()) return@any true
+            index = normalized.indexOf(keyword, index + 1)
+        }
+        false
+    }
 }

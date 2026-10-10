@@ -29,7 +29,7 @@ object LockScreenWallpaperRenderer {
         return bitmap
     }
 
-    private fun getRealScreenSize(context: Context): Pair<Int, Int> {
+    internal fun getRealScreenSize(context: Context): Pair<Int, Int> {
         val wm = context.getSystemService(Context.WINDOW_SERVICE) as? android.view.WindowManager
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             val bounds = wm?.currentWindowMetrics?.bounds

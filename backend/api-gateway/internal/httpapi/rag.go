@@ -36,6 +36,12 @@ func (h *RAGHandler) Query(c *gin.Context) {
 			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "rag service temporarily unavailable"})
 			return
 		}
+		var statusErr *rag.StatusError
+		if errors.As(err, &statusErr) && statusErr.IsClientError() {
+			metrics.RAGQueryDuration.WithLabelValues("bad_request").Observe(time.Since(start).Seconds())
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid query"})
+			return
+		}
 		metrics.RAGQueryDuration.WithLabelValues("error").Observe(time.Since(start).Seconds())
 		c.JSON(http.StatusBadGateway, gin.H{"error": "rag service unavailable"})
 		return

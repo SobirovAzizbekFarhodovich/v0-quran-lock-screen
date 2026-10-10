@@ -1,21 +1,34 @@
 package com.quranreminder.app.ui.screens
 
+import com.quranreminder.app.ui.theme.LocalNavBarPadding
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
+import androidx.compose.material.icons.filled.Bookmarks
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.MenuBook
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.SearchOff
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -26,121 +39,184 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
 import com.quranreminder.app.database.SurahHeader
+import com.quranreminder.app.ui.theme.NurBand
+import com.quranreminder.app.ui.theme.NurDivider
+import com.quranreminder.app.ui.theme.NurEmptyState
 import com.quranreminder.app.ui.theme.NurIconButton
-import com.quranreminder.app.ui.theme.NurScreenHeader
+import com.quranreminder.app.ui.theme.NurSheet
+import com.quranreminder.app.ui.theme.NurStarMedallion
+import com.quranreminder.app.ui.theme.NurSurfaceCard
+import com.quranreminder.app.ui.theme.nurColors
 import com.quranreminder.app.ui.theme.t
 import com.quranreminder.app.ui.viewmodel.QuranViewModel
 import java.util.Locale
+
+/** How far the content sheet rises over the band. */
+private val SheetOverlap = 20.dp
 
 @Composable
 fun SearchScreen(
     viewModel: QuranViewModel,
     navController: NavHostController
 ) {
-    var searchQuery by remember { mutableStateOf("") }
+    var searchQuery by rememberSaveable { mutableStateOf("") }
     val surahs = viewModel.surahs.collectAsState().value
     val filteredSurahs by remember(searchQuery, surahs) {
         derivedStateOf { filterSurahs(searchQuery, surahs) }
     }
+    val ayahReference = remember(searchQuery) {
+        parseAyahReference(searchQuery)?.takeIf { it.surahNumber in 1..114 && it.ayahNumber > 0 }
+    }
+    val openReference: (AyahReference) -> Unit = { reference ->
+        navController.navigate("surah_detail/${reference.surahNumber}?ayah=${reference.ayahNumber}")
+    }
+    val navBar = LocalNavBarPadding.current
 
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
     ) {
-        NurScreenHeader(
-            title = t("search.title"),
-            eyebrow = t("search.eyebrow"),
-            leading = {
-                NurIconButton(Icons.Default.ArrowBack, t("common.back"), onClick = { navController.popBackStack() })
-            }
-        )
-
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surface
-            ),
-            shape = RoundedCornerShape(18.dp)
-        ) {
-            BasicTextField(
-                value = searchQuery,
-                onValueChange = { newValue ->
-                    searchQuery = newValue
-                    parseAyahReference(newValue)?.let { reference ->
-                        if (reference.surahNumber in 1..114 && reference.ayahNumber > 0) {
-                            navController.navigate(
-                                "surah_detail/${reference.surahNumber}?ayah=${reference.ayahNumber}"
-                            )
-                        }
-                    }
-                },
+        NurBand(bottomPadding = SheetOverlap + 18.dp) {
+            Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(16.dp),
-                textStyle = MaterialTheme.typography.bodyMedium.copy(
-                    color = MaterialTheme.colorScheme.onSurface
-                ),
-                decorationBox = { innerTextField ->
-                    if (searchQuery.isEmpty()) {
-                        Text(
-                            text = t("search.placeholder"),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-                        )
-                    }
-                    innerTextField()
+                    .padding(start = 20.dp, end = 12.dp, top = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = t("search.title"),
+                        style = MaterialTheme.typography.headlineMedium,
+                        color = nurColors.onBand
+                    )
+                    Text(
+                        text = t("search.eyebrow"),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = nurColors.onBandMuted
+                    )
                 }
+                NurIconButton(
+                    icon = Icons.Default.Bookmarks,
+                    contentDescription = t("bookmarks.title"),
+                    onClick = { navController.navigate("bookmarks") }
+                )
+            }
+            Spacer(Modifier.height(16.dp))
+            BandSearchField(
+                query = searchQuery,
+                onQueryChange = { searchQuery = it },
+                // Navigating on every keystroke opened "2:2" before the user could finish
+                // typing "2:255"; the reference is opened explicitly instead.
+                onSearch = { ayahReference?.let(openReference) },
+                modifier = Modifier.padding(horizontal = 16.dp)
             )
         }
 
-        when {
-            searchQuery.isBlank() -> {
-                Text(
-                    text = t("search.hint"),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
-                    modifier = Modifier.padding(horizontal = 16.dp)
-                )
-            }
-            filteredSurahs.isEmpty() -> {
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(16.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center
-                ) {
-                    Text(
-                        text = t("search.noResults"),
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onBackground
+        NurSheet(
+            modifier = Modifier
+                .weight(1f)
+                .quranOverlapAbove(SheetOverlap)
+        ) {
+            when {
+                ayahReference != null -> {
+                    val surahName = surahs.firstOrNull { it.surahNumber == ayahReference.surahNumber }?.surahName.orEmpty()
+                    NurSurfaceCard(
+                        modifier = Modifier
+                            .padding(start = 16.dp, end = 16.dp, top = 24.dp)
+                            .fillMaxWidth(),
+                        onClick = { openReference(ayahReference) }
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            NurStarMedallion(Icons.Default.MenuBook, size = 48.dp)
+                            Column(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .padding(horizontal = 14.dp)
+                            ) {
+                                Text(
+                                    text = t("search.openAyah"),
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Text(
+                                    text = "$surahName ${ayahReference.surahNumber}:${ayahReference.ayahNumber}".trim(),
+                                    style = MaterialTheme.typography.labelLarge,
+                                    color = nurColors.goldText
+                                )
+                            }
+                            Icon(
+                                imageVector = Icons.Default.KeyboardArrowRight,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+                surahs.isEmpty() -> {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(bottom = navBar)
+                            .padding(32.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+                        Spacer(Modifier.height(16.dp))
+                        Text(
+                            text = t("home.dataPreparing"),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+                filteredSurahs.isEmpty() -> {
+                    NurEmptyState(
+                        icon = Icons.Default.SearchOff,
+                        title = t("search.noResults"),
+                        body = t("search.hint")
                     )
                 }
-            }
-            else -> {
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = 16.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    items(filteredSurahs) { surah ->
-                        SearchSurahCard(
-                            surah = surah,
-                            onClick = {
-                                navController.navigate("surah_detail/${surah.surahNumber}")
+                else -> {
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .imePadding(),
+                        contentPadding = PaddingValues(top = 12.dp, bottom = navBar + 16.dp)
+                    ) {
+                        if (searchQuery.isBlank()) {
+                            item(key = "hint") {
+                                Text(
+                                    text = t("search.hint"),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp)
+                                )
                             }
-                        )
+                        }
+                        items(filteredSurahs, key = { it.surahNumber }) { surah ->
+                            Column {
+                                NurSurahRow(
+                                    surah = surah,
+                                    onClick = { navController.navigate("surah_detail/${surah.surahNumber}") }
+                                )
+                                NurDivider(inset = 20.dp)
+                            }
+                        }
                     }
                 }
             }
@@ -148,12 +224,67 @@ fun SearchScreen(
     }
 }
 
+/** Rounded paper-coloured search field that sits on the green band. */
 @Composable
-private fun SearchSurahCard(
-    surah: SurahHeader,
-    onClick: () -> Unit
+private fun BandSearchField(
+    query: String,
+    onQueryChange: (String) -> Unit,
+    onSearch: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
-    NurSurahRow(surah = surah, onClick = onClick)
+    val scheme = MaterialTheme.colorScheme
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .heightIn(min = 56.dp)
+            .clip(CircleShape)
+            .background(scheme.surface)
+            .padding(start = 18.dp, end = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            imageVector = Icons.Default.Search,
+            contentDescription = null,
+            tint = scheme.onSurfaceVariant,
+            modifier = Modifier.size(22.dp)
+        )
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .padding(start = 12.dp, end = 8.dp, top = 14.dp, bottom = 14.dp)
+        ) {
+            BasicTextField(
+                value = query,
+                onValueChange = onQueryChange,
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                keyboardActions = KeyboardActions(onSearch = { onSearch() }),
+                cursorBrush = SolidColor(scheme.primary),
+                textStyle = MaterialTheme.typography.bodyLarge.copy(color = scheme.onSurface),
+                modifier = Modifier.fillMaxWidth(),
+                decorationBox = { innerTextField ->
+                    if (query.isEmpty()) {
+                        Text(
+                            text = t("search.placeholder"),
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = scheme.onSurfaceVariant,
+                            maxLines = 1
+                        )
+                    }
+                    innerTextField()
+                }
+            )
+        }
+        if (query.isNotEmpty()) {
+            IconButton(onClick = { onQueryChange("") }) {
+                Icon(
+                    imageVector = Icons.Default.Close,
+                    contentDescription = t("search.clear"),
+                    tint = scheme.onSurfaceVariant
+                )
+            }
+        }
+    }
 }
 
 private data class AyahReference(
@@ -163,9 +294,9 @@ private data class AyahReference(
 
 private fun filterSurahs(query: String, surahs: List<SurahHeader>): List<SurahHeader> {
     val trimmed = query.trim()
-    if (trimmed.isBlank() || parseAyahReference(trimmed) != null) {
-        return emptyList()
-    }
+    // An empty query lists every surah, so the Quran screen is never blank.
+    if (trimmed.isBlank()) return surahs
+    if (parseAyahReference(trimmed) != null) return emptyList()
 
     val number = trimmed.toIntOrNull()
     if (number != null) {

@@ -1,11 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="parchment">#FFF6EFDE</color>
-    <color name="ink">#FF16332E</color>
-    <color name="gold">#FFB8912F</color>
+    <!-- Mirrors ui/theme/Theme.kt NurColors. -->
+    <color name="noorain_green">#FF0E3B2E</color>
+    <color name="noorain_green_deep">#FF082A20</color>
+    <color name="noorain_gold">#FFC9A646</color>
+    <color name="noorain_paper">#FFF6F2E8</color>
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
-    <color name="primary">#FF16332E</color>
-    <color name="secondary">#FFB8912F</color>
-    <color name="tertiary">#FF5C7A63</color>
 </resources>

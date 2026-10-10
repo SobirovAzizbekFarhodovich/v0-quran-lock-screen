@@ -1,0 +1,681 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-10T06:41:37.553904+00:00",
+  "title": "Design System: Noorain",
+  "extensions": {
+    "colorMeta": {
+      "mosque-green": {
+        "role": "primary",
+        "displayName": "Mosque Green",
+        "canonical": "#0E3B2E",
+        "tonalRamp": [
+          "#0F3E30",
+          "#196B54",
+          "#249977",
+          "#2FC69A",
+          "#56D7B2",
+          "#87E3C8",
+          "#B9EEDF",
+          "#EAFAF6"
+        ]
+      },
+      "mosque-green-deep": {
+        "role": "primary",
+        "displayName": "Deep Mosque Green",
+        "canonical": "#082A20",
+        "tonalRamp": [
+          "#0C4031",
+          "#156F55",
+          "#1E9F79",
+          "#27CE9D",
+          "#4FDEB4",
+          "#83E7CA",
+          "#B6F1E0",
+          "#EAFBF6"
+        ]
+      },
+      "mosque-green-bright": {
+        "role": "primary",
+        "displayName": "Mosque Green Bright",
+        "canonical": "#1C5A47",
+        "tonalRamp": [
+          "#123A2E",
+          "#1F6550",
+          "#2D9072",
+          "#3ABB93",
+          "#60CDAC",
+          "#8EDCC4",
+          "#BDEADC",
+          "#ECF9F5"
+        ]
+      },
+      "green-mist": {
+        "role": "primary",
+        "displayName": "Green Mist",
+        "canonical": "#DCEBE3",
+        "tonalRamp": [
+          "#1C3126",
+          "#305441",
+          "#45785D",
+          "#599C78",
+          "#7AB395",
+          "#A1C9B4",
+          "#C8DFD3",
+          "#EFF6F2"
+        ]
+      },
+      "antique-gold": {
+        "role": "secondary",
+        "displayName": "Antique Gold",
+        "canonical": "#C9A646",
+        "tonalRamp": [
+          "#3B3011",
+          "#67531E",
+          "#92762B",
+          "#BD9A37",
+          "#D0B15D",
+          "#DEC88D",
+          "#EBDFBC",
+          "#F9F6EB"
+        ]
+      },
+      "gold-ink": {
+        "role": "secondary",
+        "displayName": "Gold Ink (text on paper)",
+        "canonical": "#8E6F1C",
+        "tonalRamp": [
+          "#40320D",
+          "#6F5716",
+          "#9E7B1F",
+          "#CCA028",
+          "#DDB650",
+          "#E7CC83",
+          "#F1E1B7",
+          "#FBF6EA"
+        ]
+      },
+      "gold-light": {
+        "role": "secondary",
+        "displayName": "Gold Light",
+        "canonical": "#E6CC7E",
+        "tonalRamp": [
+          "#40330C",
+          "#6F5916",
+          "#9E7E1F",
+          "#CDA428",
+          "#DDBA50",
+          "#E7CE83",
+          "#F1E2B6",
+          "#FBF7EA"
+        ]
+      },
+      "gold-pale": {
+        "role": "secondary",
+        "displayName": "Gold Pale",
+        "canonical": "#F3E6BF",
+        "tonalRamp": [
+          "#40330C",
+          "#705915",
+          "#9F7F1E",
+          "#CEA427",
+          "#DEBA4F",
+          "#E8CE82",
+          "#F1E2B6",
+          "#FBF7EA"
+        ]
+      },
+      "paper": {
+        "role": "neutral",
+        "displayName": "Paper",
+        "canonical": "#F6F2E8",
+        "tonalRamp": [
+          "#372D16",
+          "#5F4F25",
+          "#887035",
+          "#B09145",
+          "#C4AA69",
+          "#D5C395",
+          "#E7DCC1",
+          "#F8F5ED"
+        ]
+      },
+      "paper-raised": {
+        "role": "neutral",
+        "displayName": "Raised Paper",
+        "canonical": "#FFFDF8",
+        "tonalRamp": [
+          "#4C3700",
+          "#855F00",
+          "#BD8700",
+          "#F5AF00",
+          "#FFC32E",
+          "#FFD56B",
+          "#FFE6A8",
+          "#FFF8E5"
+        ]
+      },
+      "paper-sunk": {
+        "role": "neutral",
+        "displayName": "Sunk Paper",
+        "canonical": "#EFE8D8",
+        "tonalRamp": [
+          "#362D16",
+          "#5E4D27",
+          "#866E37",
+          "#AE8E47",
+          "#C2A86B",
+          "#D4C196",
+          "#E6DBC2",
+          "#F8F4ED"
+        ]
+      },
+      "hairline": {
+        "role": "neutral",
+        "displayName": "Hairline",
+        "canonical": "#DCCFAE",
+        "tonalRamp": [
+          "#352D17",
+          "#5D4E28",
+          "#846F39",
+          "#AB904A",
+          "#C0A86D",
+          "#D2C298",
+          "#E5DBC2",
+          "#F7F4ED"
+        ]
+      },
+      "hairline-soft": {
+        "role": "neutral",
+        "displayName": "Hairline Soft",
+        "canonical": "#E8DFCB",
+        "tonalRamp": [
+          "#352C17",
+          "#5C4C29",
+          "#836C3A",
+          "#AA8C4B",
+          "#BFA66E",
+          "#D2C098",
+          "#E4DAC3",
+          "#F7F4ED"
+        ]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Ink",
+        "canonical": "#1B2620",
+        "tonalRamp": [
+          "#202D26",
+          "#374E41",
+          "#4E6E5D",
+          "#668F79",
+          "#85A895",
+          "#A9C2B4",
+          "#CCDBD3",
+          "#F0F4F2"
+        ]
+      },
+      "ink-muted": {
+        "role": "neutral",
+        "displayName": "Ink Muted",
+        "canonical": "#55615A",
+        "tonalRamp": [
+          "#242926",
+          "#3E4742",
+          "#58655D",
+          "#728279",
+          "#909D95",
+          "#B0BAB4",
+          "#D1D7D3",
+          "#F1F3F2"
+        ]
+      },
+      "on-band-muted": {
+        "role": "neutral",
+        "displayName": "On-band Muted",
+        "canonical": "#C9DCD2",
+        "tonalRamp": [
+          "#1E2E26",
+          "#345042",
+          "#4A725D",
+          "#609579",
+          "#80AD95",
+          "#A5C5B4",
+          "#CADDD3",
+          "#F0F5F2"
+        ]
+      },
+      "terracotta": {
+        "role": "error",
+        "displayName": "Terracotta",
+        "canonical": "#A8432F",
+        "tonalRamp": [
+          "#3C1811",
+          "#68291D",
+          "#933B29",
+          "#BF4C36",
+          "#D16F5C",
+          "#DF998B",
+          "#ECC3BB",
+          "#F9EDEB"
+        ]
+      },
+      "terracotta-soft": {
+        "role": "error",
+        "displayName": "Terracotta Soft",
+        "canonical": "#F6DAD6",
+        "tonalRamp": [
+          "#3F140E",
+          "#6D2218",
+          "#9B3122",
+          "#C9402C",
+          "#D96454",
+          "#E49286",
+          "#EFBFB8",
+          "#FAECEA"
+        ]
+      },
+      "success": {
+        "role": "success",
+        "displayName": "Success",
+        "canonical": "#2E7D5B",
+        "tonalRamp": [
+          "#153829",
+          "#246147",
+          "#338A64",
+          "#42B382",
+          "#66C79D",
+          "#93D7BA",
+          "#C0E8D6",
+          "#ECF8F3"
+        ]
+      },
+      "success-soft": {
+        "role": "success",
+        "displayName": "Success Soft",
+        "canonical": "#D6EEE2",
+        "tonalRamp": [
+          "#163626",
+          "#275E42",
+          "#37855E",
+          "#48AD7A",
+          "#6BC296",
+          "#96D4B5",
+          "#C2E6D4",
+          "#EDF8F2"
+        ]
+      },
+      "night-green": {
+        "role": "neutral",
+        "displayName": "Night Green",
+        "canonical": "#07211A",
+        "tonalRamp": [
+          "#0D3F32",
+          "#176D56",
+          "#219C7B",
+          "#2BCA9F",
+          "#52DAB6",
+          "#85E5CB",
+          "#B7F0E1",
+          "#EAFBF6"
+        ]
+      },
+      "night-surface": {
+        "role": "neutral",
+        "displayName": "Night Surface",
+        "canonical": "#0C2C23",
+        "tonalRamp": [
+          "#103C30",
+          "#1C6853",
+          "#289476",
+          "#34C099",
+          "#5BD2B1",
+          "#8BDFC8",
+          "#BBECDE",
+          "#EBFAF5"
+        ]
+      },
+      "night-raised": {
+        "role": "neutral",
+        "displayName": "Night Raised",
+        "canonical": "#123A2F",
+        "tonalRamp": [
+          "#123A2F",
+          "#1F6552",
+          "#2D9075",
+          "#3ABB97",
+          "#5FCDAF",
+          "#8EDCC7",
+          "#BDEADE",
+          "#ECF9F5"
+        ]
+      },
+      "night-band": {
+        "role": "neutral",
+        "displayName": "Night Band",
+        "canonical": "#0B3227",
+        "tonalRamp": [
+          "#0E3F31",
+          "#186D55",
+          "#229B79",
+          "#2CC99D",
+          "#54D9B4",
+          "#86E4CA",
+          "#B8EFE0",
+          "#EAFAF6"
+        ]
+      },
+      "night-band-deep": {
+        "role": "neutral",
+        "displayName": "Night Band Deep",
+        "canonical": "#051A14",
+        "tonalRamp": [
+          "#0C4031",
+          "#156F56",
+          "#1E9E7A",
+          "#27CD9E",
+          "#50DDB5",
+          "#83E7CB",
+          "#B6F1E0",
+          "#EAFBF6"
+        ]
+      },
+      "night-paper-text": {
+        "role": "neutral",
+        "displayName": "Night Paper Text",
+        "canonical": "#F3EEDF",
+        "tonalRamp": [
+          "#382F15",
+          "#605124",
+          "#897433",
+          "#B29643",
+          "#C6AE67",
+          "#D7C693",
+          "#E7DEC0",
+          "#F8F5EC"
+        ]
+      },
+      "night-muted": {
+        "role": "neutral",
+        "displayName": "Night Muted",
+        "canonical": "#B9CCC2",
+        "tonalRamp": [
+          "#202C26",
+          "#384D42",
+          "#506D5E",
+          "#678E79",
+          "#86A796",
+          "#A9C1B4",
+          "#CDDAD3",
+          "#F0F4F2"
+        ]
+      },
+      "night-outline": {
+        "role": "neutral",
+        "displayName": "Night Outline",
+        "canonical": "#2E5A4C",
+        "tonalRamp": [
+          "#1A332B",
+          "#2D584A",
+          "#407D69",
+          "#53A289",
+          "#75B8A3",
+          "#9DCDBE",
+          "#C6E2D9",
+          "#EEF6F4"
+        ]
+      },
+      "night-terracotta": {
+        "role": "error",
+        "displayName": "Night Terracotta",
+        "canonical": "#E59A7A",
+        "tonalRamp": [
+          "#401C0D",
+          "#6F3016",
+          "#9E451F",
+          "#CD5928",
+          "#DD7A50",
+          "#E7A183",
+          "#F1C8B6",
+          "#FBEFEA"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "Large single statements; rarely used."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Home greeting on the band."
+      },
+      "headline-screen": {
+        "displayName": "Screen Title",
+        "purpose": "Band header titles and the lockup wordmark."
+      },
+      "title-serif": {
+        "displayName": "Section Title",
+        "purpose": "Section titles after a 12dp gold star."
+      },
+      "title": {
+        "displayName": "Row Title",
+        "purpose": "List-row and tile titles, auto-hyphenated."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Ayah translations and reading text."
+      },
+      "body-md": {
+        "displayName": "Body Medium",
+        "purpose": "Row subtitles, explanatory copy."
+      },
+      "body-sm": {
+        "displayName": "Body Small",
+        "purpose": "Subtitle under a band heading."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Button text and ayah references."
+      },
+      "label-sm": {
+        "displayName": "Label Small",
+        "purpose": "Tab labels; 10.5sp when longer than 8 characters."
+      },
+      "quran": {
+        "displayName": "Quran",
+        "purpose": "Uthmani Arabic only; RTL, right-aligned, 2.0x line height."
+      }
+    },
+    "shadows": [
+      {
+        "name": "card",
+        "value": "elevation 6dp, ambient #0E3B2E @10%, spot @14% (light theme only)",
+        "purpose": "Surface and ayah cards."
+      },
+      {
+        "name": "nav-track",
+        "value": "elevation 10dp, ambient green @18%, spot @22% (black in dark)",
+        "purpose": "Floating tab bar track."
+      },
+      {
+        "name": "nav-lens",
+        "value": "elevation 14dp, ambient black @22%, spot @30%",
+        "purpose": "Glass lens over the selected tab."
+      }
+    ],
+    "motion": [
+      {
+        "name": "lens-position",
+        "value": "spring k=230 c=17 (drag: k=900 c=45)",
+        "purpose": "Tab-bar lens position; underdamped overshoot."
+      },
+      {
+        "name": "lens-width",
+        "value": "spring k=260 c=20",
+        "purpose": "Lens width to the target tab."
+      },
+      {
+        "name": "lens-stretch",
+        "value": "spring k=320 c=9, target min(0.45, |v|dp/1600)",
+        "purpose": "Speed stretch / wobble."
+      },
+      {
+        "name": "lens-lift",
+        "value": "spring k=380 c=20, 1.14x while dragging",
+        "purpose": "Lens lifts when grabbed."
+      },
+      {
+        "name": "rubber-band",
+        "value": "25% past ends; flick coast = velocity x 0.12s",
+        "purpose": "Drag limits and release target."
+      },
+      {
+        "name": "ease-emphasized",
+        "value": "cubic-bezier(0.2, 0, 0, 1)",
+        "purpose": "Logo intro stroke draw (760ms) and turn (1000ms)."
+      },
+      {
+        "name": "intro",
+        "value": "~1.9s total; reduced motion shows finished mark 500ms",
+        "purpose": "Cold-start logo intro after the Android 12 splash."
+      },
+      {
+        "name": "reduced-motion",
+        "value": "ANIMATOR_DURATION_SCALE == 0 -> jump",
+        "purpose": "All motion snaps to its end state."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "phone",
+        "value": "single column, phone only"
+      },
+      {
+        "name": "glass-shader",
+        "value": "Android 13 (API 33)+ for AGSL lens refraction; painted lens below"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Full-width filled green pill, 56dp; the one obvious action per screen.",
+      "html": "<button class=\"ds-btn-primary\">Davom etish</button>",
+      "css": ".ds-btn-primary{background:#0E3B2E;color:#FFFDF8;height:56px;width:100%;padding:0 24px;border:none;border-radius:9999px;font:600 15px/20px 'Golos Text',sans-serif;cursor:pointer;transition:background .2s} .ds-btn-primary:hover{background:#1C5A47} .ds-btn-primary:focus-visible{outline:2px solid #C9A646;outline-offset:3px} .ds-btn-primary:active{background:#082A20}"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Outlined pill, 52dp, gold keyline, green label.",
+      "html": "<button class=\"ds-btn-secondary\">Qayta urinish</button>",
+      "css": ".ds-btn-secondary{background:transparent;color:#0E3B2E;height:52px;width:100%;padding:0 24px;border:1px solid rgba(201,166,70,0.55);border-radius:9999px;font:600 15px/20px 'Golos Text',sans-serif;cursor:pointer;transition:background .2s} .ds-btn-secondary:hover{background:#DCEBE3} .ds-btn-secondary:focus-visible{outline:2px solid #C9A646;outline-offset:3px}"
+    },
+    {
+      "name": "Band Header",
+      "kind": "custom",
+      "refersTo": "icon-button",
+      "description": "Deep-green band with the star lattice, serif title, subtitle below, on-band icon buttons.",
+      "html": "<header class=\"ds-band\"><div class=\"ds-band-text\"><h2>Eslatmalar</h2><p>Kunlik tilovat vaqtlari</p></div><button class=\"ds-iconbtn\" aria-label=\"Qidiruv\"><svg viewBox=\"0 0 24 24\" width=\"22\" height=\"22\"><path fill=\"currentColor\" d=\"M15.5 14h-.79l-.28-.27A6.47 6.47 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z\"/></svg></button></header>",
+      "css": ".ds-band{display:flex;align-items:center;gap:8px;padding:20px 12px 18px 20px;background:linear-gradient(#0E3B2E,#082A20);background-image:url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='64' height='55'%3E%3Cg fill='none' stroke='%23C9A646' stroke-opacity='.12'%3E%3Crect x='15' y='11' width='34' height='34'/%3E%3Crect x='15' y='11' width='34' height='34' transform='rotate(45 32 28)'/%3E%3C/g%3E%3C/svg%3E\"),linear-gradient(#0E3B2E,#082A20);border-radius:0 0 16px 16px} .ds-band-text{flex:1} .ds-band h2{margin:0;color:#FFFDF8;font:700 24px/30px 'PT Serif',Georgia,serif} .ds-band p{margin:0;color:#C9DCD2;font:400 13px/18px 'Golos Text',sans-serif} .ds-iconbtn{width:48px;height:48px;border-radius:50%;border:none;background:rgba(255,255,255,.10);color:#FFFDF8;display:grid;place-items:center;cursor:pointer} .ds-iconbtn:hover{background:rgba(255,255,255,.18)} .ds-iconbtn:focus-visible{outline:2px solid #C9A646;outline-offset:2px}"
+    },
+    {
+      "name": "Ayah Card",
+      "kind": "card",
+      "refersTo": "ayah-card",
+      "description": "Signature surface: double gold frame with star corners; Arabic, translation, gold reference.",
+      "html": "<article class=\"ds-ayah\"><div class=\"ds-ayah-in\"><p class=\"ds-ar\" dir=\"rtl\">إِنَّ مَعَ ٱلْعُسْرِ يُسْرًا</p><p class=\"ds-tr\">Albatta, qiyinchilik bilan birga yengillik bor.</p><p class=\"ds-ref\">Sharh, 94:6</p></div></article>",
+      "css": ".ds-ayah{background:#FFFDF8;border:1px solid rgba(201,166,70,.33);border-radius:22px;padding:6px;box-shadow:0 3px 12px rgba(14,59,46,.12);max-width:360px} .ds-ayah-in{position:relative;border:1px solid rgba(201,166,70,0.55);border-radius:18px;padding:20px 22px;display:flex;flex-direction:column;gap:10px} .ds-ayah-in::before,.ds-ayah-in::after{content:'';position:absolute;top:9px;width:10px;height:10px;background:url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 52 52'%3E%3Cpolygon fill='%23C9A646' points='26,0 31.4,13 44.4,7.6 39,20.6 52,26 39,31.4 44.4,44.4 31.4,39 26,52 20.6,39 7.6,44.4 13,31.4 0,26 13,20.6 7.6,7.6 20.6,13'/%3E%3C/svg%3E\") center/contain no-repeat} .ds-ayah-in::before{left:9px} .ds-ayah-in::after{right:9px} .ds-ar{margin:0;text-align:right;font:400 26px/52px 'Amiri Quran',serif;color:#1B2620} .ds-tr{margin:0;font:400 17px/26px 'Golos Text',sans-serif;color:#1B2620} .ds-ref{margin:0;font:600 15px/20px 'Golos Text',sans-serif;color:#8E6F1C}"
+    },
+    {
+      "name": "Surface Card with List Rows",
+      "kind": "card",
+      "refersTo": "list-row",
+      "description": "Paper card, gold hairline, soft green shadow; rows with star medallions and inset dividers.",
+      "html": "<div class=\"ds-card\"><div class=\"ds-row\" tabindex=\"0\"><svg viewBox=\"0 0 52 52\" width=\"44\" height=\"44\"><polygon points=\"26,0 31.4,13 44.4,7.6 39,20.6 52,26 39,31.4 44.4,44.4 31.4,39 26,52 20.6,39 7.6,44.4 13,31.4 0,26 13,20.6 7.6,7.6 20.6,13\" fill=\"#DCEBE3\" stroke=\"#C9A646\" stroke-width=\"1.2\"/></svg><div><b>Til</b><span>O‘zbekcha (lotin)</span></div></div><div class=\"ds-div\"></div><div class=\"ds-row\" tabindex=\"0\"><svg viewBox=\"0 0 52 52\" width=\"44\" height=\"44\"><polygon points=\"26,0 31.4,13 44.4,7.6 39,20.6 52,26 39,31.4 44.4,44.4 31.4,39 26,52 20.6,39 7.6,44.4 13,31.4 0,26 13,20.6 7.6,7.6 20.6,13\" fill=\"#DCEBE3\" stroke=\"#C9A646\" stroke-width=\"1.2\"/></svg><div><b>Mavzu</b><span>Tizim bo‘yicha</span></div></div></div>",
+      "css": ".ds-card{background:#FFFDF8;border:1px solid rgba(201,166,70,.33);border-radius:16px;box-shadow:0 3px 12px rgba(14,59,46,.12);overflow:hidden;max-width:360px} .ds-row{display:flex;align-items:center;gap:14px;min-height:64px;padding:10px 16px;cursor:pointer} .ds-row:hover{background:#EFE8D8} .ds-row:focus-visible{outline:2px solid #0E3B2E;outline-offset:-2px} .ds-row b{display:block;font:600 17px/23px 'Golos Text',sans-serif;color:#1B2620} .ds-row span{font:400 15px/22px 'Golos Text',sans-serif;color:#55615A} .ds-div{height:1px;margin:0 16px;background:#E8DFCB}"
+    },
+    {
+      "name": "Pill",
+      "kind": "chip",
+      "refersTo": "pill",
+      "description": "Gold-pale status pill.",
+      "html": "<span class=\"ds-pill\">Har soatda</span>",
+      "css": ".ds-pill{display:inline-block;background:#F3E6BF;color:#3F300A;padding:6px 12px;border-radius:9999px;font:600 13px/17px 'Golos Text',sans-serif}"
+    },
+    {
+      "name": "Liquid-glass Tab Bar",
+      "kind": "nav",
+      "refersTo": "nav-bar",
+      "description": "Floating 64dp pill track; a clear lens, 6dp proud, rides over the selected tab on springs and can be dragged.",
+      "html": "<nav class=\"ds-nav\"><span class=\"ds-lens\"></span><a class=\"on\">Bosh</a><a>Qur’on</a><a>Yordamchi</a><a>Tilovat</a><a>Sozlama</a></nav>",
+      "css": ".ds-nav{position:relative;display:flex;gap:2px;height:64px;padding:4px;border-radius:9999px;background:rgba(255,255,255,.62);border:1px solid rgba(255,255,255,.75);box-shadow:0 5px 20px rgba(14,59,46,.2),inset 0 10px 8px -8px rgba(14,59,46,.14);max-width:380px} .ds-nav a{flex:1;display:grid;place-items:center;color:#55615A;font:500 12px/16px 'Golos Text',sans-serif;cursor:pointer;position:relative;z-index:1} .ds-nav a.on{color:#0E3B2E} .ds-nav a:hover{color:#0E3B2E} .ds-nav a:focus-visible{outline:2px solid #0E3B2E;border-radius:9999px} .ds-lens{position:absolute;left:4px;top:-6px;width:80px;height:76px;border-radius:50%;background:radial-gradient(circle,transparent 70%,rgba(255,255,255,.18));border:1px solid rgba(255,255,255,.85);box-shadow:0 7px 14px rgba(0,0,0,.22);transition:left .45s cubic-bezier(.3,1.4,.5,1)}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Illuminated Mushaf Page",
+    "overview": "Noorain plays the category-standard Islamic companion straight and at full craft: a deep mosque-green field crowns every primary screen, content rests on warm paper, and antique gold appears only as hairline frames, references and the star. It is the look people already trust from Muslim Pro, Quran.com and Tarteel, finished properly rather than reinvented. The only ornament in the whole system is the eight-point star (Rub el Hizb): as a faint watermark lattice on the green band, as the medallion behind every feature icon, as the four corner stars of the ayah card, and as the Noorain mark itself (two interlaced squares with a light at the centre).\n\nThe system is calm and generous for an audience that includes grandparents: large serif headings, 17sp body text, 48dp minimum targets, one obvious action per screen. Dark theme is first-class, not an inversion: paper becomes green-black, the band deepens, and gold stays gold (shifted to its light tone so it carries text).\n\nMotion is physical and sparing. The floating liquid-glass tab bar moves on damped springs and can be grabbed; the cold-start intro assembles the mark once. Everything else is still. With system animations off (animator duration scale 0) every motion jumps to its end state.",
+    "keyCharacteristics": [
+      "Green band on top, paper below; the ayah card overlaps the band's lower edge on Home.",
+      "Gold is a line and a reference colour, never a fill for large areas.",
+      "The eight-point star is the single ornament; no other pattern, flourish or illustration.",
+      "Arabic is set in Amiri Quran, right-to-left, never decorated or cropped.",
+      "Floating clear-glass tab bar with a draggable refracting lens.",
+      "Four UI languages (uz_latin, uz_cyrillic, ru, en); all copy comes from `ui/theme/Strings.kt`."
+    ],
+    "rules": [
+      {
+        "name": "The Gold Is a Line Rule",
+        "body": "Antique gold appears as 1dp keylines, small stars, the reference line and text; it never fills a card, band or button background (the single exception is the emphasized icon button on the band).",
+        "section": "colors"
+      },
+      {
+        "name": "The Gold Keeps Its Contrast Rule",
+        "body": "Gold text on paper is always gold-ink, never antique-gold; on dark surfaces it is gold-light.",
+        "section": "colors"
+      },
+      {
+        "name": "The One Field Rule",
+        "body": "Mosque green owns the top band of every primary screen and nothing else gets a full-bleed colour field.",
+        "section": "colors"
+      },
+      {
+        "name": "The Subtitle-Below Rule",
+        "body": "A heading may carry a short subtitle set below it in body-sm/body-md muted colour. Small labels above headings (eyebrows, kickers) are not part of this system.",
+        "section": "typography"
+      },
+      {
+        "name": "The Untouched Scripture Rule",
+        "body": "Arabic is only ever set with the quran style: never bold, never letter-spaced, never truncated, never placed over ornament.",
+        "section": "typography"
+      },
+      {
+        "name": "The Tonal Night Rule",
+        "body": "In dark theme nothing casts a shadow except the tab bar; depth comes from night-green to night-surface to night-raised.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do open every primary screen with the green band and its star lattice, and put the screen's content on paper below it.",
+      "Do use gold-ink for any gold text on paper and gold-light for gold on dark.",
+      "Do derive every ornament from the eight-point star or the two-square Rub el Hizb.",
+      "Do keep touch targets at least 48dp and list rows at least 64dp.",
+      "Do set Arabic only with the quran style (Amiri Quran, 2.0x line height, RTL, right-aligned).",
+      "Do route every user-facing string through `ui/theme/Strings.kt` with all four languages filled.",
+      "Do make every animation jump to its end state when the system animator scale is 0.",
+      "Do pad top-level scroll content with `LocalNavBarPadding` so it scrolls under the glass bar."
+    ],
+    "donts": [
+      "Don't fill large areas with gold; it is a keyline, star and reference colour.",
+      "Don't add ornament beyond the eight-point star: no arabesques, borders of other patterns, illustrations, or imagery of living beings.",
+      "Don't place small labels above headings (eyebrows, kickers); subtitles go below.",
+      "Don't use emoji or text glyphs as icons; icons are Material icons, usually inside a star medallion.",
+      "Don't decorate, crop, truncate, bold or overlay ornament on Quran text.",
+      "Don't re-enable the frosted backdrop pass under the tab bar without measuring frame time.",
+      "Don't use Material's default pink error colour; errors are terracotta.",
+      "Don't alter the logo's colours, stretch it, add shadows or outlines, or change the interlace order (`brand/README.md`)."
+    ]
+  }
+}

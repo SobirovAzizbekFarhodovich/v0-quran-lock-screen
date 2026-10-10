@@ -12,17 +12,17 @@ import java.net.URL
 
 /**
  * Tadabbur AI API client.
- * To'g'ridan-to'g'ri OpenRouter API orqali Qwen AI modelini chaqiradi.
- * 
- * Bu client har qanday telefonda ishlaydi — lokal server kerak emas.
- * Faqat internet kerak.
+ * Qwen modelini bizning Go backend (`/api/v1/chat/completions`) orqali chaqiradi;
+ * ilovada hech qanday tashqi API kaliti saqlanmaydi. Internet kerak.
  */
 object TadabburApiClient {
     // SERVER_BASE_URL release build vaqtida almashtiriladi. Hozircha u
     // vaqtinchalik HTTP serverga, keyin esa HTTPS domain'ga ko'rsatiladi.
     private val backendChatUrl = "${BuildConfig.SERVER_BASE_URL}/api/v1/chat/completions"
     private const val QWEN_MODEL = "qwen/qwen3-8b"
-    private const val TIMEOUT_MS = 60_000
+    // Kept short: the whole Tadabbur fallback is capped at ~45s by RagChatRepository.
+    private const val CONNECT_TIMEOUT_MS = 8_000
+    private const val TIMEOUT_MS = 20_000
     private const val MAX_RETRIES = 2
     private val gson = Gson()
 
@@ -155,7 +155,7 @@ Quyidagi tuzilmaga qat'iy rioya qilgan holda, FAQAT TOZA JSON formatida javob be
             setRequestProperty("Content-Type", "application/json")
             setRequestProperty("HTTP-Referer", "https://quran-reminder.app")
             setRequestProperty("X-Title", "Quran Reminder Tadabbur AI")
-            connectTimeout = TIMEOUT_MS
+            connectTimeout = CONNECT_TIMEOUT_MS
             readTimeout = TIMEOUT_MS
             doOutput = true
         }

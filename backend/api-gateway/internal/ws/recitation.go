@@ -23,14 +23,18 @@ import (
 )
 
 const (
-	audioStreamName       = "recitation:audio"
-	resultKeyPrefix       = "recitation:result:"
-	resultChannelPrefix   = "recitation:results:"
-	writeTimeout          = 10 * time.Second
-	readTimeout           = 70 * time.Second
-	pingInterval          = 25 * time.Second
-	resultPollInterval    = 750 * time.Millisecond
-	maxAudioChunkBytes    = 512 * 1024
+	audioStreamName     = "recitation:audio"
+	resultKeyPrefix     = "recitation:result:"
+	resultChannelPrefix = "recitation:results:"
+	writeTimeout        = 10 * time.Second
+	readTimeout         = 70 * time.Second
+	pingInterval        = 25 * time.Second
+	resultPollInterval  = 750 * time.Millisecond
+	maxAudioChunkBytes  = 512 * 1024
+	// Approximate cap on the audio stream so a stalled recitation worker
+	// cannot grow Redis memory without bound (MAXLEN ~ lets Redis trim whole
+	// macro-nodes cheaply).
+	audioStreamMaxLen     = 10000
 	recitationResultReady = "result"
 )
 
@@ -99,8 +103,16 @@ func (h *Handler) Recitation(c *gin.Context) {
 		return
 	}
 
+	// Real WebSocket ping frames: clients (OkHttp, browsers) answer them with
+	// pong automatically, which re-arms the read deadline via the pong
+	// handler. The JSON "ping" message alone got no reply, so idle-but-healthy
+	// clients were dropped after readTimeout.
+	sendPing := func() error {
+		return conn.WriteControl(websocket.PingMessage, nil, time.Now().Add(writeTimeout))
+	}
+
 	resultDone := make(chan struct{})
-	go h.forwardResults(ctx, sessionID, startedAt, writeJSON, resultDone)
+	go h.forwardResults(ctx, sessionID, startedAt, writeJSON, sendPing, resultDone)
 	defer func() {
 		cancel()
 		<-resultDone
@@ -125,6 +137,8 @@ func (h *Handler) Recitation(c *gin.Context) {
 		}
 		streamID, err := h.redis.XAdd(c.Request.Context(), &redis.XAddArgs{
 			Stream: audioStreamName,
+			MaxLen: audioStreamMaxLen,
+			Approx: true,
 			Values: map[string]interface{}{
 				"session_id": sessionID,
 				"user_id":    userID,
@@ -146,7 +160,7 @@ func (h *Handler) Recitation(c *gin.Context) {
 	}
 }
 
-func (h *Handler) forwardResults(ctx context.Context, sessionID string, startedAt time.Time, writeJSON func(interface{}) error, done chan<- struct{}) {
+func (h *Handler) forwardResults(ctx context.Context, sessionID string, startedAt time.Time, writeJSON func(interface{}) error, sendPing func() error, done chan<- struct{}) {
 	defer close(done)
 
 	pubsub := h.redis.Subscribe(ctx, resultChannelPrefix+sessionID)
@@ -187,6 +201,10 @@ func (h *Handler) forwardResults(ctx context.Context, sessionID string, startedA
 				return
 			}
 		case <-pingTicker.C:
+			if err := sendPing(); err != nil {
+				return
+			}
+			// Kept for existing clients that listen for the JSON heartbeat.
 			if err := writeJSON(gin.H{"type": "ping", "session_id": sessionID}); err != nil {
 				return
 			}
@@ -268,6 +286,8 @@ func (h *Handler) createSession(ctx context.Context, sessionID, userID string, s
 func (h *Handler) enqueueStop(ctx context.Context, sessionID, userID string, surah, ayah int) error {
 	_, err := h.redis.XAdd(ctx, &redis.XAddArgs{
 		Stream: audioStreamName,
+		MaxLen: audioStreamMaxLen,
+		Approx: true,
 		Values: map[string]interface{}{
 			"event":      "stop",
 			"session_id": sessionID,

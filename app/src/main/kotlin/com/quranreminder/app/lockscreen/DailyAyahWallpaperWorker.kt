@@ -15,20 +15,7 @@ class DailyAyahWallpaperWorker(
 
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
         try {
-            val database = QuranDatabase.getDatabase(applicationContext)
-            DatabaseInitializer(applicationContext).initializeDatabase(database)
-
-            val prefs = applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            val currentHour = LockScreenWallpaperApplier.currentHour()
-            if (prefs.getString(KEY_LAST_APPLIED_HOUR, null) == currentHour) {
-                return@withContext Result.success()
-            }
-
-            val verse = LockScreenVerseSelector.select(applicationContext, database)
-                ?: return@withContext Result.retry()
-            LockScreenWallpaperApplier.apply(applicationContext, verse, rememberForHour = true)
-
-            Result.success()
+            if (applyHourlyWallpaper(applicationContext)) Result.success() else Result.retry()
         } catch (security: SecurityException) {
             Result.failure()
         } catch (e: Exception) {
@@ -36,8 +23,23 @@ class DailyAyahWallpaperWorker(
         }
     }
 
-    companion object {
-        private const val PREFS = LockScreenWallpaperApplier.PREFS
-        private const val KEY_LAST_APPLIED_HOUR = LockScreenWallpaperApplier.KEY_LAST_APPLIED_HOUR
+}
+
+/**
+ * Renders the current hour's ayah onto the lock screen. Offline: verses come from Room.
+ * Returns false when no verse is available yet (content not loaded). Shared by the WorkManager
+ * job and the top-of-the-hour alarm ([HourlyWallpaperReceiver]).
+ */
+suspend fun applyHourlyWallpaper(context: Context): Boolean = withContext(Dispatchers.IO) {
+    val database = QuranDatabase.getDatabase(context)
+    DatabaseInitializer(context).initializeDatabase(database)
+    val verse = LockScreenVerseSelector.select(context, database) ?: return@withContext false
+    // Skip only if exactly this render (hour + verse + text + language + font + background)
+    // is already on the lock screen.
+    val prefs = context.getSharedPreferences(LockScreenWallpaperApplier.PREFS, Context.MODE_PRIVATE)
+    val signature = LockScreenWallpaperApplier.renderSignature(context, verse)
+    if (prefs.getString(LockScreenWallpaperApplier.KEY_LAST_APPLIED_HOUR, null) != signature) {
+        LockScreenWallpaperApplier.apply(context, verse, rememberForHour = true)
     }
+    true
 }

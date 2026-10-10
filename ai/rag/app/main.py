@@ -18,10 +18,13 @@ API kontrakti eski versiya bilan to'liq mos: POST /query, POST /verse,
 GET /quran/verses, GET /health, DELETE /history/{user_id}.
 """
 
+import asyncio
+import contextvars
 import hashlib
 import json
+import logging
 import os
-import re
+import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
@@ -29,16 +32,50 @@ from typing import Any
 import httpx
 import redis.asyncio as redis
 from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
-from .retriever import HybridRetriever
+from .helpers import (
+    MESSAGE_MAX_CHARS,
+    USER_NAME_MAX_CHARS,
+    format_reference,
+    gemini_generation_config,
+    gemini_response_text,
+    heuristic_intent,
+    quick_casual_reply,
+    resolve_language,
+    safe_int,
+    sanitize_user_name,
+    strip_basmala,
+)
+from .retriever import HybridRetriever, embedding_function
+
+logging.basicConfig(
+    level=os.getenv("LOG_LEVEL", "INFO").upper(),
+    format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+)
+logger = logging.getLogger("rag")
 
 
 class QueryRequest(BaseModel):
-    user_id: str | None = None
-    message: str = Field(min_length=1)
-    language: str = "uz_cyrillic"
-    user_name: str | None = None  # ixtiyoriy: shaxsiy murojaat uchun
+    user_id: str | None = Field(default=None, max_length=128)
+    message: str = Field(min_length=1, max_length=MESSAGE_MAX_CHARS)
+    language: str = Field(default="uz_cyrillic", max_length=16)
+    # ixtiyoriy: shaxsiy murojaat uchun
+    user_name: str | None = Field(default=None, max_length=USER_NAME_MAX_CHARS)
+
+    @field_validator("message")
+    @classmethod
+    def _message_not_blank(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("message must not be blank")
+        return value
+
+    @field_validator("user_name")
+    @classmethod
+    def _clean_user_name(cls, value: str | None) -> str | None:
+        # Control characters/newlines would let a "name" inject prompt lines.
+        return sanitize_user_name(value)
 
 
 class QueryResponse(BaseModel):
@@ -49,8 +86,8 @@ class QueryResponse(BaseModel):
 
 class VerseRequest(BaseModel):
     surah: int = Field(ge=1, le=114)
-    ayah: int = Field(ge=1)
-    language: str = "uz_cyrillic"
+    ayah: int = Field(ge=1, le=286)
+    language: str = Field(default="uz_cyrillic", max_length=16)
 
 
 class VerseResponse(BaseModel):
@@ -81,6 +118,33 @@ QURAN_ARABIC_URL = os.getenv(
     "QURAN_ARABIC_URL", "https://api.alquran.cloud/v1/quran/quran-uthmani"
 )
 arabic_verses: dict[tuple[int, int], str] | None = None
+# A failed Arabic download is remembered briefly so /quran/verses does not
+# block every request for up to 30s retrying an unreachable upstream.
+ARABIC_RETRY_AFTER_SECONDS = float(os.getenv("QURAN_ARABIC_RETRY_SECONDS", "300"))
+_arabic_failed_at: float | None = None
+_arabic_lock: asyncio.Lock | None = None
+_quran_payload_cache: dict[str, dict[str, list[dict[str, Any]]]] = {}
+
+# Whole /query request budget (the API gateway gives up after 90s).
+REQUEST_BUDGET_SECONDS = float(os.getenv("RAG_REQUEST_BUDGET_SECONDS", "75"))
+LLM_CALL_TIMEOUT_SECONDS = float(os.getenv("RAG_LLM_TIMEOUT_SECONDS", "45"))
+CLASSIFIER_TIMEOUT_SECONDS = float(os.getenv("RAG_CLASSIFIER_TIMEOUT_SECONDS", "15"))
+RETRIEVAL_TIMEOUT_SECONDS = float(os.getenv("RAG_RETRIEVAL_TIMEOUT_SECONDS", "25"))
+MIN_LLM_CALL_SECONDS = 3.0
+# Thinking budget for answer generation on Gemini 2.5 (0 = off; the
+# classifier always runs with thinking off).
+GEMINI_ANSWER_THINKING_BUDGET = int(os.getenv("GEMINI_ANSWER_THINKING_BUDGET", "0"))
+_request_deadline: contextvars.ContextVar[float | None] = contextvars.ContextVar(
+    "rag_request_deadline", default=None
+)
+
+
+def remaining_seconds(cap: float) -> float:
+    """Time left for one step: min(cap, time until the request deadline)."""
+    deadline = _request_deadline.get()
+    if deadline is None:
+        return cap
+    return max(0.0, min(cap, deadline - time.monotonic()))
 
 
 @asynccontextmanager
@@ -94,6 +158,13 @@ async def lifespan(app: FastAPI):
         db=int(os.getenv("REDIS_DB", "0")),
         decode_responses=True,
     )
+    # Load the embedding model in the background so the first query does not
+    # pay for it inside its retrieval timeout (the import no longer loads it).
+    warmup = asyncio.create_task(asyncio.to_thread(embedding_function))
+    warmup.add_done_callback(
+        lambda task: task.cancelled() or task.exception() is None
+        or logger.error("embedding model warm-up failed: %s", task.exception())
+    )
     yield
     if redis_client is not None:
         await redis_client.close()
@@ -106,15 +177,8 @@ app = FastAPI(title="Islamic AI RAG Service", version="4.0.0", lifespan=lifespan
 # Til sozlamalari
 # ---------------------------------------------------------------------------
 
-LANGUAGE_ALIASES = {
-    "uz": "uz_cyrillic",
-    "uz_cyrl": "uz_cyrillic",
-    "uz_lat": "uz_latin",
-}
-
-
-def resolve_language(lang: str) -> str:
-    return LANGUAGE_ALIASES.get(lang, lang)
+# resolve_language / LANGUAGE_ALIASES live in helpers.py ("uz" == uz_latin,
+# the same as QURAN_LANGUAGE_FILES["uz"]).
 
 
 LANGUAGE_DIRECTIVES = {
@@ -315,15 +379,25 @@ async def call_llm(
     max_tokens: int = 1500,
     temperature: float = 0.3,
     json_mode: bool = False,
+    timeout_cap: float = LLM_CALL_TIMEOUT_SECONDS,
+    thinking_budget: int = 0,
 ) -> str | None:
-    """Gemini API, ishlamasa OpenRouter orqali javob generatsiya qiladi."""
+    """Gemini API, ishlamasa OpenRouter orqali javob generatsiya qiladi.
+
+    Every provider attempt is bounded by the remaining request budget.
+    Failures are logged (never the API keys) and None is returned.
+    """
     gemini_key = os.getenv("GEMINI_API_KEY", "")
     if gemini_key:
+        model = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
+        timeout = remaining_seconds(timeout_cap)
+        if timeout < MIN_LLM_CALL_SECONDS:
+            logger.warning("skipping Gemini call: request time budget exhausted")
+            return None
         try:
-            model = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
             url = (
                 "https://generativelanguage.googleapis.com/v1beta/models/"
-                f"{model}:generateContent?key={gemini_key}"
+                f"{model}:generateContent"
             )
             contents = [
                 {
@@ -332,16 +406,22 @@ async def call_llm(
                 }
                 for m in messages
             ]
-            config: dict[str, Any] = {
-                "temperature": temperature,
-                "maxOutputTokens": max_tokens,
-            }
-            if json_mode:
-                config["responseMimeType"] = "application/json"
-            async with httpx.AsyncClient(timeout=45) as client:
+            config = gemini_generation_config(
+                model,
+                max_tokens=max_tokens,
+                temperature=temperature,
+                json_mode=json_mode,
+                thinking_budget=thinking_budget,
+            )
+            async with httpx.AsyncClient(timeout=timeout) as client:
                 resp = await client.post(
                     url,
-                    headers={"Content-Type": "application/json"},
+                    headers={
+                        "Content-Type": "application/json",
+                        # Header, not ?key=..., so the key never ends up in
+                        # URLs that httpx/our logs may print.
+                        "x-goog-api-key": gemini_key,
+                    },
                     json={
                         "systemInstruction": {"parts": [{"text": system}]},
                         "contents": contents,
@@ -349,26 +429,34 @@ async def call_llm(
                     },
                 )
             if resp.status_code == 200:
-                candidates = resp.json().get("candidates", [])
-                if candidates and "content" in candidates[0]:
-                    parts = candidates[0]["content"].get("parts", [])
-                    if parts and parts[0].get("text"):
-                        return parts[0]["text"]
-        except Exception:
-            pass
+                text, reason = gemini_response_text(resp.json())
+                if text:
+                    return text
+                logger.warning("Gemini (%s) returned no text: %s", model, reason)
+            else:
+                logger.warning(
+                    "Gemini (%s) HTTP %s: %s", model, resp.status_code, resp.text[:300]
+                )
+        except Exception as exc:
+            logger.warning("Gemini (%s) call failed: %s: %s", model, type(exc).__name__, exc)
 
     openrouter_key = os.getenv("OPENROUTER_API_KEY", "")
     if openrouter_key:
+        model = os.getenv("OPENROUTER_MODEL", "anthropic/claude-3.5-sonnet")
+        timeout = remaining_seconds(timeout_cap)
+        if timeout < MIN_LLM_CALL_SECONDS:
+            logger.warning("skipping OpenRouter call: request time budget exhausted")
+            return None
         try:
             payload: dict[str, Any] = {
-                "model": os.getenv("OPENROUTER_MODEL", "anthropic/claude-3.5-sonnet"),
+                "model": model,
                 "messages": [{"role": "system", "content": system}, *messages],
                 "temperature": temperature,
                 "max_tokens": max_tokens,
             }
             if json_mode:
                 payload["response_format"] = {"type": "json_object"}
-            async with httpx.AsyncClient(timeout=45) as client:
+            async with httpx.AsyncClient(timeout=timeout) as client:
                 resp = await client.post(
                     "https://openrouter.ai/api/v1/chat/completions",
                     headers={
@@ -381,10 +469,18 @@ async def call_llm(
                 content = resp.json()["choices"][0]["message"]["content"]
                 if content and "</think>" in content:
                     content = content.split("</think>")[-1].strip()
-                return content
-        except Exception:
-            pass
+                if content and content.strip():
+                    return content
+                logger.warning("OpenRouter (%s) returned empty content", model)
+            else:
+                logger.warning(
+                    "OpenRouter (%s) HTTP %s: %s", model, resp.status_code, resp.text[:300]
+                )
+        except Exception as exc:
+            logger.warning("OpenRouter (%s) call failed: %s: %s", model, type(exc).__name__, exc)
 
+    if not gemini_key and not openrouter_key:
+        logger.error("no LLM provider configured (GEMINI_API_KEY / OPENROUTER_API_KEY)")
     return None
 
 
@@ -400,7 +496,13 @@ async def classify_intent(message: str, history: list[dict[str, str]]) -> dict[s
     """Xabar niyatini aniqlaydi: casual / islamic / emotional."""
     convo = history[-6:] + [{"role": "user", "content": message}]
     raw = await call_llm(
-        CLASSIFIER_PROMPT, convo, max_tokens=200, temperature=0.0, json_mode=True
+        CLASSIFIER_PROMPT,
+        convo,
+        max_tokens=200,
+        temperature=0.0,
+        json_mode=True,
+        timeout_cap=CLASSIFIER_TIMEOUT_SECONDS,
+        thinking_budget=0,
     )
     if raw:
         try:
@@ -412,84 +514,16 @@ async def classify_intent(message: str, history: list[dict[str, str]]) -> dict[s
                 "intent": intent,
                 "search_query": str(data.get("search_query") or "").strip(),
             }
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning("classifier returned unparsable output (%s): %r", exc, raw[:200])
     # LLM vaqtincha mavjud bo'lmasa ham oddiy suhbatni RAG/fatvo rejimiga
     # majburlamaymiz. Diniy signal bo'lsa xavfsiz taraf — manbali rejim.
     return heuristic_intent(message)
 
 
-def heuristic_intent(message: str) -> dict[str, Any]:
-    text = " ".join(message.lower().split())
-    islamic_terms = (
-        "qur'on", "quron", "oyat", "hadis", "hadith", "sunnat", "sunnah",
-        "namoz", "salat", "ro'za", "roza", "zakat", "haj", "umra", "duo",
-        "zikr", "tavba", "halol", "harom", "fiqh", "fatvo", "mazhab",
-        "islom", "alloh", "rasululloh", "payg'ambar", "paygambar",
-    )
-    emotional_terms = (
-        "charchadim", "tushkun", "qo'rqyap", "qorqyap", "xavotir", "g'am",
-        "gam", "yolg'iz", "yolgiz", "siqilyap", "siqildim", "zerikdim",
-        "ishlarim yurishmay", "kasal", "yo'qotdim", "yoqotdim", "stress",
-    )
-    if any(term in text for term in islamic_terms):
-        return {"intent": "islamic", "search_query": message}
-    if any(term in text for term in emotional_terms):
-        return {"intent": "emotional", "search_query": message}
-    return {"intent": "casual", "search_query": ""}
-
-
-# Instant, LLM-free replies for the most common trivial chitchat (greetings,
-# thanks) so a plain "salom" does not have to pay for two sequential LLM
-# calls (classify_intent + generate_casual_answer). Anything less obvious
-# still goes through the full intent-aware flow. Turns are still saved to
-# Redis history so conversation continuity is unaffected.
-QUICK_CASUAL_MAX_CHARS = 40
-
-QUICK_CASUAL_PATTERNS: dict[str, tuple[str, ...]] = {
-    "greeting": (
-        "salom", "assalom", "assalamu", "hi", "hello", "xayrli", "privet", "selam",
-    ),
-    "thanks": (
-        "rahmat", "tashakkur", "jazakallah", "barakalloh", "spasibo", "minnatdor",
-    ),
-}
-
-QUICK_CASUAL_REPLIES: dict[str, dict[str, str]] = {
-    "greeting": {
-        "uz_latin": (
-            "Assalomu alaykum va rahmatulloohi va barakatuh! Sizga Qur'on oyatlari, "
-            "sahih hadislar va duolar bo'yicha qanday yordam bera olaman?"
-        ),
-        "uz_cyrillic": (
-            "Ассалому алайкум ва раҳматуллоҳи ва баракатуҳ! Сизга Қуръон оятлари, "
-            "саҳиҳ ҳадислар ва дуолар бўйича қандай ёрдам бера оламан?"
-        ),
-        "en": "Wa alaykum assalam! How can I help you with the Quran, hadith or duas today?",
-        "ru": "Ва алейкум ассалам! Чем могу помочь по Корану, хадисам или дуа?",
-    },
-    "thanks": {
-        "uz_latin": (
-            "Arzimaydi! Jazakallohu xayran. Yana savollaringiz bo'lsa, bemalol yozavering."
-        ),
-        "uz_cyrillic": (
-            "Арзимайди! Жазакаллоҳу хайран. Яна саволларингиз бўлса, бемалол ёзаверинг."
-        ),
-        "en": "You're welcome! Feel free to ask anytime.",
-        "ru": "Пожалуйста! Обращайтесь, если будут ещё вопросы.",
-    },
-}
-
-
-def quick_casual_reply(message: str, language: str) -> str | None:
-    text = " ".join(message.lower().split())
-    if not text or len(text) > QUICK_CASUAL_MAX_CHARS:
-        return None
-    for category, terms in QUICK_CASUAL_PATTERNS.items():
-        if any(re.search(rf"\b{re.escape(term)}\b", text) for term in terms):
-            replies = QUICK_CASUAL_REPLIES[category]
-            return replies.get(language, replies["en"])
-    return None
+# heuristic_intent (word-boundary keyword fallback) and quick_casual_reply
+# (instant replies only for messages that are JUST a greeting/thanks, so a
+# "salom" does not pay for two LLM calls) live in helpers.py.
 
 
 # ---------------------------------------------------------------------------
@@ -506,7 +540,8 @@ async def load_history(user_id: str | None) -> list[dict[str, str]]:
     try:
         raw = await redis_client.lrange(history_key(user_id), -HISTORY_MAX_MESSAGES, -1)
         return [json.loads(item) for item in raw]
-    except Exception:
+    except Exception as exc:
+        logger.warning("failed to load chat history: %s", exc)
         return []
 
 
@@ -522,8 +557,8 @@ async def save_turn(user_id: str | None, user_msg: str, answer: str) -> None:
         )
         await redis_client.ltrim(key, -HISTORY_MAX_MESSAGES, -1)
         await redis_client.expire(key, HISTORY_TTL_SECONDS)
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.warning("failed to save chat history: %s", exc)
 
 
 # ---------------------------------------------------------------------------
@@ -534,22 +569,10 @@ def build_context(sources: list[dict[str, Any]], limit: int = 8) -> str:
     parts = []
     for i, item in enumerate(sources[:limit], 1):
         meta = item.get("metadata", {})
-        item_type = meta.get("type", "")
-        source_title = meta.get("source") or meta.get("title") or ""
-        surah = safe_int(meta.get("surah"))
-        surah_name = meta.get("surah_name") or ""
-        ayah = safe_int(meta.get("ayah"))
-        hadith_number = safe_int(meta.get("hadith_number"))
         arabic = meta.get("arabic") or ""
-
-        if item_type == "quran" or surah > 0:
-            ref = f"Quran, surah {surah_name or surah}, ayah {ayah}"
-        elif hadith_number > 0:
-            ref = f"{source_title or 'Hadith'}, No. {hadith_number}"
-        elif source_title:
-            ref = source_title
-        else:
-            ref = "Source"
+        # Quran chunks only store ayah_start/ayah_end (and "[s:a]" markers in
+        # the text) — format_reference derives the range instead of "ayah 0".
+        ref = format_reference(meta, item.get("text", ""))
 
         block = f"[{i}] {ref}\n{item['text']}"
         if arabic:
@@ -560,17 +583,21 @@ def build_context(sources: list[dict[str, Any]], limit: int = 8) -> str:
 
 async def generate_casual_answer(
     message: str, language: str, history: list[dict[str, str]]
-) -> str:
+) -> tuple[str, bool]:
+    """(answer, ok) — ok is False when the LLM failed (error text returned)."""
     system = "\n\n".join([
         BASE_RULES,
         CASUAL_RULES,
         LANGUAGE_DIRECTIVES.get(language, LANGUAGE_DIRECTIVES["en"]),
     ])
     convo = history[-8:] + [{"role": "user", "content": message}]
-    answer = await call_llm(system, convo, max_tokens=800, temperature=0.6)
+    answer = await call_llm(
+        system, convo, max_tokens=800, temperature=0.6,
+        thinking_budget=GEMINI_ANSWER_THINKING_BUDGET,
+    )
     if answer:
-        return answer.strip()
-    return ERROR_MESSAGES.get(language, ERROR_MESSAGES["en"])
+        return answer.strip(), True
+    return ERROR_MESSAGES.get(language, ERROR_MESSAGES["en"]), False
 
 
 async def generate_grounded_answer(
@@ -578,11 +605,15 @@ async def generate_grounded_answer(
     language: str,
     sources: list[dict[str, Any]],
     history: list[dict[str, str]],
-) -> tuple[str, list[dict[str, Any]]]:
-    """Islomiy savol: faqat manbalardan, topilmasa — halol 'topilmadi'."""
+) -> tuple[str, list[dict[str, Any]], bool]:
+    """Islomiy savol: faqat manbalardan, topilmasa — halol 'topilmadi'.
+
+    Returns (answer, sources, ok); ok is False for the raw-source fallback
+    used when the LLM is unavailable (never cached, never saved to history).
+    """
     not_found = NOT_FOUND_MESSAGES.get(language, NOT_FOUND_MESSAGES["en"])
     if not sources:
-        return not_found, []
+        return not_found, [], True
 
     context = build_context(sources, limit=6)
     system = "\n\n".join([
@@ -594,16 +625,19 @@ async def generate_grounded_answer(
         f"KNOWLEDGE BASE PASSAGES:\n\n{context}\n\nUSER QUESTION: {message}"
     )
     convo = history[-8:] + [{"role": "user", "content": user_prompt}]
-    answer = await call_llm(system, convo, max_tokens=1500, temperature=0.2)
+    answer = await call_llm(
+        system, convo, max_tokens=1500, temperature=0.2,
+        thinking_budget=GEMINI_ANSWER_THINKING_BUDGET,
+    )
     if answer:
-        return answer.strip(), sources[:6]
+        return answer.strip(), sources[:6], True
 
     lines = []
     for idx, s in enumerate(sources[:4], 1):
         meta = s.get("metadata", {})
         title = meta.get("source") or meta.get("title") or "Manba"
         lines.append(f"{idx}. **{title}**:\n{s['text']}")
-    return "\n\n".join(lines), sources[:4]
+    return "\n\n".join(lines), sources[:4], False
 
 
 async def generate_emotional_answer(
@@ -612,8 +646,8 @@ async def generate_emotional_answer(
     sources: list[dict[str, Any]],
     history: list[dict[str, str]],
     user_name: str | None,
-) -> tuple[str, list[dict[str, Any]]]:
-    """Ruhiy holat: Tadabbur uslubidagi iliq, manbali tasalli."""
+) -> tuple[str, list[dict[str, Any]], bool]:
+    """Ruhiy holat: Tadabbur uslubidagi iliq, manbali tasalli. (answer, sources, ok)"""
     system = "\n\n".join([
         BASE_RULES,
         EMOTIONAL_RULES,
@@ -621,6 +655,7 @@ async def generate_emotional_answer(
     ])
 
     context = build_context(sources, limit=8) if sources else "(no passages found)"
+    user_name = sanitize_user_name(user_name)
     name_line = f"USER'S NAME: {user_name}\n" if user_name else ""
     user_prompt = (
         f"{name_line}"
@@ -628,10 +663,13 @@ async def generate_emotional_answer(
         f"USER'S MESSAGE (their emotional state): {message}"
     )
     convo = history[-8:] + [{"role": "user", "content": user_prompt}]
-    answer = await call_llm(system, convo, max_tokens=2000, temperature=0.5)
+    answer = await call_llm(
+        system, convo, max_tokens=2000, temperature=0.5,
+        thinking_budget=GEMINI_ANSWER_THINKING_BUDGET,
+    )
     if answer:
-        return answer.strip(), sources[:6]
-    return ERROR_MESSAGES.get(language, ERROR_MESSAGES["en"]), []
+        return answer.strip(), sources[:6], True
+    return ERROR_MESSAGES.get(language, ERROR_MESSAGES["en"]), [], False
 
 
 # ---------------------------------------------------------------------------
@@ -644,10 +682,11 @@ async def healthz() -> dict[str, Any]:
     stats: dict[str, Any]
     status = "ok"
     try:
-        stats = retriever.collection_stats()
+        stats = await asyncio.to_thread(retriever.collection_stats)
         if stats["total_documents"] == 0:
             status = "degraded"
     except Exception as exc:
+        logger.warning("health check: collection stats failed: %s", exc)
         status = "degraded"
         stats = {
             "total_documents": 0,
@@ -668,12 +707,35 @@ async def healthz() -> dict[str, Any]:
     }
 
 
+async def retrieve(search_query: str, lang: str, limit: int = 6) -> list[dict[str, Any]] | None:
+    """Run the blocking hybrid search in a worker thread, within the budget.
+
+    Returns None when retrieval failed or timed out (distinct from "no hits").
+    """
+    timeout = remaining_seconds(RETRIEVAL_TIMEOUT_SECONDS)
+    if timeout <= 0:
+        logger.warning("retrieval skipped: request time budget exhausted")
+        return None
+    try:
+        return await asyncio.wait_for(
+            asyncio.to_thread(retriever.search, search_query, language=lang, limit=limit),
+            timeout=timeout,
+        )
+    except asyncio.TimeoutError:
+        logger.warning("retrieval timed out after %.1fs", timeout)
+    except Exception:
+        logger.exception("retrieval failed")
+    return None
+
+
 @app.post("/query", response_model=QueryResponse)
 async def query(req: QueryRequest) -> QueryResponse:
+    _request_deadline.set(time.monotonic() + REQUEST_BUDGET_SECONDS)
     lang = resolve_language(req.language)
+    error_message = ERROR_MESSAGES.get(lang, ERROR_MESSAGES["en"])
     history = await load_history(req.user_id)
 
-    # 0. Oddiy salomlashuv/rahmat — ikkita LLM chaqiruvisiz darhol javob.
+    # 0. Faqat salomlashuv/rahmatning o'zi — ikkita LLM chaqiruvisiz darhol javob.
     quick_reply = quick_casual_reply(req.message, lang)
     if quick_reply:
         await save_turn(req.user_id, req.message, quick_reply)
@@ -684,8 +746,9 @@ async def query(req: QueryRequest) -> QueryResponse:
 
     # 2a. Oddiy suhbat — bazasiz, tabiiy javob
     if intent["intent"] == "casual":
-        answer = await generate_casual_answer(req.message, lang, history)
-        await save_turn(req.user_id, req.message, answer)
+        answer, ok = await generate_casual_answer(req.message, lang, history)
+        if ok:
+            await save_turn(req.user_id, req.message, answer)
         return QueryResponse(answer=answer, sources=[], cached=False)
 
     search_query = intent["search_query"] or req.message
@@ -693,11 +756,12 @@ async def query(req: QueryRequest) -> QueryResponse:
     # 2b. Ruhiy holat: har doim bazadan olingan manbalar bilan Tadabbur
     # uslubidagi tasalli (hech qachon taxmin/o'zidan to'qib chiqarilmaydi).
     if intent["intent"] == "emotional":
-        sources = retriever.search(search_query, language=lang, limit=8)
-        answer, used_sources = await generate_emotional_answer(
-            req.message, lang, sources, history, req.user_name
+        sources = await retrieve(search_query, lang, limit=8)
+        answer, used_sources, ok = await generate_emotional_answer(
+            req.message, lang, sources or [], history, req.user_name
         )
-        await save_turn(req.user_id, req.message, answer)
+        if ok:
+            await save_turn(req.user_id, req.message, answer)
         return QueryResponse(answer=answer, sources=used_sources, cached=False)
 
     # 2c. Islomiy savol — kesh faqat kontekstsiz (birinchi) savollar uchun
@@ -712,13 +776,22 @@ async def query(req: QueryRequest) -> QueryResponse:
                 await save_turn(req.user_id, req.message, payload["answer"])
                 return QueryResponse(**payload, cached=True)
             await redis_client.incr(CACHE_MISSES_KEY)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning("answer cache read failed: %s", exc)
 
-    sources = retriever.search(search_query, language=lang)
-    answer, used_sources = await generate_grounded_answer(
+    sources = await retrieve(search_query, lang)
+    if sources is None:
+        # Retrieval failure is not "no source found": report an error and
+        # neither cache it nor put it into the conversation history.
+        return QueryResponse(answer=error_message, sources=[], cached=False)
+
+    answer, used_sources, ok = await generate_grounded_answer(
         req.message, lang, sources, history
     )
+    if not ok:
+        # Raw-source fallback (LLM unavailable): shown once, never cached
+        # for 24h and never saved as an assistant turn.
+        return QueryResponse(answer=answer, sources=used_sources, cached=False)
 
     not_found = NOT_FOUND_MESSAGES.get(lang, NOT_FOUND_MESSAGES["en"])
     if use_cache and used_sources and answer != not_found:
@@ -730,8 +803,8 @@ async def query(req: QueryRequest) -> QueryResponse:
                 ),
                 ex=CACHE_TTL_SECONDS,
             )
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning("answer cache write failed: %s", exc)
 
     await save_turn(req.user_id, req.message, answer)
     return QueryResponse(answer=answer, sources=used_sources, cached=False)
@@ -743,8 +816,8 @@ async def clear_history(user_id: str) -> dict[str, str]:
     if redis_client is not None:
         try:
             await redis_client.delete(history_key(user_id))
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning("failed to clear chat history: %s", exc)
     return {"status": "cleared"}
 
 
@@ -752,7 +825,7 @@ async def clear_history(user_id: str) -> dict[str, str]:
 async def get_verse(req: VerseRequest) -> VerseResponse:
     """Aniq oyatni qaytaradi (surah + ayah bo'yicha)."""
     lang = resolve_language(req.language)
-    result = retriever.search_verse(req.surah, req.ayah, language=lang)
+    result = await asyncio.to_thread(retriever.search_verse, req.surah, req.ayah, language=lang)
     if result is None:
         raise HTTPException(status_code=404, detail="Oyat topilmadi")
     return VerseResponse(text=result["text"], metadata=result["metadata"])
@@ -761,10 +834,14 @@ async def get_verse(req: VerseRequest) -> VerseResponse:
 @app.get("/quran/verses")
 async def quran_verses(language: str = "uz_latin") -> dict[str, list[dict[str, Any]]]:
     """Return all bundled Quran translations in the legacy Android shape."""
-    lang = resolve_language(language)
+    lang = resolve_language(language, strict=True)
     filename = QURAN_LANGUAGE_FILES.get(lang)
     if filename is None:
         raise HTTPException(status_code=400, detail="unsupported Quran language")
+
+    cached = _quran_payload_cache.get(filename)
+    if cached is not None:
+        return cached
 
     path = QURAN_DATA_DIR / filename
     if not path.exists():
@@ -774,17 +851,30 @@ async def quran_verses(language: str = "uz_latin") -> dict[str, list[dict[str, A
     if not arabic:
         raise HTTPException(status_code=503, detail="Arabic Quran text is unavailable")
 
+    payload = await asyncio.to_thread(build_quran_payload, path, arabic)
+    _quran_payload_cache[filename] = payload
+    return payload
+
+
+def build_quran_payload(
+    path: Path, arabic: dict[tuple[int, int], str]
+) -> dict[str, list[dict[str, Any]]]:
     verses: list[dict[str, Any]] = []
     with path.open(encoding="utf-8") as data_file:
         for line in data_file:
+            if not line.strip():
+                continue
             row = json.loads(line)
+            ayah_arabic = strip_basmala(
+                row["surah"], row["ayah"], arabic.get((row["surah"], row["ayah"]), "")
+            )
             verses.append({
                 "surahNumber": row["surah"],
                 "surahName": row.get("surah_name") or row.get("surah_name_en") or "",
                 "surahNameArabic": row.get("surah_name_ar") or "",
                 "ayahNumber": row["ayah"],
-                "ayahText": arabic.get((row["surah"], row["ayah"]), ""),
-                "ayahTextArabic": arabic.get((row["surah"], row["ayah"]), ""),
+                "ayahText": ayah_arabic,
+                "ayahTextArabic": ayah_arabic,
                 "translation": row["text"],
                 "transliteration": "",
             })
@@ -792,30 +882,52 @@ async def quran_verses(language: str = "uz_latin") -> dict[str, list[dict[str, A
 
 
 async def load_arabic_verses() -> dict[tuple[int, int], str]:
-    """Load canonical Uthmani verses once and retain them for this process."""
-    global arabic_verses
+    """Load canonical Uthmani verses once and retain them for this process.
+
+    Success is cached for the process lifetime; a failure is remembered for
+    ARABIC_RETRY_AFTER_SECONDS so callers fail fast instead of each waiting
+    up to 30s on an unreachable upstream.  Concurrent callers share one
+    download.
+    """
+    global arabic_verses, _arabic_failed_at, _arabic_lock
     if arabic_verses is not None:
         return arabic_verses
-    try:
-        async with httpx.AsyncClient(timeout=30) as client:
-            response = await client.get(QURAN_ARABIC_URL)
-            response.raise_for_status()
-        payload = response.json().get("data", {})
-        result: dict[tuple[int, int], str] = {}
-        for surah in payload.get("surahs", []):
-            number = safe_int(surah.get("number"))
-            for ayah in surah.get("ayahs", []):
-                ayah_number = safe_int(ayah.get("numberInSurah"))
-                text = str(ayah.get("text") or "").strip()
-                if number and ayah_number and text:
-                    result[(number, ayah_number)] = text
-        if len(result) != 6236:
-            raise ValueError(f"expected 6236 Arabic verses, received {len(result)}")
+    if _arabic_lock is None:
+        _arabic_lock = asyncio.Lock()
+    async with _arabic_lock:
+        if arabic_verses is not None:
+            return arabic_verses
+        if (
+            _arabic_failed_at is not None
+            and time.monotonic() - _arabic_failed_at < ARABIC_RETRY_AFTER_SECONDS
+        ):
+            return {}
+        try:
+            async with httpx.AsyncClient(timeout=30) as client:
+                response = await client.get(QURAN_ARABIC_URL)
+                response.raise_for_status()
+            payload = response.json().get("data", {})
+            result: dict[tuple[int, int], str] = {}
+            for surah in payload.get("surahs", []):
+                number = safe_int(surah.get("number"))
+                for ayah in surah.get("ayahs", []):
+                    ayah_number = safe_int(ayah.get("numberInSurah"))
+                    text = str(ayah.get("text") or "").strip()
+                    if number and ayah_number and text:
+                        result[(number, ayah_number)] = text
+            if len(result) != 6236:
+                raise ValueError(f"expected 6236 Arabic verses, received {len(result)}")
+        except Exception as exc:
+            # A partial corpus must never be passed to users as a complete Quran.
+            _arabic_failed_at = time.monotonic()
+            logger.warning(
+                "Arabic Quran download failed (retry in %.0fs): %s: %s",
+                ARABIC_RETRY_AFTER_SECONDS, type(exc).__name__, exc,
+            )
+            return {}
         arabic_verses = result
-    except Exception:
-        # A partial corpus must never be passed to users as a complete Quran.
-        return {}
-    return arabic_verses
+        _arabic_failed_at = None
+        return arabic_verses
 
 
 # ---------------------------------------------------------------------------
@@ -835,15 +947,10 @@ async def get_cache_stats() -> dict[str, float | int]:
         hits_raw, misses_raw = await redis_client.mget(CACHE_HITS_KEY, CACHE_MISSES_KEY)
         hits = int(hits_raw or 0)
         misses = int(misses_raw or 0)
-    except Exception:
+    except Exception as exc:
+        logger.warning("cache stats unavailable: %s", exc)
         return {"hits": 0, "misses": 0, "hit_rate": 0.0}
     total = hits + misses
     hit_rate = hits / total if total else 0.0
     return {"hits": hits, "misses": misses, "hit_rate": round(hit_rate, 4)}
 
-
-def safe_int(value: Any) -> int:
-    try:
-        return int(value or 0)
-    except (TypeError, ValueError):
-        return 0

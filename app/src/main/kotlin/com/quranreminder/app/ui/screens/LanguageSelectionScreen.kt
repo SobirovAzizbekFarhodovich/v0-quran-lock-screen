@@ -1,9 +1,9 @@
 package com.quranreminder.app.ui.screens
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -12,19 +12,20 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -34,23 +35,39 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import com.quranreminder.app.ui.theme.NurColors
-import com.quranreminder.app.ui.theme.NurEmblem
+import com.quranreminder.app.ui.theme.NurBand
+import com.quranreminder.app.ui.theme.NurLockup
+import com.quranreminder.app.ui.theme.NurPrimaryButton
+import com.quranreminder.app.ui.theme.NurSheet
+import com.quranreminder.app.ui.theme.nurColors
+import com.quranreminder.app.ui.theme.starPath
 import com.quranreminder.app.ui.theme.t
 import com.quranreminder.app.ui.viewmodel.SettingsViewModel
 
-private data class AppLanguage(val code: String, val label: String)
+/**
+ * An app language. [label] is its native name (also used for "Back to %s"); [sample]
+ * is a short greeting written in that language and script, so a user can recognise
+ * their own script even before reading the name.
+ */
+private data class AppLanguage(val code: String, val label: String, val sample: String)
 
 private val appLanguages = listOf(
-    AppLanguage("uz_latin", "O'zbek (lotin)"),
-    AppLanguage("uz_cyrillic", "O'zbek (kirill)"),
-    AppLanguage("ru", "Русский"),
-    AppLanguage("en", "English")
+    AppLanguage("uz_latin", "O'zbekcha (lotin)", "Assalomu alaykum"),
+    AppLanguage("uz_cyrillic", "Ўзбекча (кирилл)", "Ассалому алайкум"),
+    AppLanguage("ru", "Русский", "Ассаляму алейкум"),
+    AppLanguage("en", "English", "Peace be upon you")
 )
+
+/** Native display name of an app language code (falls back to the code itself). */
+fun appLanguageLabel(code: String): String = appLanguages.firstOrNull { it.code == code }?.label ?: code
+
+private val SheetOverlap = 24.dp
 
 @Composable
 fun LanguageSelectionScreen(
@@ -62,66 +79,70 @@ fun LanguageSelectionScreen(
         mutableStateOf(appLanguages.firstOrNull { it.code == savedLanguage }?.code ?: "uz_latin")
     }
 
-    Box(
+    Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background),
-        contentAlignment = Alignment.Center
+            .background(MaterialTheme.colorScheme.background)
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 24.dp, vertical = 32.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            NurEmblem(size = 56.dp)
-            Spacer(modifier = Modifier.height(16.dp))
-            Text(
-                text = "Noorain",
-                style = MaterialTheme.typography.displaySmall,
-                color = MaterialTheme.colorScheme.primary
-            )
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = t("languageSelect.tagline"),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.65f),
-                textAlign = TextAlign.Center
-            )
-
-            Spacer(modifier = Modifier.height(42.dp))
-            Text(
-                text = "Tilni tanlang · Выберите язык · Choose language",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.64f),
-                textAlign = TextAlign.Center
-            )
-            Spacer(modifier = Modifier.height(16.dp))
-
-            appLanguages.forEach { language ->
-                LanguageChoice(
-                    language = language,
-                    selected = language.code == selectedCode,
-                    onClick = { selectedCode = language.code }
-                )
-                Spacer(modifier = Modifier.height(12.dp))
-            }
-
-            Button(
-                onClick = {
-                    viewModel.setLanguage(selectedCode)
-                    onLanguageSelected(selectedCode)
-                },
+        NurBand(bottomPadding = SheetOverlap + 28.dp) {
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(52.dp),
-                shape = RoundedCornerShape(14.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = NurColors.Gold,
-                    contentColor = NurColors.Charcoal
-                )
+                    .padding(start = 24.dp, end = 24.dp, top = 28.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Text(t("languageSelect.continue"), style = MaterialTheme.typography.labelLarge)
+                NurLockup(markSize = 48.dp)
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    text = t("languageSelect.tagline"),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = nurColors.onBandMuted,
+                    textAlign = TextAlign.Center
+                )
+                Spacer(Modifier.height(24.dp))
+                // Deliberately not translated: the user has not chosen a language yet.
+                Text(
+                    text = "Tilni tanlang\nВыберите язык\nChoose language",
+                    style = MaterialTheme.typography.titleLarge,
+                    color = nurColors.onBand,
+                    textAlign = TextAlign.Center
+                )
+            }
+        }
+
+        NurSheet(
+            modifier = Modifier
+                .weight(1f)
+                .offset(y = -SheetOverlap)
+        ) {
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .verticalScroll(rememberScrollState())
+                    .padding(start = 20.dp, end = 20.dp, top = 24.dp, bottom = 8.dp)
+                    .selectableGroup(),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                appLanguages.forEach { language ->
+                    LanguageChoice(
+                        language = language,
+                        selected = language.code == selectedCode,
+                        onClick = { selectedCode = language.code }
+                    )
+                }
+            }
+            Box(
+                Modifier
+                    .padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 16.dp + SheetOverlap)
+                    .navigationBarsPadding()
+            ) {
+                NurPrimaryButton(
+                    text = t("languageSelect.continue"),
+                    onClick = {
+                        viewModel.setLanguage(selectedCode)
+                        onLanguageSelected(selectedCode)
+                    }
+                )
             }
         }
     }
@@ -133,50 +154,65 @@ private fun LanguageChoice(
     selected: Boolean,
     onClick: () -> Unit
 ) {
-    val border = if (selected) NurColors.Gold else MaterialTheme.colorScheme.outline
-    val background = if (selected) NurColors.Cream else MaterialTheme.colorScheme.surface
-    Card(
+    val c = nurColors
+    val shape = MaterialTheme.shapes.medium
+    val selectedLabel = t("languageSelect.selected")
+    Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = background),
-        border = BorderStroke(if (selected) 1.5.dp else 1.dp, border)
+            .heightIn(min = 72.dp)
+            .clip(shape)
+            .background(MaterialTheme.colorScheme.surface)
+            .border(
+                if (selected) BorderStroke(2.dp, c.ornament) else BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                shape
+            )
+            .selectable(selected = selected, role = Role.RadioButton, onClick = onClick)
+            .semantics { if (selected) stateDescription = selectedLabel }
+            .padding(horizontal = 18.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 18.dp, vertical = 16.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
+        Column(Modifier.weight(1f)) {
             Text(
                 text = language.label,
                 style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onSurface
             )
-            Box(
-                modifier = Modifier
-                    .size(22.dp)
-                    .clip(CircleShape)
-                    .background(if (selected) NurColors.Gold else MaterialTheme.colorScheme.surface)
-                    .border(
-                        width = if (selected) 0.dp else 2.dp,
-                        color = if (selected) Color.Transparent else MaterialTheme.colorScheme.outline,
-                        shape = CircleShape
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                if (selected) {
-                    Icon(
-                        imageVector = Icons.Default.Check,
-                        contentDescription = "Tanlangan",
-                        tint = NurColors.Cream,
-                        modifier = Modifier.size(15.dp)
-                    )
-                }
+            Text(
+                text = language.sample,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        StarCheck(selected)
+    }
+}
+
+/** Selection mark: an empty star outline, or a filled star medallion carrying a check. */
+@Composable
+private fun StarCheck(selected: Boolean) {
+    val c = nurColors
+    val outline = MaterialTheme.colorScheme.outline
+    val fill = MaterialTheme.colorScheme.primary
+    Box(Modifier.size(36.dp), contentAlignment = Alignment.Center) {
+        Canvas(Modifier.size(36.dp)) {
+            val r = size.minDimension / 2f
+            val star = starPath(center, r, r * 0.84f)
+            if (selected) {
+                drawPath(star, fill)
+                drawPath(star, c.ornament, style = Stroke(1.5.dp.toPx()))
+            } else {
+                drawPath(star, outline, style = Stroke(1.5.dp.toPx()))
             }
+        }
+        if (selected) {
+            Icon(
+                imageVector = Icons.Default.Check,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onPrimary,
+                modifier = Modifier.size(18.dp)
+            )
         }
     }
 }

@@ -23,6 +23,10 @@ import (
 	"islamic-ai/backend/api-gateway/internal/ws"
 )
 
+// trustedProxyCIDRs are the private ranges Docker networks are allocated
+// from; nginx reaches the gateway from one of them.
+var trustedProxyCIDRs = []string{"10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"}
+
 func main() {
 	cfg := config.Load()
 	if err := cfg.Validate(); err != nil {
@@ -67,6 +71,13 @@ func main() {
 	wsHandler := ws.NewHandler(redisClient, db, cfg.CORSOrigins)
 
 	router := gin.New()
+
+	// Only trust X-Forwarded-For / X-Real-IP from the nginx container on the
+	// Docker network; otherwise any client could spoof its IP and bypass the
+	// per-IP rate limiter.
+	if err := router.SetTrustedProxies(trustedProxyCIDRs); err != nil {
+		log.Fatalf("trusted proxies: %v", err)
+	}
 
 	// --- Middleware Stack ---
 
@@ -115,10 +126,14 @@ func main() {
 
 	v1 := router.Group("/api/v1")
 	v1.POST("/auth/register", authHandler.Register)
-	v1.POST("/auth/login", authHandler.Login)
+	// Brute-force sensitive endpoints get a stricter per-IP budget on top of
+	// the global limiter (the key includes the route path, so each endpoint
+	// has its own bucket).
+	credentialLimit := ratelimit.RedisTokenBucket(redisClient, 10, time.Minute)
+	v1.POST("/auth/login", credentialLimit, authHandler.Login)
 	v1.POST("/auth/refresh", authHandler.Refresh)
-	v1.POST("/auth/password-reset/request", authHandler.RequestPasswordReset)
-	v1.POST("/auth/password-reset/confirm", authHandler.ConfirmPasswordReset)
+	v1.POST("/auth/password-reset/request", credentialLimit, authHandler.RequestPasswordReset)
+	v1.POST("/auth/password-reset/confirm", credentialLimit, authHandler.ConfirmPasswordReset)
 	v1.POST("/auth/oauth/google", authHandler.GoogleOAuth)
 	v1.POST("/auth/oauth/apple", authHandler.AppleOAuth)
 	// Temporary backwards-compatible route for the Kotlin Tadabbur screen.

@@ -1,31 +1,47 @@
 package com.quranreminder.app.ui.screens
 
-import androidx.compose.foundation.background
+import com.quranreminder.app.ui.theme.LocalNavBarPadding
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.outlined.ChevronRight
+import androidx.compose.material.icons.outlined.DarkMode
+import androidx.compose.material.icons.outlined.FormatSize
+import androidx.compose.material.icons.outlined.Language
+import androidx.compose.material.icons.outlined.Lock
+import androidx.compose.material.icons.outlined.Logout
+import androidx.compose.material.icons.outlined.Notifications
+import androidx.compose.material.icons.outlined.Person
+import androidx.compose.material.icons.outlined.Shuffle
+import androidx.compose.material.icons.outlined.Vibration
+import androidx.compose.material.icons.outlined.VolumeUp
+import androidx.compose.material.icons.outlined.Wallpaper
+import androidx.compose.material.icons.outlined.BatteryChargingFull
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -34,8 +50,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
 import com.quranreminder.app.auth.SessionManager
@@ -43,9 +60,15 @@ import com.quranreminder.app.database.AppSettings
 import com.quranreminder.app.lockscreen.DailyAyahScheduler
 import com.quranreminder.app.lockscreen.LockScreenAyahCategory
 import com.quranreminder.app.lockscreen.LockScreenWallpaperApplier
-import com.quranreminder.app.ui.theme.NurColors
+import com.quranreminder.app.notification.rememberNotificationAccess
+import com.quranreminder.app.ui.theme.NurDivider
+import com.quranreminder.app.ui.theme.NurEmblem
+import com.quranreminder.app.ui.theme.NurListRow
 import com.quranreminder.app.ui.theme.NurScreenHeader
 import com.quranreminder.app.ui.theme.NurSectionTitle
+import com.quranreminder.app.ui.theme.NurStarMedallion
+import com.quranreminder.app.ui.theme.NurSurfaceCard
+import com.quranreminder.app.ui.theme.nurColors
 import com.quranreminder.app.ui.theme.t
 import com.quranreminder.app.ui.viewmodel.SettingsViewModel
 
@@ -61,22 +84,30 @@ fun SettingsScreen(
         mutableStateOf(LockScreenWallpaperApplier.getSelectedCategory(context))
     }
     var showLogoutConfirm by remember { mutableStateOf(false) }
+    val displayName = remember { session.displayName.trim() }
+    val notificationAccess = rememberNotificationAccess()
+    val navBar = LocalNavBarPadding.current
 
     if (showLogoutConfirm) {
         androidx.compose.material3.AlertDialog(
             onDismissRequest = { showLogoutConfirm = false },
-            title = { Text(t("settings.logout.confirmTitle")) },
-            text = { Text(t("settings.logout.confirmBody")) },
+            containerColor = MaterialTheme.colorScheme.surface,
+            shape = MaterialTheme.shapes.extraLarge,
+            title = { Text(t("settings.logout.confirmTitle"), style = MaterialTheme.typography.headlineSmall) },
+            text = { Text(t("settings.logout.confirmBody"), style = MaterialTheme.typography.bodyLarge) },
             confirmButton = {
-                androidx.compose.material3.TextButton(onClick = {
-                    session.signOut()
-                    showLogoutConfirm = false
-                    navController.navigate("auth") { popUpTo(0) }
-                }) { Text(t("settings.logout"), color = NurColors.Terracotta) }
+                TextButton(
+                    onClick = {
+                        session.signOut()
+                        showLogoutConfirm = false
+                        navController.navigate("auth") { popUpTo(0) }
+                    },
+                    modifier = Modifier.heightIn(min = 48.dp)
+                ) { Text(t("settings.logout"), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.error) }
             },
             dismissButton = {
-                androidx.compose.material3.TextButton(onClick = { showLogoutConfirm = false }) {
-                    Text(t("settings.logout.cancel"))
+                TextButton(onClick = { showLogoutConfirm = false }, modifier = Modifier.heightIn(min = 48.dp)) {
+                    Text(t("settings.logout.cancel"), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
                 }
             }
         )
@@ -89,92 +120,106 @@ fun SettingsScreen(
     ) {
         NurScreenHeader(
             title = t("settings.title"),
-            eyebrow = "Noorain",
-            leading = {
-                androidx.compose.material3.IconButton(onClick = { navController.popBackStack() }) {
-                    Icon(
-                        Icons.Default.ArrowBack,
-                        contentDescription = t("settings.back"),
-                        tint = MaterialTheme.colorScheme.primary
-                    )
-                }
-            }
+            eyebrow = displayName.ifBlank { "Noorain" },
+            leading = { NurEmblem(size = 44.dp, modifier = Modifier.padding(start = 4.dp, end = 4.dp)) }
         )
 
         LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(16.dp),
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 20.dp, bottom = navBar + 28.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
+            // ---------------------------------------------------------- notifications
+            item { SettingSection(t("settings.notifications")) }
             item {
-                SettingSection(title = t("settings.notifications"))
-                SettingToggle(
-                    label = t("settings.notifications.enable"),
-                    isChecked = settings.notificationsEnabled,
-                    onCheckedChange = { viewModel.toggleNotifications() }
-                )
-                SettingToggle(
-                    label = t("settings.notifications.vibrate"),
-                    isChecked = settings.vibrateOnReminder,
-                    onCheckedChange = { viewModel.toggleVibration() }
-                )
-                SettingToggle(
-                    label = t("settings.notifications.sound"),
-                    isChecked = settings.soundEnabled,
-                    onCheckedChange = { viewModel.toggleSound() }
-                )
-                SettingToggle(
-                    label = t("settings.notifications.lockScreen"),
-                    isChecked = settings.lockScreenNotifications,
-                    onCheckedChange = { viewModel.toggleLockScreenNotifications() }
-                )
-            }
-
-            item {
-                Spacer(modifier = Modifier.height(16.dp))
-                SettingSection(title = t("settings.appearance"))
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                    shape = RoundedCornerShape(18.dp)
-                ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Text(t("settings.language.title"), style = MaterialTheme.typography.titleMedium)
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = when (settings.language) {
-                                "uz_cyrillic" -> "O‘zbek (kirill)"
-                                "ru" -> "Русский"
-                                "en" -> "English"
-                                else -> "O‘zbek (lotin)"
-                            },
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f)
+                NurSurfaceCard(Modifier.fillMaxWidth()) {
+                    Column {
+                        SwitchRow(
+                            title = t("settings.notifications.enable"),
+                            icon = Icons.Outlined.Notifications,
+                            checked = settings.notificationsEnabled,
+                            onCheckedChange = { enabled ->
+                                viewModel.toggleNotifications()
+                                if (enabled) notificationAccess.ensurePermission()
+                            }
                         )
-                        Spacer(modifier = Modifier.height(10.dp))
-                        OutlinedButton(onClick = { navController.navigate("language_selection?isFirstRun=false") }) {
-                            Text(t("settings.language.change"))
+                        if (settings.notificationsEnabled && notificationAccess.shouldShowDeniedHint) {
+                            Column(Modifier.fillMaxWidth().padding(start = 74.dp, end = 12.dp, bottom = 4.dp)) {
+                                Text(
+                                    t("reminders.permission.denied"),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.error
+                                )
+                                TextButton(
+                                    onClick = notificationAccess.openNotificationSettings,
+                                    modifier = Modifier.heightIn(min = 48.dp),
+                                    contentPadding = PaddingValues(horizontal = 0.dp)
+                                ) {
+                                    Text(
+                                        t("reminders.permission.openSettings"),
+                                        style = MaterialTheme.typography.labelLarge,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                }
+                            }
                         }
+                        NurDivider()
+                        SwitchRow(
+                            title = t("settings.notifications.vibrate"),
+                            icon = Icons.Outlined.Vibration,
+                            checked = settings.vibrateOnReminder,
+                            onCheckedChange = { viewModel.toggleVibration() }
+                        )
+                        NurDivider()
+                        SwitchRow(
+                            title = t("settings.notifications.sound"),
+                            icon = Icons.Outlined.VolumeUp,
+                            checked = settings.soundEnabled,
+                            onCheckedChange = { viewModel.toggleSound() }
+                        )
+                        NurDivider()
+                        SwitchRow(
+                            title = t("settings.notifications.lockScreen"),
+                            icon = Icons.Outlined.Lock,
+                            checked = settings.lockScreenNotifications,
+                            onCheckedChange = { viewModel.toggleLockScreenNotifications() }
+                        )
                     }
                 }
-                Spacer(modifier = Modifier.height(12.dp))
-                SettingSlider(
-                    label = t("settings.fontSize"),
-                    value = settings.fontSize.toFloat(),
-                    onValueChange = { viewModel.setFontSize(it.toInt()) },
-                    valueRange = 12f..24f
-                )
-                AppearanceControl(
-                    isDark = settings.darkMode,
-                    onSelect = { dark -> if (dark != settings.darkMode) viewModel.toggleDarkMode() }
-                )
             }
 
+            // ---------------------------------------------------------- appearance
+            item { SettingSection(t("settings.appearance"), Modifier.padding(top = 12.dp)) }
             item {
-                Spacer(modifier = Modifier.height(16.dp))
-                SettingSection(title = t("settings.lockScreen"))
-                LockScreenControls(
+                NurSurfaceCard(Modifier.fillMaxWidth()) {
+                    Column {
+                        NurListRow(
+                            title = t("settings.language.title"),
+                            subtitle = languageDisplayName(settings.language),
+                            leadingIcon = Icons.Outlined.Language,
+                            trailing = { Chevron() },
+                            onClick = { navController.navigate("language_selection?isFirstRun=false") }
+                        )
+                        NurDivider()
+                        SwitchRow(
+                            title = t("settings.darkMode"),
+                            icon = Icons.Outlined.DarkMode,
+                            checked = settings.darkMode,
+                            onCheckedChange = { dark -> if (dark != settings.darkMode) viewModel.toggleDarkMode() }
+                        )
+                        NurDivider()
+                        FontSizeControl(
+                            value = settings.fontSize,
+                            onValueChange = { viewModel.setFontSize(it) }
+                        )
+                    }
+                }
+            }
+
+            // ---------------------------------------------------------- lock screen
+            item { SettingSection(t("settings.lockScreen"), Modifier.padding(top = 12.dp)) }
+            item {
+                LockScreenGroup(
                     selectedCategory = selectedCategory.value,
                     onPreview = { navController.navigate("lock_preview") },
                     onRandom = {
@@ -190,253 +235,235 @@ fun SettingsScreen(
                 )
             }
 
+            // ---------------------------------------------------------- about
+            item { SettingSection(t("settings.about"), Modifier.padding(top = 12.dp)) }
             item {
-                Spacer(modifier = Modifier.height(16.dp))
-                SettingSection(title = t("settings.about"))
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surface
-                    ),
-                    shape = RoundedCornerShape(18.dp)
-                ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Text(
-                            text = "Noorain",
-                            style = MaterialTheme.typography.headlineSmall,
-                            color = MaterialTheme.colorScheme.onSurface
+                NurSurfaceCard(Modifier.fillMaxWidth()) {
+                    Column {
+                        NurListRow(
+                            title = "Noorain",
+                            subtitle = t("settings.about.tagline"),
+                            leading = { NurEmblem(size = 44.dp) }
                         )
-                        Text(
-                            text = t("settings.about.tagline"),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
                         Text(
                             text = t("settings.about.description"),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 16.dp)
                         )
                     }
                 }
             }
 
+            // ---------------------------------------------------------- account
+            item { SettingSection(t("settings.account"), Modifier.padding(top = 12.dp)) }
             item {
-                Spacer(modifier = Modifier.height(16.dp))
-                OutlinedButton(
-                    onClick = { showLogoutConfirm = true },
-                    modifier = Modifier.fillMaxWidth().height(52.dp)
-                ) {
-                    Text(t("settings.logout"), color = NurColors.Terracotta)
+                NurSurfaceCard(Modifier.fillMaxWidth()) {
+                    Column {
+                        NurListRow(
+                            title = displayName.ifBlank { t("settings.account") },
+                            subtitle = t("settings.account.signedIn"),
+                            leadingIcon = Icons.Outlined.Person
+                        )
+                        NurDivider()
+                        SignOutRow(onClick = { showLogoutConfirm = true })
+                    }
                 }
             }
         }
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
 @Composable
-fun LockScreenControls(
+private fun LockScreenGroup(
     selectedCategory: LockScreenAyahCategory?,
     onPreview: () -> Unit,
     onRandom: () -> Unit,
     onCategorySelected: (LockScreenAyahCategory?) -> Unit
 ) {
-    val context = LocalContext.current
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        shape = RoundedCornerShape(18.dp)
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(
-                    modifier = Modifier.weight(1f),
-                    onClick = onPreview
-                ) {
-                    Text(t("settings.lockScreen.preview"))
-                }
-                OutlinedButton(
-                    modifier = Modifier.weight(1f),
-                    onClick = {
-                        onCategorySelected(null)
-                        onRandom()
-                    }
-                ) {
-                    Text(t("settings.lockScreen.random"))
-                }
-            }
-            Text(
-                text = t("settings.lockScreen.languageNote"),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+    val c = nurColors
+    NurSurfaceCard(Modifier.fillMaxWidth()) {
+        Column {
+            NurListRow(
+                title = t("settings.lockScreen.preview"),
+                subtitle = t("settings.lockScreen.preview.desc"),
+                leadingIcon = Icons.Outlined.Wallpaper,
+                trailing = { Chevron() },
+                onClick = onPreview
             )
-
-            Text(
-                text = t("settings.lockScreen.category"),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface
+            NurDivider()
+            NurListRow(
+                title = t("settings.lockScreen.random"),
+                subtitle = t("settings.lockScreen.random.desc"),
+                leadingIcon = Icons.Outlined.Shuffle,
+                trailing = if (selectedCategory == null) {
+                    { Icon(Icons.Default.Check, contentDescription = null, tint = MaterialTheme.colorScheme.primary) }
+                } else null,
+                onClick = {
+                    onCategorySelected(null)
+                    onRandom()
+                }
             )
-            LockScreenAyahCategory.entries.chunked(2).forEach { rowCategories ->
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    rowCategories.forEach { category ->
-                        val isSelected = selectedCategory == category
-                        if (isSelected) {
-                            Button(
-                                modifier = Modifier.weight(1f),
-                                onClick = { onCategorySelected(category) }
-                            ) {
-                                Text(category.label)
-                            }
-                        } else {
-                            OutlinedButton(
-                                modifier = Modifier.weight(1f),
-                                onClick = { onCategorySelected(category) }
-                            ) {
-                                Text(category.label)
-                            }
-                        }
-                    }
-                    if (rowCategories.size == 1) {
-                        Spacer(modifier = Modifier.weight(1f))
+            NurDivider()
+            // Hourly ayah changes in the background; OEM battery managers (Honor, Xiaomi…) can
+            // hold the alarm back unless the app is allowed to run in the background.
+            val context = androidx.compose.ui.platform.LocalContext.current
+            NurListRow(
+                title = t("settings.lockScreen.background"),
+                subtitle = t("settings.lockScreen.background.desc"),
+                leadingIcon = Icons.Outlined.BatteryChargingFull,
+                trailing = { Chevron() },
+                onClick = {
+                    runCatching {
+                        context.startActivity(
+                            android.content.Intent(android.provider.Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
+                                .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                        )
+                    }.onFailure {
+                        context.startActivity(
+                            android.content.Intent(
+                                android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                                android.net.Uri.fromParts("package", context.packageName, null)
+                            ).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                        )
                     }
                 }
-            }
-        }
-    }
-}
-
-@Composable
-fun AppearanceControl(
-    isDark: Boolean,
-    onSelect: (Boolean) -> Unit
-) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        shape = RoundedCornerShape(18.dp)
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text(t("settings.appearance"), style = MaterialTheme.typography.titleMedium)
-            Spacer(modifier = Modifier.height(10.dp))
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(MaterialTheme.colorScheme.background, RoundedCornerShape(14.dp))
-                    .padding(4.dp),
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            )
+            NurDivider()
+            Column(
+                Modifier.padding(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                AppearanceOption(label = t("settings.appearance.light"), selected = !isDark, modifier = Modifier.weight(1f)) { onSelect(false) }
-                AppearanceOption(label = t("settings.appearance.dark"), selected = isDark, modifier = Modifier.weight(1f)) { onSelect(true) }
+                Text(
+                    text = t("settings.lockScreen.category"),
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    LockScreenAyahCategory.entries.forEach { category ->
+                        val isSelected = selectedCategory == category
+                        FilterChip(
+                            selected = isSelected,
+                            onClick = { onCategorySelected(category) },
+                            label = {
+                                Text(
+                                    t("settings.lockScreen.category.${category.id}"),
+                                    style = MaterialTheme.typography.labelLarge
+                                )
+                            },
+                            leadingIcon = if (isSelected) {
+                                { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(18.dp)) }
+                            } else null,
+                            shape = CircleShape,
+                            colors = FilterChipDefaults.filterChipColors(
+                                containerColor = MaterialTheme.colorScheme.surface,
+                                labelColor = MaterialTheme.colorScheme.onSurface,
+                                selectedContainerColor = MaterialTheme.colorScheme.primary,
+                                selectedLabelColor = MaterialTheme.colorScheme.onPrimary,
+                                selectedLeadingIconColor = MaterialTheme.colorScheme.onPrimary
+                            ),
+                            border = FilterChipDefaults.filterChipBorder(
+                                borderColor = c.frame,
+                                selectedBorderColor = c.ornament
+                            ),
+                            modifier = Modifier.heightIn(min = 40.dp)
+                        )
+                    }
+                }
+                Text(
+                    text = t("settings.lockScreen.languageNote"),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
         }
     }
 }
 
 @Composable
-private fun AppearanceOption(
-    label: String,
-    selected: Boolean,
-    modifier: Modifier = Modifier,
-    onClick: () -> Unit
-) {
-    Box(
-        modifier = modifier
-            .clip(RoundedCornerShape(12.dp))
-            .background(if (selected) MaterialTheme.colorScheme.primary else androidx.compose.ui.graphics.Color.Transparent)
-            .clickable(onClick = onClick)
-            .padding(vertical = 10.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelLarge,
-            color = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+private fun FontSizeControl(value: Int, onValueChange: (Int) -> Unit) {
+    Column(Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
+        NurListRow(
+            title = t("settings.fontSize"),
+            leadingIcon = Icons.Outlined.FormatSize,
+            trailing = {
+                Text(
+                    text = value.toString(),
+                    style = MaterialTheme.typography.titleMedium,
+                    color = nurColors.goldText
+                )
+            }
+        )
+        Slider(
+            value = value.toFloat(),
+            onValueChange = { onValueChange(it.toInt()) },
+            valueRange = 12f..24f,
+            steps = 11,
+            colors = SliderDefaults.colors(
+                thumbColor = MaterialTheme.colorScheme.primary,
+                activeTrackColor = MaterialTheme.colorScheme.primary,
+                inactiveTrackColor = MaterialTheme.colorScheme.outlineVariant
+            ),
+            modifier = Modifier.padding(horizontal = 16.dp)
         )
     }
 }
 
 @Composable
-fun SettingSection(title: String) {
-    NurSectionTitle(text = title, modifier = Modifier.padding(vertical = 8.dp))
-}
-
-@Composable
-fun SettingToggle(
-    label: String,
-    isChecked: Boolean,
+private fun SwitchRow(
+    title: String,
+    icon: ImageVector,
+    checked: Boolean,
     onCheckedChange: (Boolean) -> Unit
 ) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
-        ),
-        shape = RoundedCornerShape(18.dp)
+    NurListRow(
+        title = title,
+        leadingIcon = icon,
+        trailing = { Switch(checked = checked, onCheckedChange = onCheckedChange) },
+        onClick = { onCheckedChange(!checked) }
+    )
+}
+
+@Composable
+private fun SignOutRow(onClick: () -> Unit) {
+    val danger = MaterialTheme.colorScheme.error
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 64.dp)
+            .clickable(role = Role.Button, onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = label,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.weight(1f)
-            )
-            Switch(
-                checked = isChecked,
-                onCheckedChange = onCheckedChange
-            )
-        }
+        NurStarMedallion(
+            Icons.Outlined.Logout,
+            size = 44.dp,
+            container = MaterialTheme.colorScheme.errorContainer,
+            tint = danger
+        )
+        Text(t("settings.logout"), style = MaterialTheme.typography.titleMedium, color = danger, modifier = Modifier.weight(1f))
     }
 }
 
 @Composable
-fun SettingSlider(
-    label: String,
-    value: Float,
-    onValueChange: (Float) -> Unit,
-    valueRange: ClosedFloatingPointRange<Float>
-) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
-        ),
-        shape = RoundedCornerShape(18.dp)
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Text(
-                    text = label,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Text(
-                    text = value.toInt().toString(),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.primary
-                )
-            }
-            Slider(
-                value = value,
-                onValueChange = onValueChange,
-                valueRange = valueRange,
-                modifier = Modifier.padding(top = 8.dp)
-            )
-        }
-    }
+private fun Chevron() {
+    Icon(Icons.Outlined.ChevronRight, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+}
+
+@Composable
+private fun SettingSection(title: String, modifier: Modifier = Modifier) {
+    NurSectionTitle(text = title, modifier = modifier.padding(horizontal = 4.dp))
+}
+
+/** Native names of the app languages (shown in their own script, so not translated). */
+private fun languageDisplayName(code: String): String = when (code) {
+    "uz_cyrillic" -> "O‘zbek (kirill)"
+    "ru" -> "Русский"
+    "en" -> "English"
+    else -> "O‘zbek (lotin)"
 }

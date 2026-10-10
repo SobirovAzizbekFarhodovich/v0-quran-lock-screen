@@ -61,7 +61,7 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
       - run: pip install -r requirements.txt pytest
-      - run: python -m py_compile app/main.py
+      - run: python -m py_compile app/*.py
       - run: python -m pytest -q
 
   docker-build:

@@ -1,11 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- Edge-to-edge: Compose draws the green band behind the status bar. The window starts
+         green so the cold start and the first frame match. -->
     <style name="Theme.QuranReminder" parent="android:Theme.Material.Light.NoActionBar">
-        <item name="android:colorAccent">@color/secondary</item>
-        <item name="android:statusBarColor">@color/parchment</item>
-        <item name="android:navigationBarColor">@color/parchment</item>
-        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:colorAccent">@color/noorain_gold</item>
+        <item name="android:windowBackground">@color/noorain_green</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar">false</item>
     </style>
 
-    <style name="Theme.QuranReminder.NoActionBar" parent="android:Theme.Material.Light.NoActionBar" />
+    <style name="Theme.QuranReminder.NoActionBar" parent="Theme.QuranReminder" />
 </resources>

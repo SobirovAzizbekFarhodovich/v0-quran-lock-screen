@@ -37,45 +37,142 @@ data class QuranVerseDto(
             surahName = surahName,
             surahNameArabic = surahNameArabic,
             ayahNumber = ayahNumber,
-            ayahText = ayahText.ifBlank { ayahTextArabic },
-            ayahTextArabic = ayahTextArabic,
+            ayahText = ayahText.removePrefix("\uFEFF").ifBlank { ayahTextArabic.removePrefix("\uFEFF") },
+            ayahTextArabic = ayahTextArabic.removePrefix("\uFEFF"),
             translation = translation,
             transliteration = transliteration
         )
     }
 }
 
+/** Failure while loading Quran content; [code] is an AppStrings key for the UI. */
+class ContentLoadException(val code: String, cause: Throwable? = null) : Exception(code, cause)
+
 object QuranDataLoader {
+    const val EXPECTED_VERSE_COUNT = 6236
 
-    fun loadFromServer(language: String): List<QuranVerse> {
-        return runCatching {
-            val encodedLanguage = java.net.URLEncoder.encode(language, "UTF-8")
-            val url = java.net.URL("${BuildConfig.SERVER_BASE_URL}/api/quran/verses?language=$encodedLanguage")
-            val connection = url.openConnection() as java.net.HttpURLConnection
+    /** Languages whose full Quran content ships inside the APK (assets/quran/<lang>.json). */
+    private val bundledLanguages = setOf("uz_latin", "uz_cyrillic")
+
+    fun isBundled(language: String): Boolean = language in bundledLanguages
+
+    /** Loads a bundled translation from assets — no network involved. */
+    fun loadFromAssets(context: Context, language: String): List<QuranVerse> {
+        require(isBundled(language)) { "$language is not bundled" }
+        val data = try {
+            context.assets.open("quran/$language.json").bufferedReader(Charsets.UTF_8).use { reader ->
+                Gson().fromJson(reader, QuranAssetData::class.java)
+            }
+        } catch (error: Exception) {
+            android.util.Log.e("QuranDataLoader", "Failed to read bundled $language", error)
+            throw ContentLoadException("loading.error.bundled", error)
+        }
+        return data.toVerses(language)
+    }
+
+    /** Bump when the server payload changes shape or content, so stale caches are ignored. */
+    private const val DISK_CACHE_VERSION = 1
+
+    private fun diskCacheFile(context: Context, language: String): java.io.File =
+        java.io.File(java.io.File(context.filesDir, "quran"), "$language.v$DISK_CACHE_VERSION.json.gz")
+
+    /**
+     * A translation downloaded earlier, kept gzipped on disk (~1 MB each) so switching back to
+     * it is instant and works offline. Returns null when absent or unreadable (and drops a
+     * corrupt file so the next attempt re-downloads).
+     */
+    fun loadFromDiskCache(context: Context, language: String): List<QuranVerse>? {
+        val file = diskCacheFile(context, language)
+        if (!file.exists()) return null
+        val verses = runCatching {
+            java.util.zip.GZIPInputStream(file.inputStream()).bufferedReader(Charsets.UTF_8).use { reader ->
+                Gson().fromJson(reader, QuranAssetData::class.java)
+            }.toVerses(language)
+        }.getOrNull()
+        if (verses == null || verses.size < EXPECTED_VERSE_COUNT) {
+            file.delete()
+            return null
+        }
+        return verses
+    }
+
+    /**
+     * Downloads a translation from the server and keeps a gzipped copy on disk (see
+     * [loadFromDiskCache]). Throws [ContentLoadException] with `loading.error.offline` for
+     * connectivity failures and `loading.error.server` otherwise.
+     */
+    fun loadFromServer(context: Context, language: String): List<QuranVerse> {
+        val target = diskCacheFile(context, language)
+        val partial = java.io.File(target.parentFile, "${target.name}.part")
+        target.parentFile?.mkdirs()
+        val encodedLanguage = java.net.URLEncoder.encode(language, "UTF-8")
+        val url = java.net.URL("${BuildConfig.SERVER_BASE_URL}/api/quran/verses?language=$encodedLanguage")
+        val connection = try {
+            url.openConnection() as java.net.HttpURLConnection
+        } catch (io: java.io.IOException) {
+            throw ContentLoadException("loading.error.offline", io)
+        }
+        try {
             connection.requestMethod = "GET"
-            connection.connectTimeout = 30_000
-            connection.readTimeout = 30_000
-
-            if (connection.responseCode != java.net.HttpURLConnection.HTTP_OK) {
-                android.util.Log.e("QuranDataLoader", "Failed to fetch verses, response code: ${connection.responseCode}")
-                return@runCatching emptyList<QuranVerse>()
+            connection.connectTimeout = 15_000
+            connection.readTimeout = 60_000
+            val code = try {
+                connection.responseCode
+            } catch (io: java.io.IOException) {
+                throw ContentLoadException("loading.error.offline", io)
             }
+            if (code != java.net.HttpURLConnection.HTTP_OK) {
+                android.util.Log.e("QuranDataLoader", "Failed to fetch verses, response code: $code")
+                throw ContentLoadException("loading.error.server")
+            }
+            // Stream the body straight into a gzipped file, then parse from disk: the payload
+            // is ~5 MB of JSON and never needs to sit in memory as one string.
+            try {
+                connection.inputStream.use { body ->
+                    java.util.zip.GZIPOutputStream(partial.outputStream()).use { out -> body.copyTo(out) }
+                }
+            } catch (io: java.io.IOException) {
+                partial.delete()
+                throw ContentLoadException("loading.error.offline", io)
+            }
+            val data = try {
+                java.util.zip.GZIPInputStream(partial.inputStream()).bufferedReader(Charsets.UTF_8).use { reader ->
+                    Gson().fromJson(reader, QuranAssetData::class.java)
+                }
+            } catch (error: Exception) {
+                partial.delete()
+                throw ContentLoadException("loading.error.server", error)
+            }
+            val verses = data.toVerses(language)
+            if (verses.size >= EXPECTED_VERSE_COUNT) partial.renameTo(target) else partial.delete()
+            return verses
+        } finally {
+            connection.disconnect()
+        }
+    }
 
-            val json = connection.inputStream.bufferedReader().use { it.readText() }
-            val data = Gson().fromJson(json, QuranAssetData::class.java)
-            val verses = if (data.verses.isNotEmpty()) {
-                data.verses.map { it.toEntity() }
+    private fun QuranAssetData?.toVerses(language: String): List<QuranVerse> {
+        if (this == null) return emptyList()
+        val verses = if (verses.isNotEmpty()) {
+            val entities = verses.map { it.toEntity() }
+            // The server's Russian payload carries Latin transliterations ("Al-Baqarah");
+            // show the Russian surah names instead.
+            if (language == "ru") {
+                entities.map { verse ->
+                    SurahNames.russian.getOrNull(verse.surahNumber - 1)
+                        ?.let { verse.copy(surahName = it) } ?: verse
+                }
             } else {
-                data.quranEncResult.map { it.toEntity(language) }
+                entities
             }
-            verses.filter { verse ->
-                verse.surahNumber in 1..114 &&
-                    verse.ayahNumber > 0 &&
-                    verse.translation.isNotBlank()
-            }
-        }.onFailure { e ->
-            android.util.Log.e("QuranDataLoader", "Exception while fetching verses", e)
-        }.getOrElse { emptyList() }
+        } else {
+            quranEncResult.map { it.toEntity(language) }
+        }
+        return verses.filter { verse ->
+            verse.surahNumber in 1..114 &&
+                verse.ayahNumber > 0 &&
+                verse.translation.isNotBlank()
+        }
     }
 }
 
@@ -143,7 +240,7 @@ private object SurahNames {
         "Раҳмон", "Воқеа", "Ҳадид", "Мужодала", "Ҳашр", "Мумтаҳана", "Сафф",
         "Жума", "Мунофиқун", "Тағобун", "Талоқ", "Таҳрим", "Мулк", "Қалам",
         "Ҳаққа", "Маориж", "Нуҳ", "Жин", "Муззаммил", "Муддассир", "Қиёмат",
-        "Инсон", "Мурсалот", "Наба", "Нозиот", "Абаса", "Такв", "Инфитор",
+        "Инсон", "Мурсалот", "Наба", "Нозиот", "Абаса", "Таквир", "Инфитор",
         "Мутоффифин", "Иншиқоқ", "Буруж", "Ториқ", "Аъло", "Ғошия", "Фажр",
         "Балад", "Шамс", "Лайл", "Зуҳо", "Шарҳ", "Тийн", "Алақ", "Қадр",
         "Баййина", "Залзала", "Одиёт", "Қориа", "Такосур", "Аср", "Ҳумаза",

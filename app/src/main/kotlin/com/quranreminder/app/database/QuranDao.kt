@@ -5,6 +5,7 @@ import androidx.room.Delete
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Transaction
 import androidx.room.Update
 import kotlinx.coroutines.flow.Flow
 
@@ -46,8 +47,19 @@ interface QuranVerseDao {
     @Query("SELECT COUNT(*) FROM quran_verses")
     suspend fun getVerseCount(): Int
 
+    /** Re-emits on every write to quran_verses (e.g. a language switch replacing content). */
+    @Query("SELECT COUNT(*) FROM quran_verses")
+    fun observeVerseCount(): Flow<Int>
+
     @Query("DELETE FROM quran_verses")
     suspend fun deleteAllVerses()
+
+    /** Swaps the whole Quran content atomically: readers never see an empty/partial table. */
+    @Transaction
+    suspend fun replaceAllVerses(verses: List<QuranVerse>) {
+        deleteAllVerses()
+        insertVerses(verses)
+    }
 
     @Query("SELECT * FROM quran_verses ORDER BY RANDOM() LIMIT 1")
     suspend fun getRandomVerse(): QuranVerse?

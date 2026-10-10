@@ -3,11 +3,16 @@ HybridRetriever — ChromaDB semantic search + BM25 keyword search.
 
 Qur'oni Karim, Hisnul Muslim, Hadis kitoblari (Riyozus Solihiyn, Bulugh al-Maram, Al-Adhkar),
 Qur'oniy duolar, Ibodat va Muqaddas oylar bo'yicha qidiradi va natijalarni birlashtirib qaytaradi.
+
+All methods are synchronous (ChromaDB HTTP client + local embedding model);
+async callers must run them in a worker thread (asyncio.to_thread).
 """
 
 import hashlib
-import json
+import logging
 import os
+import threading
+import time
 from typing import Any
 
 import chromadb
@@ -15,51 +20,34 @@ from chromadb.config import Settings
 from chromadb.utils.embedding_functions import SentenceTransformerEmbeddingFunction
 from rank_bm25 import BM25Okapi
 
-# Xuddi build_chromadb.py dagi model bilan bir xil bo'lishi shart
-EMBEDDING_FN = SentenceTransformerEmbeddingFunction(
-    model_name="sentence-transformers/paraphrase-multilingual-mpnet-base-v2"
+from .helpers import (
+    LANG_TO_COLLECTIONS,
+    LANG_TO_VERSE_COLLECTIONS,
+    enrich_metadata,
+    normalize_and_rank,
+    tokenize,
+    verse_doc_id,
 )
 
+logger = logging.getLogger("rag.retriever")
 
-# Til kodi → ChromaDB collection nomi mappingi
-LANG_TO_COLLECTIONS = {
-    "uz": [
-        "quran_chunks_uz_cyrillic", "quran_chunks_uz_latin",
-        "bukhari_uz_cyrillic", "bukhari_uz_latin",
-        "muslim_uz_cyrillic", "muslim_uz_latin",
-        "hisnul_muslim_uz_cyrillic", "hisnul_muslim_uz_latin",
-        "hadith_uz_cyrillic", "hadith_uz_latin",
-        "duas_quranic_uz_cyrillic", "duas_quranic_uz_latin",
-        "ibodat_uz_cyrillic", "ibodat_uz_latin",
-        "sacred_months_uz_cyrillic", "sacred_months_uz_latin",
-        "duas_uz_cyrillic", "duas_uz_latin"
-    ],
-    "uz_cyrillic": [
-        "quran_chunks_uz_cyrillic", "bukhari_uz_cyrillic", "muslim_uz_cyrillic", "hisnul_muslim_uz_cyrillic", "hadith_uz_cyrillic",
-        "duas_quranic_uz_cyrillic", "ibodat_uz_cyrillic", "sacred_months_uz_cyrillic", "duas_uz_cyrillic"
-    ],
-    "uz_latin": [
-        "quran_chunks_uz_latin", "bukhari_uz_latin", "muslim_uz_latin", "hisnul_muslim_uz_latin", "hadith_uz_latin",
-        "duas_quranic_uz_latin", "ibodat_uz_latin", "sacred_months_uz_latin", "duas_uz_latin"
-    ],
-    "en": [
-        "quran_chunks_en", "bukhari_en", "muslim_en", "hisnul_muslim_en", "hadith_en",
-        "duas_quranic_en", "ibodat_en", "sacred_months_en"
-    ],
-    "ru": [
-        "quran_chunks_ru", "bukhari_ru", "muslim_ru", "hisnul_muslim_ru", "hadith_ru",
-        "duas_quranic_ru", "ibodat_ru", "sacred_months_ru"
-    ],
-}
+# Xuddi build_chromadb.py dagi model bilan bir xil bo'lishi shart
+EMBEDDING_MODEL = "sentence-transformers/paraphrase-multilingual-mpnet-base-v2"
 
-# Aniq oyat qidirish uchun verse collectionlar
-LANG_TO_VERSE_COLLECTIONS = {
-    "uz": ["quran_verses_uz_cyrillic", "quran_verses_uz_latin"],
-    "uz_cyrillic": ["quran_verses_uz_cyrillic"],
-    "uz_latin": ["quran_verses_uz_latin"],
-    "en": ["quran_verses_en"],
-    "ru": ["quran_verses_ru"],
-}
+__all__ = ["HybridRetriever", "LANG_TO_COLLECTIONS", "LANG_TO_VERSE_COLLECTIONS"]
+
+_embedding_fn: SentenceTransformerEmbeddingFunction | None = None
+_embedding_lock = threading.Lock()
+
+
+def embedding_function() -> SentenceTransformerEmbeddingFunction:
+    """Load the embedding model lazily (not at import time)."""
+    global _embedding_fn
+    if _embedding_fn is None:
+        with _embedding_lock:
+            if _embedding_fn is None:
+                _embedding_fn = SentenceTransformerEmbeddingFunction(model_name=EMBEDDING_MODEL)
+    return _embedding_fn
 
 
 class HybridRetriever:
@@ -73,18 +61,27 @@ class HybridRetriever:
         self.chroma_host = chroma_host or os.getenv("CHROMA_HOST", "chromadb")
         self.chroma_port = chroma_port or int(os.getenv("CHROMA_PORT", "8000"))
         self.min_semantic_score = float(os.getenv("RAG_MIN_SEMANTIC_SCORE", "0.15"))
+        # A BM25 index built while the collection was still being (re)built
+        # would otherwise be stale forever; re-check the count periodically.
+        self.bm25_refresh_seconds = float(os.getenv("RAG_BM25_REFRESH_SECONDS", "600"))
         self._client: chromadb.ClientAPI | None = None
-        self._bm25_cache: dict[str, tuple[BM25Okapi, list[dict]]] = {}
+        self._client_lock = threading.Lock()
+        # name -> (bm25, docs, doc_count, built_at)
+        self._bm25_cache: dict[str, tuple[BM25Okapi | None, list[dict], int, float]] = {}
+        self._bm25_locks: dict[str, threading.Lock] = {}
+        self._bm25_locks_guard = threading.Lock()
 
     @property
     def client(self) -> chromadb.ClientAPI:
         """Lazy ChromaDB client init."""
         if self._client is None:
-            self._client = chromadb.HttpClient(
-                host=self.chroma_host,
-                port=self.chroma_port,
-                settings=Settings(anonymized_telemetry=False),
-            )
+            with self._client_lock:
+                if self._client is None:
+                    self._client = chromadb.HttpClient(
+                        host=self.chroma_host,
+                        port=self.chroma_port,
+                        settings=Settings(anonymized_telemetry=False),
+                    )
         return self._client
 
     def search(
@@ -97,7 +94,7 @@ class HybridRetriever:
 
         Args:
             query: Qidiruv so'rovi
-            language: Til kodi (uz, uz_cyrillic, uz_latin, en, ru)
+            language: Til kodi (uz=uz_latin, uz_cyrillic, uz_latin, en, ru)
             limit: Qaytariladigan natijalar soni
 
         Returns:
@@ -125,7 +122,8 @@ class HybridRetriever:
                 count = collection.count()
                 counts[name] = count
                 total += count
-            except Exception:
+            except Exception as exc:
+                logger.info("collection %s unavailable: %s", name, exc)
                 missing.append(name)
 
         return {
@@ -145,8 +143,8 @@ class HybridRetriever:
         collections = LANG_TO_VERSE_COLLECTIONS.get(language, [])
         for col_name in collections:
             try:
-                collection = self.client.get_collection(col_name, embedding_function=EMBEDDING_FN)
-                doc_id = f"{language}:{surah}:{ayah}"
+                collection = self.client.get_collection(col_name)
+                doc_id = verse_doc_id(col_name, surah, ayah)
                 result = collection.get(ids=[doc_id], include=["documents", "metadatas"])
                 if result["documents"]:
                     return {
@@ -154,6 +152,7 @@ class HybridRetriever:
                         "metadata": result["metadatas"][0] if result["metadatas"] else {},
                     }
             except Exception:
+                logger.warning("verse lookup failed in %s", col_name, exc_info=True)
                 continue
         return None
 
@@ -166,35 +165,47 @@ class HybridRetriever:
         """ChromaDB semantic search."""
         results = []
         collections = LANG_TO_COLLECTIONS.get(language, [])
+        if not collections:
+            return results
+
+        # Embed the query ONCE instead of once per collection.
+        try:
+            query_embeddings = embedding_function()([query])
+        except Exception:
+            logger.exception("query embedding failed")
+            return results
 
         for col_name in collections:
             try:
-                collection = self.client.get_collection(col_name, embedding_function=EMBEDDING_FN)
+                collection = self.client.get_collection(col_name)
                 count = collection.count()
                 if count <= 0:
                     continue
                 query_result = collection.query(
-                    query_texts=[query],
+                    query_embeddings=query_embeddings,
                     n_results=min(limit, count),
                     include=["documents", "metadatas", "distances"],
                 )
 
                 if query_result["documents"] and query_result["documents"][0]:
+                    ids = (query_result.get("ids") or [[]])[0]
                     for i, doc in enumerate(query_result["documents"][0]):
                         distance = query_result["distances"][0][i] if query_result["distances"] else 1.0
                         meta = query_result["metadatas"][0][i] if query_result["metadatas"] else {}
                         score = max(0.0, 1.0 - distance)
                         if score < self.min_semantic_score:
                             continue
+                        doc_id = ids[i] if i < len(ids) else ""
                         doc_hash = hashlib.md5(doc.encode("utf-8")).hexdigest()[:16]
                         results.append({
                             "text": doc,
-                            "metadata": meta,
+                            "metadata": enrich_metadata(meta or {}, doc, doc_id),
                             "score": score,
                             "source_type": "semantic",
                             "_id": f"{col_name}:{doc_hash}",
                         })
-            except Exception as e:
+            except Exception as exc:
+                logger.warning("semantic search failed in %s: %s", col_name, exc)
                 continue
 
         results.sort(key=lambda x: x["score"], reverse=True)
@@ -206,8 +217,15 @@ class HybridRetriever:
         language: str,
         limit: int = 12,
     ) -> list[dict[str, Any]]:
-        """BM25 keyword search — ChromaDB dagi documentlar ustida."""
-        results = []
+        """BM25 keyword search — ChromaDB dagi documentlar ustida.
+
+        Scores are normalized per collection and the hits are sorted globally,
+        so the RRF rank reflects relevance rather than collection order.
+        """
+        tokenized_query = tokenize(query)
+        if not tokenized_query:
+            return []
+        per_collection: list[list[dict[str, Any]]] = []
         collections = LANG_TO_COLLECTIONS.get(language, [])
 
         for col_name in collections:
@@ -216,55 +234,78 @@ class HybridRetriever:
                 if bm25 is None:
                     continue
 
-                tokenized_query = query.lower().split()
                 scores = bm25.get_scores(tokenized_query)
+                scored_docs = sorted(zip(scores, docs), key=lambda x: x[0], reverse=True)
 
-                scored_docs = list(zip(scores, docs))
-                scored_docs.sort(key=lambda x: x[0], reverse=True)
-
-                for idx, (score, doc) in enumerate(scored_docs[:limit]):
+                hits = []
+                for score, doc in scored_docs[:limit]:
                     if score <= 0:
                         continue
                     doc_hash = hashlib.md5(doc["text"].encode("utf-8")).hexdigest()[:16]
-                    results.append({
+                    hits.append({
                         "text": doc["text"],
                         "metadata": doc["metadata"],
                         "score": float(score),
                         "source_type": "bm25",
                         "_id": f"{col_name}:{doc_hash}",
                     })
-            except Exception as e:
+                per_collection.append(hits)
+            except Exception as exc:
+                logger.warning("bm25 search failed in %s: %s", col_name, exc)
                 continue
 
-        return results
+        return normalize_and_rank(per_collection, limit)
+
+    def _bm25_lock(self, collection_name: str) -> threading.Lock:
+        with self._bm25_locks_guard:
+            return self._bm25_locks.setdefault(collection_name, threading.Lock())
 
     def _get_bm25_index(
         self, collection_name: str
     ) -> tuple[BM25Okapi | None, list[dict]]:
         """BM25 index yaratadi yoki keshdan oladi."""
-        if collection_name in self._bm25_cache:
-            return self._bm25_cache[collection_name]
+        cached = self._bm25_cache.get(collection_name)
+        if cached is not None and time.monotonic() - cached[3] < self.bm25_refresh_seconds:
+            return cached[0], cached[1]
 
-        try:
-            collection = self.client.get_collection(collection_name)
-            all_data = collection.get(include=["documents", "metadatas"])
+        with self._bm25_lock(collection_name):
+            cached = self._bm25_cache.get(collection_name)
+            now = time.monotonic()
+            if cached is not None and now - cached[3] < self.bm25_refresh_seconds:
+                return cached[0], cached[1]
+            try:
+                collection = self.client.get_collection(collection_name)
+                count = collection.count()
+                if cached is not None and cached[2] == count:
+                    # Unchanged: keep the index, just restart the timer.
+                    self._bm25_cache[collection_name] = (cached[0], cached[1], count, now)
+                    return cached[0], cached[1]
 
-            if not all_data["documents"]:
-                self._bm25_cache[collection_name] = (None, [])
+                all_data = collection.get(include=["documents", "metadatas"])
+                if not all_data["documents"]:
+                    self._bm25_cache[collection_name] = (None, [], 0, now)
+                    return None, []
+
+                docs = []
+                tokenized = []
+                ids = all_data.get("ids") or []
+                for i, doc_text in enumerate(all_data["documents"]):
+                    meta = all_data["metadatas"][i] if all_data["metadatas"] else {}
+                    doc_id = ids[i] if i < len(ids) else ""
+                    docs.append({
+                        "text": doc_text,
+                        "metadata": enrich_metadata(meta or {}, doc_text, doc_id),
+                    })
+                    tokenized.append(tokenize(doc_text) or ["_"])
+
+                bm25 = BM25Okapi(tokenized)
+                self._bm25_cache[collection_name] = (bm25, docs, len(docs), now)
+                return bm25, docs
+            except Exception as exc:
+                logger.warning("bm25 index build failed for %s: %s", collection_name, exc)
+                if cached is not None:
+                    return cached[0], cached[1]
                 return None, []
-
-            docs = []
-            tokenized = []
-            for i, doc_text in enumerate(all_data["documents"]):
-                meta = all_data["metadatas"][i] if all_data["metadatas"] else {}
-                docs.append({"text": doc_text, "metadata": meta})
-                tokenized.append(doc_text.lower().split())
-
-            bm25 = BM25Okapi(tokenized)
-            self._bm25_cache[collection_name] = (bm25, docs)
-            return bm25, docs
-        except Exception as e:
-            return None, []
 
     def _rrf_merge(
         self,

@@ -23,16 +23,9 @@ android {
             useSupportLibrary = true
         }
 
-        // OpenRouter API key (local.properties yoki gradle.properties dan olinadi)
+        // No third-party API keys are compiled into the app: all AI calls go through
+        // our backend, which holds the provider credentials.
         val localPropsFile = rootProject.file("local.properties")
-        val apiKey = if (localPropsFile.exists()) {
-            val props = Properties()
-            localPropsFile.inputStream().use { props.load(it) }
-            props.getProperty("OPENROUTER_API_KEY") ?: ""
-        } else {
-            (project.findProperty("OPENROUTER_API_KEY") as? String) ?: ""
-        }
-        buildConfigField("String", "OPENROUTER_API_KEY", "\"$apiKey\"")
 
         // The temporary HTTP server can be used for device testing.  Supply
         // SERVER_BASE_URL=https://api.example.com at release time when a
@@ -42,9 +35,9 @@ android {
             localPropsFile.inputStream().use { props.load(it) }
             props.getProperty("SERVER_BASE_URL")
                 ?: (project.findProperty("SERVER_BASE_URL") as? String)
-                ?: "http://18.195.218.23"
+                ?: "http://3.73.130.154"
         } else {
-            (project.findProperty("SERVER_BASE_URL") as? String) ?: "http://18.195.218.23"
+            (project.findProperty("SERVER_BASE_URL") as? String) ?: "http://3.73.130.154"
         }.trimEnd('/')
         buildConfigField("String", "SERVER_BASE_URL", "\"$serverBaseUrl\"")
 

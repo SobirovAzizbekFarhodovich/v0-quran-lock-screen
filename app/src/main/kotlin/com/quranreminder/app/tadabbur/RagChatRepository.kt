@@ -4,9 +4,18 @@ import android.content.Context
 import com.google.gson.Gson
 import com.google.gson.JsonObject
 import com.quranreminder.app.BuildConfig
+import com.quranreminder.app.auth.SessionException
 import com.quranreminder.app.auth.SessionManager
+import com.quranreminder.app.auth.UnauthorizedException
+import com.quranreminder.app.ui.theme.AppStrings
+import com.quranreminder.app.ui.theme.text
+import com.quranreminder.app.util.NetworkStatus
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import java.net.HttpURLConnection
 import java.net.URL
 
@@ -14,15 +23,15 @@ import java.net.URL
 class RagChatRepository(context: Context) {
     private val appContext = context.applicationContext
     private val tadabburRepo = TadabburRepository(appContext)
+    private val session = SessionManager(appContext)
     private val gson = Gson()
 
     suspend fun answer(message: String, language: String): TadabburAnswer = withContext(Dispatchers.IO) {
+        fun text(key: String) = AppStrings.text(language, key)
+
         val trimmed = message.trim()
         if (trimmed.isBlank()) {
-            return@withContext TadabburAnswer(
-                intro = "Iltimos, savolingizni yozing.",
-                evidence = emptyList()
-            )
+            return@withContext TadabburAnswer(intro = text("chat.empty"), evidence = emptyList())
         }
 
         val cleanMsg = trimmed.lowercase()
@@ -31,51 +40,73 @@ class RagChatRepository(context: Context) {
         // meaningful message goes to the server so history and intent routing
         // work like a real chatbot.
         if (isGibberish(cleanMsg)) {
-            return@withContext TadabburAnswer(
-                intro = "Kechirasiz, yozgan matningizni tushuna olmadim. Iltimos, savolingizni yoki fikringizni aniqroq yozing.",
-                evidence = emptyList()
-            )
+            return@withContext TadabburAnswer(intro = text("chat.gibberish"), evidence = emptyList())
+        }
+
+        // Both the server RAG and the Tadabbur fallback need the internet: fail fast
+        // with a clear message instead of waiting for HTTP timeouts.
+        if (!NetworkStatus.isServerReachable(appContext)) {
+            return@withContext TadabburAnswer(intro = text("chat.offline"), evidence = emptyList())
         }
 
         // A single server route owns normal conversation, emotional support,
         // Islamic RAG, citations and Redis conversation history.
-        val token = SessionManager(appContext).accessToken
-        if (!token.isNullOrBlank()) {
-            val userName = SessionManager(appContext).displayName
-            val remoteResult = runCatching {
-                val connection = (URL("${BuildConfig.SERVER_BASE_URL}/api/v1/spiritual/query").openConnection() as HttpURLConnection).apply {
-                    requestMethod = "POST"
-                    connectTimeout = 8_000
-                    readTimeout = 90_000
-                    setRequestProperty("Content-Type", "application/json; charset=utf-8")
-                    setRequestProperty("Authorization", "Bearer $token")
-                    doOutput = true
+        if (session.isSignedIn) {
+            val userName = session.displayName
+            val remote = try {
+                session.withAuthorization { token -> queryServer(token, trimmed, language, userName) }
+            } catch (expired: SessionException) {
+                if (expired.code == SessionManager.CODE_SESSION_EXPIRED) {
+                    return@withContext TadabburAnswer(intro = text(expired.code), evidence = emptyList())
                 }
-                connection.outputStream.bufferedWriter(Charsets.UTF_8).use {
-                    it.write(gson.toJson(RagRequest(message, language, userName)))
-                }
-                val body = (if (connection.responseCode in 200..299) connection.inputStream else connection.errorStream)
-                    ?.bufferedReader()?.use { reader -> reader.readText() }.orEmpty()
-                if (connection.responseCode in 200..299 && body.isNotBlank()) {
-                    val response = gson.fromJson(body, RagResponse::class.java)
-                    if (response.answer.isNotBlank()) {
-                        TadabburAnswer(
-                            intro = response.answer,
-                            evidence = response.sources.mapIndexed { index, source -> source.toEvidence(index) }
-                        )
-                    } else null
-                } else null
-            }.getOrNull()
-
-            if (remoteResult != null) {
-                return@withContext remoteResult
+                null
+            } catch (error: Exception) {
+                android.util.Log.w("RagChat", "Server RAG failed, falling back", error)
+                null
+            }
+            if (remote != null) {
+                return@withContext TadabburAnswer(
+                    intro = remote.answer,
+                    evidence = remote.sources.map { source -> source.toEvidence(language) }
+                )
             }
         }
 
-        // Server unreachable, erroring, or no active session: fall back to the
-        // on-device RAG search instead of blaming "no internet" when that may
-        // not be the actual cause.
-        return@withContext tadabburRepo.answer(message)
+        // Server erroring or no active session: fall back to the on-device source
+        // search + Tadabbur AI, capped so the user never waits more than ~45s.
+        // The fallback runs in its own scope because its blocking HTTP calls can't be
+        // interrupted; on timeout we stop waiting and let it finish in the background.
+        val fallback = fallbackScope.async { tadabburRepo.answer(trimmed, language) }
+        withTimeoutOrNull(FALLBACK_TIMEOUT_MS) { fallback.await() }
+            ?: run {
+                fallback.cancel()
+                TadabburAnswer(intro = text("chat.timeout"), evidence = emptyList())
+            }
+    }
+
+    /** Returns the server answer, null for an empty/unusable reply; throws on transport errors and 401. */
+    private fun queryServer(token: String, message: String, language: String, userName: String): RagResponse? {
+        val connection = (URL("${BuildConfig.SERVER_BASE_URL}/api/v1/spiritual/query").openConnection() as HttpURLConnection).apply {
+            requestMethod = "POST"
+            connectTimeout = 8_000
+            readTimeout = 90_000
+            setRequestProperty("Content-Type", "application/json; charset=utf-8")
+            setRequestProperty("Authorization", "Bearer $token")
+            doOutput = true
+        }
+        try {
+            connection.outputStream.bufferedWriter(Charsets.UTF_8).use {
+                it.write(gson.toJson(RagRequest(message, language, userName)))
+            }
+            val code = connection.responseCode
+            if (code == HttpURLConnection.HTTP_UNAUTHORIZED) throw UnauthorizedException()
+            val body = (if (code in 200..299) connection.inputStream else connection.errorStream)
+                ?.bufferedReader()?.use { reader -> reader.readText() }.orEmpty()
+            if (code !in 200..299 || body.isBlank()) return null
+            return gson.fromJson(body, RagResponse::class.java).takeIf { it.answer.isNotBlank() }
+        } finally {
+            connection.disconnect()
+        }
     }
 
     private fun isGibberish(msg: String): Boolean {
@@ -105,12 +136,12 @@ class RagChatRepository(context: Context) {
     }
 
 
-    private fun RagSource.toEvidence(index: Int): TadabburEvidence {
+    private fun RagSource.toEvidence(language: String): TadabburEvidence {
         val typeValue = metadata.get("type")?.asString.orEmpty()
         val type = if (typeValue == "quran" || metadata.has("surah")) EvidenceType.QURAN else EvidenceType.HADITH
         val title = metadata.get("title")?.asString
             ?: metadata.get("source")?.asString
-            ?: if (type == EvidenceType.QURAN) "Qur’oni karim" else "Hadis manbasi"
+            ?: AppStrings.text(language, if (type == EvidenceType.QURAN) "chat.source.quran" else "chat.source.hadith")
         return TadabburEvidence(
             type = type,
             title = title,
@@ -120,6 +151,9 @@ class RagChatRepository(context: Context) {
         )
     }
 }
+
+private const val FALLBACK_TIMEOUT_MS = 45_000L
+private val fallbackScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
 private data class RagRequest(val message: String, val language: String, @com.google.gson.annotations.SerializedName("user_name") val userName: String = "")
 private data class RagResponse(val answer: String = "", val sources: List<RagSource> = emptyList())

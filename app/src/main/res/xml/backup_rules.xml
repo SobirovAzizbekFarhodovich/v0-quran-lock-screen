@@ -3,4 +3,8 @@
     <exclude
         domain="database"
         path="quran_database" />
+    <!-- Auth tokens must never leave the device. -->
+    <exclude
+        domain="sharedpref"
+        path="user_session.xml" />
 </full-backup-content>

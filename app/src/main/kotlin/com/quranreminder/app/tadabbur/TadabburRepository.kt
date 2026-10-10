@@ -2,6 +2,8 @@ package com.quranreminder.app.tadabbur
 
 import android.content.Context
 import com.quranreminder.app.database.QuranDatabase
+import com.quranreminder.app.ui.theme.AppStrings
+import com.quranreminder.app.ui.theme.text
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.util.Locale
@@ -13,7 +15,8 @@ class TadabburRepository(private val context: Context) {
     private val validTopicLabels: List<String>
         get() = topicProfiles.map { it.label }
 
-    suspend fun answer(query: String): TadabburAnswer = withContext(Dispatchers.IO) {
+    suspend fun answer(query: String, language: String = "uz_latin"): TadabburAnswer = withContext(Dispatchers.IO) {
+        fun text(key: String) = AppStrings.text(language, key)
         // 1. Lokal topic detection (har doim ishlaydi)
         val normalizedQuery = normalize(query)
         val queryTokens = tokenize(query)
@@ -56,7 +59,7 @@ class TadabburRepository(private val context: Context) {
 
         if (effectiveTokens.isEmpty() && effectiveProfiles.isEmpty()) {
             return@withContext TadabburAnswer(
-                intro = "Holatingizni yozing. Javob faqat Qur'on va hadis manbalaridan topilgan dalillarga tayangan holda beriladi.",
+                intro = text("chat.local.describe"),
                 evidence = emptyList()
             )
         }
@@ -153,7 +156,7 @@ class TadabburRepository(private val context: Context) {
 
         if (evidence.isEmpty()) {
             return@withContext TadabburAnswer(
-                intro = "Mavzu bo'yicha aniq mos oyat yoki hadis topilmadi. Savolingizni boshqacharoq shaklda yozishingiz mumkin (masalan: \"sabr haqida oyat\", \"namoz duosi\", \"ota-ona hadis\").",
+                intro = text("chat.local.noEvidence"),
                 evidence = emptyList()
             )
         }
@@ -183,9 +186,9 @@ class TadabburRepository(private val context: Context) {
         val intro = aiResponse?.intro?.takeIf { it.isNotBlank() } ?: run {
             val labels = effectiveProfiles.take(2).joinToString(", ") { it.label }
             if (labels.isBlank()) {
-                "Holatingizga mos dalillar quyida. Javob faqat indekslangan Qur'on oyatlari va hadis matnlaridan tuzildi; manbalardan tashqari xulosa yoki fatvo berilmaydi."
+                text("chat.local.introGeneric")
             } else {
-                "Men yozganlaringizni \"$labels\" holatiga yaqin deb tushundim. Quyidagi dalillar faqat indekslangan Qur'on oyatlari va hadis matnlaridan tanlandi."
+                text("chat.local.introTopic").replace("%s", labels)
             }
         }
 

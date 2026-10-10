@@ -10,7 +10,7 @@ import time
 from dataclasses import dataclass
 
 import redis.asyncio as redis
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
 try:
@@ -27,6 +27,9 @@ GROUP_NAME = "ai-recitation"
 RESULT_KEY_PREFIX = "recitation:result:"
 RESULT_CHANNEL_PREFIX = "recitation:results:"
 RESULT_TTL_SECONDS = 300
+# Dead-letter entries keep only metadata (never the audio payload) and the
+# stream is capped so a misbehaving client cannot grow Redis without bound.
+DEAD_LETTER_MAXLEN = int(os.getenv("RECITATION_DEAD_LETTER_MAXLEN", "1000"))
 SAMPLE_RATE = 16000
 SAMPLE_WIDTH_BYTES = 2
 
@@ -48,6 +51,20 @@ class Settings:
     # transcription is produced so the client can highlight words live, karaoke
     # style, while the reader is still speaking.
     partial_interval_seconds: float = float(os.getenv("RECITATION_PARTIAL_INTERVAL_SECONDS", "1.5"))
+    # Partials never re-transcribe the whole buffer: only the most recent
+    # window is transcribed on each tick; older audio is transcribed once, in
+    # window-sized blocks, and its text is kept as a committed prefix.  The
+    # full buffer is transcribed only on Stop (the scored final result).
+    partial_window_seconds: float = float(os.getenv("RECITATION_PARTIAL_WINDOW_SECONDS", "30"))
+    # Buffers of sessions whose client disconnected without sending Stop are
+    # evicted after this much inactivity, and the number of concurrently
+    # buffered sessions is capped (each may hold up to max_analysis_seconds).
+    session_idle_seconds: float = float(os.getenv("RECITATION_SESSION_IDLE_SECONDS", "300"))
+    max_sessions: int = int(os.getenv("RECITATION_MAX_SESSIONS", "64"))
+    # Upper bound for the direct /analyze endpoint.
+    max_analyze_seconds: float = float(os.getenv("RECITATION_MAX_ANALYZE_SECONDS", "120"))
+    # Number of transcriptions allowed to run at once (CPU bound).
+    transcribe_concurrency: int = int(os.getenv("RECITATION_TRANSCRIBE_CONCURRENCY", "1"))
 
 
 settings = Settings()
@@ -55,6 +72,10 @@ client: redis.Redis | None = None
 model = None
 session_buffers: dict[str, bytearray] = {}
 session_last_partial_bytes: dict[str, int] = {}
+# Per-session committed partial transcript: (bytes already transcribed, text).
+session_committed: dict[str, tuple[int, str]] = {}
+session_last_seen: dict[str, float] = {}
+_transcribe_semaphore: asyncio.Semaphore | None = None
 
 
 @dataclass(frozen=True)
@@ -105,6 +126,7 @@ async def healthz() -> dict[str, str | int | bool]:
         "model_loaded": model is not None,
         "model_name": settings.whisper_model,
         "buffered_sessions": len(session_buffers),
+        "buffered_bytes": sum(len(buffer) for buffer in session_buffers.values()),
     }
 
 
@@ -119,11 +141,23 @@ class AnalyzeResponse(BaseModel):
     score: float
 
 
+def max_analyze_bytes() -> int:
+    return int(settings.max_analyze_seconds * SAMPLE_RATE * SAMPLE_WIDTH_BYTES)
+
+
 @app.post("/analyze", response_model=AnalyzeResponse)
 async def analyze(req: AnalyzeRequest) -> AnalyzeResponse:
     """HTTP endpoint for direct audio analysis (alternative to Redis stream)."""
-    audio = base64.b64decode(req.audio_b64)
-    transcription = transcribe(audio)
+    # Reject oversized payloads before decoding (base64 is ~4/3 of the raw size).
+    if len(req.audio_b64) > (max_analyze_bytes() * 4) // 3 + 4:
+        raise HTTPException(status_code=413, detail="audio is too long")
+    try:
+        audio = decode_audio(req.audio_b64)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if len(audio) > max_analyze_bytes():
+        raise HTTPException(status_code=413, detail="audio is too long")
+    transcription = await transcribe_async(audio)
     transcript = transcription.text
     tajweed = check_tajweed(transcript, transcription)
     return AnalyzeResponse(
@@ -144,6 +178,7 @@ async def consume_audio() -> None:
 
     while True:
         try:
+            evict_idle_sessions()
             messages = await client.xreadgroup(
                 GROUP_NAME,
                 settings.worker_name,
@@ -173,15 +208,66 @@ async def handle_stream_message(message_id: str, fields: dict[str, str]) -> None
             await client.publish(f"{RESULT_CHANNEL_PREFIX}{session_id}", payload)
         await client.xack(STREAM_NAME, GROUP_NAME, message_id)
     except Exception as exc:
-        failed_fields = {
-            **fields,
-            "original_id": message_id,
-            "error": str(exc),
-            "failed_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-        }
-        await client.xadd(DEAD_LETTER_STREAM, failed_fields)
-        await client.xack(STREAM_NAME, GROUP_NAME, message_id)
         logger.exception("failed to process recitation message %s", message_id)
+        try:
+            await client.xadd(
+                DEAD_LETTER_STREAM,
+                dead_letter_fields(message_id, fields, exc),
+                maxlen=DEAD_LETTER_MAXLEN,
+                approximate=True,
+            )
+        except Exception:
+            logger.exception("failed to dead-letter recitation message %s", message_id)
+        await client.xack(STREAM_NAME, GROUP_NAME, message_id)
+
+
+def dead_letter_fields(message_id: str, fields: dict[str, str], exc: Exception) -> dict[str, str]:
+    """Metadata-only copy of a failed message (the audio payload is dropped)."""
+    kept = {key: value for key, value in fields.items() if key != "audio_b64"}
+    kept["audio_b64_length"] = str(len(fields.get("audio_b64") or ""))
+    kept["original_id"] = message_id
+    kept["error"] = str(exc)[:500]
+    kept["failed_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    return kept
+
+
+def touch_session(session_id: str, now: float | None = None) -> bytearray:
+    """Return the session buffer, creating it (within the session cap) if needed."""
+    now = time.monotonic() if now is None else now
+    buffer = session_buffers.get(session_id)
+    if buffer is None:
+        evict_idle_sessions(now)
+        while len(session_buffers) >= max(1, settings.max_sessions):
+            oldest = min(session_buffers, key=lambda sid: session_last_seen.get(sid, 0.0))
+            logger.warning("evicting recitation session %s: session cap reached", oldest)
+            drop_session(oldest)
+        buffer = session_buffers[session_id] = bytearray()
+    session_last_seen[session_id] = now
+    return buffer
+
+
+def drop_session(session_id: str) -> None:
+    session_buffers.pop(session_id, None)
+    session_last_partial_bytes.pop(session_id, None)
+    session_committed.pop(session_id, None)
+    session_last_seen.pop(session_id, None)
+
+
+def evict_idle_sessions(now: float | None = None) -> int:
+    """Drop buffers of sessions that went silent (client disconnected without Stop)."""
+    now = time.monotonic() if now is None else now
+    cutoff = now - settings.session_idle_seconds
+    stale = [
+        sid for sid in list(session_buffers)
+        if session_last_seen.get(sid, 0.0) < cutoff
+    ]
+    for sid in stale:
+        logger.info("evicting idle recitation session %s", sid)
+        drop_session(sid)
+    # Keep the auxiliary dicts consistent with the buffers.
+    for orphan in [sid for sid in list(session_last_seen) if sid not in session_buffers]:
+        session_last_seen.pop(orphan, None)
+    return len(stale)
 
 
 async def process_chunk(fields: dict[str, str]) -> dict | None:
@@ -191,14 +277,17 @@ async def process_chunk(fields: dict[str, str]) -> dict | None:
 
     event = fields.get("event", "audio")
     final = event == "stop"
-    buffer = session_buffers.setdefault(session_id, bytearray())
-
     if event == "audio":
         audio = decode_audio(fields.get("audio_b64", ""))
+        buffer = touch_session(session_id)
         buffer.extend(audio)
-        trim_buffer(buffer)
+        removed = trim_buffer(buffer)
+        if removed:
+            shift_session_offsets(session_id, removed)
     elif not final:
         return None
+    else:
+        buffer = session_buffers.get(session_id, bytearray())
 
     if not final:
         # Fast, non-final transcription so the client can highlight words
@@ -210,8 +299,8 @@ async def process_chunk(fields: dict[str, str]) -> dict | None:
         if len(buffer) - last_bytes < partial_interval_bytes():
             return None
         session_last_partial_bytes[session_id] = len(buffer)
-        transcription = transcribe(bytes(buffer), fast=True)
-        if not transcription.text:
+        text = await partial_transcript(session_id, buffer)
+        if not text:
             return None
         return {
             "type": "result",
@@ -221,13 +310,17 @@ async def process_chunk(fields: dict[str, str]) -> dict | None:
             "user_id": fields.get("user_id"),
             "surah": int(fields.get("surah") or 0),
             "ayah": int(fields.get("ayah") or 0),
-            "transcript": transcription.text,
-            "transcription": transcription.text,
+            "transcript": text,
+            "transcription": text,
             "errors": [],
             "score": 0,
         }
 
-    transcription = transcribe(bytes(buffer))
+    try:
+        transcription = await transcribe_async(bytes(buffer))
+    finally:
+        if final:
+            drop_session(session_id)
     transcript = transcription.text
     tajweed = check_tajweed(transcript, transcription)
     result = {
@@ -244,10 +337,42 @@ async def process_chunk(fields: dict[str, str]) -> dict | None:
         "errors": tajweed.get("issues", []),
         "score": tajweed.get("score", 0),
     }
-    if final:
-        session_buffers.pop(session_id, None)
-        session_last_partial_bytes.pop(session_id, None)
     return result
+
+
+def partial_window_bytes() -> int:
+    window = int(settings.partial_window_seconds * SAMPLE_RATE * SAMPLE_WIDTH_BYTES)
+    window -= window % SAMPLE_WIDTH_BYTES
+    return max(window, partial_interval_bytes(), SAMPLE_WIDTH_BYTES)
+
+
+async def partial_transcript(session_id: str, buffer: bytearray) -> str:
+    """Live transcript whose cost is bounded by the partial window.
+
+    Audio older than the window is transcribed exactly once, block by block,
+    and kept as a committed prefix so the client still receives the transcript
+    from the beginning of the recitation (it aligns words from the start).
+    """
+    window = partial_window_bytes()
+    committed_bytes, committed_text = session_committed.get(session_id, (0, ""))
+    while len(buffer) - committed_bytes > window:
+        block = bytes(buffer[committed_bytes : committed_bytes + window])
+        block_text = (await transcribe_async(block, fast=True)).text
+        committed_bytes += len(block)
+        committed_text = " ".join(part for part in (committed_text, block_text) if part)
+    session_committed[session_id] = (committed_bytes, committed_text)
+    tail = bytes(buffer[committed_bytes:])
+    tail_text = (await transcribe_async(tail, fast=True)).text if tail else ""
+    return " ".join(part for part in (committed_text, tail_text) if part).strip()
+
+
+def shift_session_offsets(session_id: str, removed: int) -> None:
+    """Adjust byte offsets after the oldest audio was trimmed from the buffer."""
+    if session_id in session_last_partial_bytes:
+        session_last_partial_bytes[session_id] = max(0, session_last_partial_bytes[session_id] - removed)
+    if session_id in session_committed:
+        committed_bytes, committed_text = session_committed[session_id]
+        session_committed[session_id] = (max(0, committed_bytes - removed), committed_text)
 
 
 def decode_audio(audio_b64: str) -> bytes:
@@ -272,10 +397,25 @@ def partial_interval_bytes() -> int:
     return int(settings.partial_interval_seconds * SAMPLE_RATE * SAMPLE_WIDTH_BYTES)
 
 
-def trim_buffer(buffer: bytearray) -> None:
+def trim_buffer(buffer: bytearray) -> int:
+    """Drop the oldest audio beyond the analysis limit; return bytes removed."""
     max_bytes = max_analysis_bytes()
     if len(buffer) > max_bytes:
-        del buffer[: len(buffer) - max_bytes]
+        removed = len(buffer) - max_bytes
+        del buffer[:removed]
+        return removed
+    return 0
+
+
+async def transcribe_async(audio: bytes, fast: bool = False) -> Transcription:
+    """Run the blocking Whisper transcription off the event loop."""
+    global _transcribe_semaphore
+    if model is None or not audio or len(audio) < 1600:
+        return Transcription("")
+    if _transcribe_semaphore is None:
+        _transcribe_semaphore = asyncio.Semaphore(max(1, settings.transcribe_concurrency))
+    async with _transcribe_semaphore:
+        return await asyncio.to_thread(transcribe, audio, fast)
 
 
 def transcribe(audio: bytes, fast: bool = False) -> Transcription:

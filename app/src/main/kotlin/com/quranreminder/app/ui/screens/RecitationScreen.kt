@@ -6,11 +6,16 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -22,19 +27,28 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -45,32 +59,47 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathMeasure
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.navigation.NavHostController
-import com.quranreminder.app.auth.SessionManager
 import com.quranreminder.app.recitation.RecitationClient
-import com.quranreminder.app.recitation.RecitationResult
-import com.quranreminder.app.ui.theme.NurColors
-import com.quranreminder.app.ui.theme.NurIconButton
+import com.quranreminder.app.ui.theme.LocalAppStrings
+import com.quranreminder.app.ui.theme.LocalNavBarPadding
+import com.quranreminder.app.ui.theme.NurDivider
 import com.quranreminder.app.ui.theme.NurPill
 import com.quranreminder.app.ui.theme.NurScreenHeader
+import com.quranreminder.app.ui.theme.NurSecondaryButton
 import com.quranreminder.app.ui.theme.NurSurfaceCard
+import com.quranreminder.app.ui.theme.nurColors
+import com.quranreminder.app.ui.theme.quranTextStyle
+import com.quranreminder.app.ui.theme.starPath
 import com.quranreminder.app.ui.theme.t
 import com.quranreminder.app.ui.viewmodel.QuranViewModel
+import com.quranreminder.app.recitation.RecitationResult
 
+@Suppress("UNUSED_PARAMETER")
 @Composable
 fun RecitationScreen(navController: NavHostController, quranViewModel: QuranViewModel) {
     val context = LocalContext.current
-    val token = remember { SessionManager(context).accessToken.orEmpty() }
-    val client = remember(token) { RecitationClient(token) }
+    val strings = LocalAppStrings.current
+    val client = remember(strings) { RecitationClient(context, strings) }
     var surah by remember { mutableStateOf("1") }
     var ayah by remember { mutableStateOf("1") }
     var fullSurah by remember { mutableStateOf(false) }
@@ -115,79 +144,186 @@ fun RecitationScreen(navController: NavHostController, quranViewModel: QuranView
     val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (granted) begin() else message = needPermissionStatus
     }
-    DisposableEffect(Unit) { onDispose { client.close() } }
+    DisposableEffect(client) { onDispose { client.close() } }
     LaunchedEffect(surah) { surah.toIntOrNull()?.let { quranViewModel.loadSurahVerses(it) } }
 
+    val surahName = surahVerses.firstOrNull()?.surahName.orEmpty()
+    val showAyah = targetWords.isNotEmpty() && (!fullSurah || recording || result != null)
+
+    val navBar = LocalNavBarPadding.current
+    val onRecordClick = {
+        if (recording) { client.stop(); message = analyzingStatus }
+        else if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) begin()
+        else permission.launch(Manifest.permission.RECORD_AUDIO)
+    }
+
     Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-        NurScreenHeader(
-            title = t("recitation.title"), eyebrow = t("recitation.eyebrow"),
-            leading = { NurIconButton(Icons.Default.ArrowBack, t("common.back"), onClick = { navController.popBackStack() }) }
-        )
+        NurScreenHeader(title = t("recitation.title"), eyebrow = t("recitation.eyebrow"))
+
+        // Scrolling content: intro, picker, the ayah being recited and the result.
         Column(
-            Modifier.padding(20.dp).fillMaxWidth(),
+            Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                // Soft fade where the scroll meets the pinned record area, instead of a hard cut.
+                .graphicsLayer { compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen }
+                .drawWithContent {
+                    drawContent()
+                    val fade = 28.dp.toPx()
+                    drawRect(
+                        androidx.compose.ui.graphics.Brush.verticalGradient(
+                            0f to androidx.compose.ui.graphics.Color.Black,
+                            ((size.height - fade) / size.height).coerceIn(0f, 1f) to androidx.compose.ui.graphics.Color.Black,
+                            1f to androidx.compose.ui.graphics.Color.Transparent
+                        ),
+                        blendMode = androidx.compose.ui.graphics.BlendMode.DstIn
+                    )
+                }
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp, vertical = 16.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(14.dp)
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             Text(
                 t("recitation.intro"),
-                style = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier.fillMaxWidth()
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp)
             )
-            OutlinedTextField(surah, { surah = it.filter(Char::isDigit).take(3) }, Modifier.fillMaxWidth(), label = { Text(t("recitation.surahNumber")) }, singleLine = true)
-            if (!fullSurah) {
-                OutlinedTextField(ayah, { ayah = it.filter(Char::isDigit).take(3) }, Modifier.fillMaxWidth(), label = { Text(t("recitation.ayahNumber")) }, singleLine = true)
-            }
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Column(Modifier.weight(1f)) {
-                    Text(t("recitation.fullSurah"), style = MaterialTheme.typography.titleSmall)
-                    Text(t("recitation.fullSurah.note"), style = MaterialTheme.typography.bodySmall)
+
+            PickerCard(
+                surah = surah,
+                onSurahChange = { surah = it.filter(Char::isDigit).take(3) },
+                ayah = ayah,
+                onAyahChange = { ayah = it.filter(Char::isDigit).take(3) },
+                // The ayah card's reference already names the surah whenever it is shown.
+                surahName = if (showAyah) "" else surahName,
+                fullSurah = fullSurah,
+                onFullSurahChange = { fullSurah = it },
+                enabled = !recording
+            )
+
+            if (showAyah) {
+                val reference = buildString {
+                    if (surahName.isNotBlank()) append(surahName).append(" · ")
+                    append(surah.toIntOrNull() ?: 1)
+                    if (!fullSurah) append(':').append(ayah.toIntOrNull() ?: 1)
                 }
-                Switch(checked = fullSurah, onCheckedChange = { fullSurah = it })
-            }
-
-            if (targetWords.isNotEmpty() && (recording || result != null)) {
-                AyahHighlightCard(words = targetWords, matchedCount = matchedWordCount)
-            }
-
-            Spacer(Modifier.height(4.dp))
-
-            if (result == null) {
-                RecordButton(
-                    recording = recording,
-                    onClick = {
-                        if (recording) { client.stop(); message = analyzingStatus }
-                        else if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) begin()
-                        else permission.launch(Manifest.permission.RECORD_AUDIO)
-                    }
-                )
-                Text(message, style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center)
+                AyahHighlightCard(words = targetWords, matchedCount = matchedWordCount, reference = reference)
             }
 
             result?.let { value ->
-                ScoreGauge(score = value.score)
-                NurSurfaceCard(Modifier.fillMaxWidth()) {
-                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text(t("recitation.transcriptLabel") + value.transcript.ifBlank { t("recitation.transcriptEmpty") })
-                        if (value.issues.isNotEmpty()) {
-                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                value.issues.forEach { NurPill(text = it, tone = NurColors.TerracottaSoft) }
-                            }
-                        }
-                    }
-                }
+                StarScoreGauge(score = value.score)
+                ResultCard(transcript = value.transcript, issues = value.issues)
+            }
+        }
+
+        // Pinned action area, always on screen and above the floating glass bar.
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = navBar + 8.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            if (result == null) {
+                RecordButton(recording = recording, onClick = onRecordClick)
                 Text(
+                    message,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = if (recording) MaterialTheme.colorScheme.onBackground else MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                    maxLines = 2,
+                    modifier = Modifier.padding(horizontal = 16.dp)
+                )
+            } else {
+                NurSecondaryButton(
                     text = t("recitation.retry"),
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable {
-                            result = null
-                            matchedWordCount = 0
-                            message = idleStatus
-                        }
-                        .padding(vertical = 10.dp),
-                    textAlign = TextAlign.Center
+                    icon = Icons.Default.Refresh,
+                    onClick = {
+                        result = null
+                        matchedWordCount = 0
+                        message = idleStatus
+                    },
+                    modifier = Modifier.padding(vertical = 8.dp)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun PickerCard(
+    surah: String,
+    onSurahChange: (String) -> Unit,
+    ayah: String,
+    onAyahChange: (String) -> Unit,
+    surahName: String,
+    fullSurah: Boolean,
+    onFullSurahChange: (Boolean) -> Unit,
+    enabled: Boolean
+) {
+    val c = nurColors
+    val fieldColors = OutlinedTextFieldDefaults.colors(
+        focusedBorderColor = c.ornament,
+        unfocusedBorderColor = c.frame,
+        focusedLabelColor = c.goldText,
+        cursorColor = MaterialTheme.colorScheme.primary
+    )
+    val numberKeyboard = KeyboardOptions(keyboardType = KeyboardType.Number)
+    NurSurfaceCard(Modifier.fillMaxWidth()) {
+        Column {
+            Column(Modifier.padding(start = 12.dp, end = 12.dp, top = 12.dp, bottom = 8.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    OutlinedTextField(
+                        value = surah,
+                        onValueChange = onSurahChange,
+                        modifier = Modifier.weight(1f),
+                        label = { Text(t("recitation.surahNumber"), maxLines = 1) },
+                        textStyle = MaterialTheme.typography.titleMedium,
+                        singleLine = true,
+                        enabled = enabled,
+                        keyboardOptions = numberKeyboard,
+                        shape = MaterialTheme.shapes.small,
+                        colors = fieldColors
+                    )
+                    OutlinedTextField(
+                        value = if (fullSurah) "" else ayah,
+                        onValueChange = onAyahChange,
+                        modifier = Modifier.weight(1f),
+                        label = { Text(t("recitation.ayahNumber"), maxLines = 1) },
+                        textStyle = MaterialTheme.typography.titleMedium,
+                        singleLine = true,
+                        enabled = enabled && !fullSurah,
+                        keyboardOptions = numberKeyboard,
+                        shape = MaterialTheme.shapes.small,
+                        colors = fieldColors
+                    )
+                }
+                if (surahName.isNotBlank()) {
+                    Spacer(Modifier.height(6.dp))
+                    Text(surahName, style = MaterialTheme.typography.labelLarge, color = c.goldText, modifier = Modifier.padding(start = 4.dp))
+                }
+            }
+            NurDivider()
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 48.dp)
+                    .clickable(enabled = enabled, role = Role.Switch) { onFullSurahChange(!fullSurah) }
+                    .padding(horizontal = 16.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text(t("recitation.fullSurah"), style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurface)
+                    Text(t("recitation.fullSurah.note"), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Switch(
+                    checked = fullSurah,
+                    onCheckedChange = onFullSurahChange,
+                    enabled = enabled,
+                    colors = SwitchDefaults.colors(checkedTrackColor = MaterialTheme.colorScheme.primary)
                 )
             }
         }
@@ -220,46 +356,71 @@ private fun matchArabicWords(transcript: String, targetWords: List<String>): Int
     return matched
 }
 
+/**
+ * The ayah being recited, in the same gold double frame as the ayah card. Words already
+ * recited turn gold, the next word is in the primary color, the rest wait muted.
+ */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun AyahHighlightCard(words: List<String>, matchedCount: Int) {
-    NurSurfaceCard(Modifier.fillMaxWidth()) {
-        FlowRow(
-            modifier = Modifier.fillMaxWidth().padding(16.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+private fun AyahHighlightCard(words: List<String>, matchedCount: Int, reference: String) {
+    val c = nurColors
+    val muted = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+    NurSurfaceCard(Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.large) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .padding(6.dp)
+                .border(BorderStroke(1.dp, c.frame), RoundedCornerShape(18.dp))
+                .drawBehind {
+                    val r = 5.dp.toPx()
+                    val k = 14.dp.toPx()
+                    listOf(
+                        Offset(k, k), Offset(size.width - k, k),
+                        Offset(k, size.height - k), Offset(size.width - k, size.height - k)
+                    ).forEach { drawPath(starPath(it, r), c.ornament) }
+                }
+                .padding(horizontal = 22.dp, vertical = 20.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            words.forEachIndexed { index, word ->
-                val isMatched = index < matchedCount
-                val isCurrent = index == matchedCount
-                Text(
-                    text = word,
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Normal,
-                    color = when {
-                        isMatched -> NurColors.Gold
-                        isCurrent -> MaterialTheme.colorScheme.onSurface
-                        else -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.32f)
+            // Arabic reads right to left: lay the words out RTL so the first word sits at the right.
+            CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
+                    words.forEachIndexed { index, word ->
+                        Text(
+                            text = word,
+                            style = quranTextStyle(28),
+                            color = when {
+                                index < matchedCount -> c.goldText
+                                index == matchedCount -> MaterialTheme.colorScheme.primary
+                                else -> muted
+                            }
+                        )
                     }
-                )
+                }
             }
+            Text(reference, style = MaterialTheme.typography.labelLarge, color = c.goldText)
         }
     }
 }
 
 @Composable
 private fun RecordButton(recording: Boolean, onClick: () -> Unit) {
+    val c = nurColors
     val infinite = rememberInfiniteTransition(label = "record")
     val ringScale by infinite.animateFloat(
-        initialValue = 0.9f,
-        targetValue = 1.4f,
-        animationSpec = infiniteRepeatable(animation = tween(1400, easing = LinearEasing)),
+        initialValue = 0.82f,
+        targetValue = 1.12f,
+        animationSpec = infiniteRepeatable(animation = tween(1600, easing = LinearEasing)),
         label = "ringScale"
     )
     val ringAlpha by infinite.animateFloat(
-        initialValue = 0.5f,
+        initialValue = 0.9f,
         targetValue = 0f,
-        animationSpec = infiniteRepeatable(animation = tween(1400, easing = LinearEasing)),
+        animationSpec = infiniteRepeatable(animation = tween(1600, easing = LinearEasing)),
         label = "ringAlpha"
     )
     val pulse by infinite.animateFloat(
@@ -267,71 +428,121 @@ private fun RecordButton(recording: Boolean, onClick: () -> Unit) {
         targetValue = 1.03f,
         animationSpec = infiniteRepeatable(
             animation = tween(700, easing = FastOutSlowInEasing),
-            repeatMode = androidx.compose.animation.core.RepeatMode.Reverse
+            repeatMode = RepeatMode.Reverse
         ),
         label = "pulse"
     )
+    val container = if (recording) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
+    val content = if (recording) MaterialTheme.colorScheme.onError else MaterialTheme.colorScheme.onPrimary
+    val description = if (recording) t("recitation.stop") else t("recitation.start")
 
-    Box(modifier = Modifier.size(140.dp), contentAlignment = Alignment.Center) {
-        if (recording) {
-            Box(
-                modifier = Modifier
-                    .size(88.dp)
-                    .graphicsLayer { scaleX = ringScale; scaleY = ringScale; alpha = ringAlpha }
-                    .drawBehind {
-                        drawCircle(color = NurColors.Gold, style = Stroke(width = 3.dp.toPx()))
-                    }
+    Box(modifier = Modifier.size(144.dp), contentAlignment = Alignment.Center) {
+        // Resting gold star keyline around the button; it pulses outward while recording.
+        Canvas(
+            Modifier
+                .size(144.dp)
+                .graphicsLayer {
+                    val s = if (recording) ringScale else 0.82f
+                    scaleX = s; scaleY = s
+                    alpha = if (recording) ringAlpha else 0.9f
+                }
+        ) {
+            drawPath(
+                starPath(center, size.minDimension / 2f - 2.dp.toPx(), size.minDimension / 2f * 0.84f),
+                c.ornament,
+                style = Stroke(1.5.dp.toPx(), join = StrokeJoin.Round)
             )
         }
         Box(
             modifier = Modifier
                 .size(88.dp)
                 .graphicsLayer { scaleX = if (recording) pulse else 1f; scaleY = if (recording) pulse else 1f }
-                .background(MaterialTheme.colorScheme.secondary, CircleShape)
-                .clickable(onClick = onClick),
+                .clip(CircleShape)
+                .background(container)
+                .clickable(role = Role.Button, onClickLabel = description, onClick = onClick)
+                .semantics { contentDescription = description },
             contentAlignment = Alignment.Center
         ) {
             Icon(
                 imageVector = if (recording) Icons.Default.Stop else Icons.Default.Mic,
-                contentDescription = if (recording) "To'xtatish" else "Yozib olishni boshlash",
-                tint = MaterialTheme.colorScheme.onSecondary,
-                modifier = Modifier.size(34.dp)
+                contentDescription = null,
+                tint = content,
+                modifier = Modifier.size(40.dp)
             )
         }
     }
 }
 
+/** Score drawn as an eight-point star whose gold outline fills in proportion to the score. */
 @Composable
-private fun ScoreGauge(score: Int) {
-    val trackColor = MaterialTheme.colorScheme.surfaceVariant
-    val progressColor = MaterialTheme.colorScheme.secondary
-    val textColor = MaterialTheme.colorScheme.onBackground
-    Box(modifier = Modifier.size(140.dp), contentAlignment = Alignment.Center) {
-        androidx.compose.foundation.Canvas(modifier = Modifier.size(140.dp)) {
-            val strokeWidth = 10.dp.toPx()
-            drawArc(
-                color = trackColor,
-                startAngle = -90f,
-                sweepAngle = 360f,
-                useCenter = false,
-                style = Stroke(width = strokeWidth),
-                size = Size(size.width - strokeWidth, size.height - strokeWidth),
-                topLeft = androidx.compose.ui.geometry.Offset(strokeWidth / 2, strokeWidth / 2)
-            )
-            drawArc(
-                color = progressColor,
-                startAngle = -90f,
-                sweepAngle = 360f * (score.coerceIn(0, 100) / 100f),
-                useCenter = false,
-                style = Stroke(width = strokeWidth, cap = androidx.compose.ui.graphics.StrokeCap.Round),
-                size = Size(size.width - strokeWidth, size.height - strokeWidth),
-                topLeft = androidx.compose.ui.geometry.Offset(strokeWidth / 2, strokeWidth / 2)
-            )
+private fun StarScoreGauge(score: Int) {
+    val c = nurColors
+    val clamped = score.coerceIn(0, 100)
+    val progress by animateFloatAsState(targetValue = clamped / 100f, animationSpec = tween(900), label = "score")
+    val track = MaterialTheme.colorScheme.outlineVariant
+    val fill = MaterialTheme.colorScheme.primaryContainer
+    val label = t("recitation.scoreLabel")
+    Box(
+        modifier = Modifier
+            .size(188.dp)
+            .semantics { contentDescription = "$label: $clamped%" },
+        contentAlignment = Alignment.Center
+    ) {
+        Canvas(Modifier.size(188.dp)) {
+            val stroke = 7.dp.toPx()
+            val outer = size.minDimension / 2f - stroke
+            val star = starPath(center, outer, outer * 0.8f)
+            drawPath(star, fill)
+            drawPath(star, track, style = Stroke(stroke, join = StrokeJoin.Round))
+            val measure = PathMeasure().apply { setPath(star, false) }
+            val segment = Path()
+            measure.getSegment(0f, measure.length * progress, segment, true)
+            drawPath(segment, c.ornament, style = Stroke(stroke, cap = StrokeCap.Round, join = StrokeJoin.Round))
         }
-        Text(
-            text = "$score%",
-            style = MaterialTheme.typography.headlineSmall,
-            color = textColor
-        )
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text("$clamped%", style = MaterialTheme.typography.displaySmall, color = MaterialTheme.colorScheme.onPrimaryContainer)
+            Text(label, style = MaterialTheme.typography.labelMedium, color = c.goldText)
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun ResultCard(transcript: String, issues: List<String>) {
+    NurSurfaceCard(Modifier.fillMaxWidth()) {
+        Column {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(t("recitation.transcriptTitle"), style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
+                if (transcript.isBlank()) {
+                    Text(t("recitation.transcriptEmpty"), style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                } else {
+                    Text(
+                        transcript,
+                        style = quranTextStyle(22),
+                        color = MaterialTheme.colorScheme.onSurface,
+                        textAlign = TextAlign.Right,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            }
+            if (issues.isNotEmpty()) {
+                NurDivider()
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(t("recitation.issuesTitle"), style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        issues.forEach {
+                            NurPill(
+                                text = it,
+                                tone = MaterialTheme.colorScheme.errorContainer,
+                                contentColor = MaterialTheme.colorScheme.onErrorContainer
+                            )
+                        }
+                    }
+                }
+            }
+        }
     }
 }
