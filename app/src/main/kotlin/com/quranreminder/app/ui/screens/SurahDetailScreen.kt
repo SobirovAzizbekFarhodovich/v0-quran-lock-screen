@@ -85,8 +85,6 @@ fun SurahDetailScreen(
     val loadingText = t("surahDetail.loading")
     val eyebrowFallbackText = t("surahDetail.eyebrowFallback")
     val backText = t("common.back")
-    val lockScreenSelectedText = t("surahDetail.lockScreenSelected")
-    val lockScreenFailedText = t("surahDetail.lockScreenFailed")
     val shareFailedText = t("surahDetail.shareFailed")
     val ayahPrefixText = t("surahDetail.ayahPrefix")
     val shareImageDesc = t("surahDetail.shareImage")
@@ -164,16 +162,9 @@ fun SurahDetailScreen(
                     isBookmarked = isBookmarked,
                     onBookmarkClick = { viewModel.toggleBookmark(verse.surahNumber, verse.ayahNumber) },
                     onLockScreenClick = {
-                        scope.launch {
-                            runCatching {
-                                LockScreenWallpaperApplier.saveSelectedVerse(context, verse)
-                                LockScreenWallpaperApplier.apply(context, verse, rememberForHour = true)
-                            }.onSuccess {
-                                Toast.makeText(context, lockScreenSelectedText, Toast.LENGTH_SHORT).show()
-                            }.onFailure {
-                                Toast.makeText(context, lockScreenFailedText, Toast.LENGTH_SHORT).show()
-                            }
-                        }
+                        // Open the lock-screen page on this ayah to choose background and font;
+                        // it is saved only when the user presses apply there.
+                        navController.navigate("lock_preview?surah=${verse.surahNumber}&ayah=${verse.ayahNumber}")
                     },
                     onShareClick = {
                         scope.launch {

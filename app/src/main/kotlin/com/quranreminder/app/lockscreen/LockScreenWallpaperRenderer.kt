@@ -5,6 +5,10 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
+import com.quranreminder.app.R
+import androidx.core.content.res.ResourcesCompat
+import android.graphics.Typeface
+import android.graphics.BlurMaskFilter
 import android.graphics.Color
 import android.graphics.LinearGradient
 import android.graphics.Paint
@@ -147,208 +151,190 @@ object LockScreenWallpaperRenderer {
         canvas.drawBitmap(bitmap, src, dest, Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG))
     }
 
+    /**
+     * Just the verse layer (transparent background) at [width] x [height], exactly as [render]
+     * draws it — the lock-screen preview cards show this so the preview is what gets applied.
+     */
+    fun renderTextOverlay(context: Context, verse: QuranVerse, width: Int, height: Int): Bitmap {
+        val bitmap = Bitmap.createBitmap(width.coerceAtLeast(1), height.coerceAtLeast(1), Bitmap.Config.ARGB_8888)
+        drawContent(Canvas(bitmap), bitmap.width, bitmap.height, verse, context)
+        return bitmap
+    }
+
+    private val Cream = Color.rgb(251, 247, 238)
+    private val Gold = Color.rgb(230, 204, 126)
+
+    private fun golos(context: Context, weight: Int): Typeface {
+        val base = ResourcesCompat.getFont(context, R.font.golos_text) ?: return Typeface.DEFAULT
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) Typeface.create(base, weight, false) else base
+    }
+
+    /**
+     * The verse, centred between the clock and the bottom controls: the Arabic ayah (short and
+     * medium ayahs only), a small gold star between hairlines, the full translation, and the
+     * reference in gold. The translation is never cut: when it is long the Arabic is left out
+     * and the text size steps down until everything fits.
+     */
     private fun drawContent(canvas: Canvas, width: Int, height: Int, verse: QuranVerse, context: Context) {
-        val safe = calculateSafeTextArea(width, height)
         val selectedLang = LockScreenWallpaperApplier.getLockScreenLanguage(context)
         val selectedFont = LockScreenWallpaperApplier.getLockScreenFont(context)
 
-        var rawTranslation = cleanTranslation(verse.translation)
+        var translation = LockScreenText.cleanTranslation(verse.translation)
         var surahTitle = verse.surahName
-
         if (selectedLang == "uz_latin" || selectedLang == "uz") {
-            rawTranslation = CyrillicToLatinConverter.convert(rawTranslation)
+            translation = CyrillicToLatinConverter.convert(translation)
             surahTitle = CyrillicToLatinConverter.convert(surahTitle)
         }
-
-        rawTranslation = FancyTextConverter.convert(rawTranslation, selectedFont)
+        translation = FancyTextConverter.convert(translation, selectedFont)
         surahTitle = FancyTextConverter.convert(surahTitle, selectedFont)
+        val arabic = verse.ayahTextArabic.trim()
 
-        val translation = rawTranslation
-        val panelPadding = (width * 0.052f).coerceAtLeast(18f)
-        val contentWidth = (safe.width() - panelPadding * 2).toInt()
-        val maxTextHeight = safe.height() - panelPadding * 2
+        val textFace = when (selectedFont) {
+            LockScreenFontFamily.STANDART -> golos(context, 500)
+            LockScreenFontFamily.KLASSIK -> ResourcesCompat.getFont(context, R.font.pt_serif_regular) ?: Typeface.SERIF
+            else -> selectedFont.typeface
+        }
+        val arabicFace = ResourcesCompat.getFont(context, R.font.amiri_quran) ?: Typeface.SERIF
+        val shadowRadius = width * 0.007f
+        val shadowDy = width * 0.0025f
 
-        val titlePaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.WHITE
-            textSize = chooseTitleTextSize(width)
-            typeface = android.graphics.Typeface.create(selectedFont.typeface, android.graphics.Typeface.BOLD)
-            letterSpacing = 0f
-            setShadowLayer(width * 0.012f, 0f, width * 0.004f, Color.argb(170, 0, 0, 0))
+        val arabicPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+            typeface = arabicFace
+            color = Cream
+            textSize = width * 0.058f
+            setShadowLayer(shadowRadius, 0f, shadowDy, Color.argb(160, 0, 0, 0))
         }
         val translationPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.WHITE
-            textSize = chooseTranslationTextSize(width, translation.length)
-            typeface = selectedFont.typeface
-            isFakeBoldText = true
-            letterSpacing = 0f
-            setShadowLayer(width * 0.013f, 0f, width * 0.005f, Color.argb(185, 0, 0, 0))
+            typeface = textFace
+            color = Cream
+            setShadowLayer(shadowRadius, 0f, shadowDy, Color.argb(160, 0, 0, 0))
+        }
+        val referencePaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+            typeface = golos(context, 600)
+            color = Gold
+            textSize = width * 0.028f
+            letterSpacing = 0.12f
+            setShadowLayer(shadowRadius, 0f, shadowDy, Color.argb(140, 0, 0, 0))
         }
 
-        val title = "$surahTitle ${verse.surahNumber}:${verse.ayahNumber}"
-        fitContentToSafeArea(
-            title = title,
-            titlePaint = titlePaint,
-            translation = translation,
-            translationPaint = translationPaint,
-            width = contentWidth,
-            maxHeight = maxTextHeight
-        )
-        var y = safe.top + panelPadding
-        y += drawWrappedText(
-            canvas = canvas,
-            text = title,
-            paint = titlePaint,
-            x = safe.left,
-            y = y,
-            width = contentWidth,
-            alignment = Layout.Alignment.ALIGN_NORMAL,
-            maxLines = Int.MAX_VALUE
-        )
-        y += (width * 0.012f).coerceAtLeast(6f)
-        drawWrappedText(
-            canvas = canvas,
-            text = translation,
-            paint = translationPaint,
-            x = safe.left,
-            y = y,
-            width = contentWidth,
-            alignment = Layout.Alignment.ALIGN_NORMAL,
-            maxLines = Int.MAX_VALUE
-        )
-    }
+        // Between the system clock (top ~27%) and the bottom shortcuts (~80%).
+        val area = RectF(width * 0.08f, height * 0.30f, width * 0.92f, height * 0.80f)
+        val textWidth = area.width().toInt()
+        val ornamentGap = width * 0.075f
+        val referenceGap = width * 0.035f
+        val reference = "${surahTitle.uppercase()}  ·  ${verse.surahNumber}:${verse.ayahNumber}"
+        val referenceLayout = buildLayout(reference, referencePaint, textWidth, Layout.Alignment.ALIGN_CENTER, 1f)
 
-    /** A calm, centered translucent panel keeps the verse readable over any wallpaper. */
-    private fun drawVersePanel(canvas: Canvas, safe: RectF, width: Int) {
-        val radius = (width * 0.065f).coerceAtLeast(28f)
-        val shadow = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.argb(92, 0, 0, 0)
-            setShadowLayer(width * 0.026f, 0f, width * 0.012f, Color.argb(130, 0, 0, 0))
-        }
-        canvas.drawRoundRect(safe, radius, radius, shadow)
-        shadow.clearShadowLayer()
-
-        val border = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            style = Paint.Style.STROKE
-            strokeWidth = (width * 0.0035f).coerceAtLeast(2f)
-            color = Color.argb(175, 216, 192, 119)
-        }
-        canvas.drawRoundRect(safe, radius, radius, border)
-
-        val accent = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.rgb(216, 192, 119)
-            strokeWidth = (width * 0.008f).coerceAtLeast(4f)
-            strokeCap = Paint.Cap.ROUND
-        }
-        val accentWidth = safe.width() * 0.22f
-        canvas.drawLine(
-            safe.centerX() - accentWidth / 2,
-            safe.top + width * 0.035f,
-            safe.centerX() + accentWidth / 2,
-            safe.top + width * 0.035f,
-            accent
-        )
-    }
-
-    private fun calculateSafeTextArea(width: Int, height: Int): RectF {
-        val aspectRatio = height.toFloat() / width.toFloat()
-        val horizontalInset = when {
-            aspectRatio >= 2.1f -> width * 0.145f
-            aspectRatio >= 1.85f -> width * 0.13f
-            else -> width * 0.12f
-        }
-        val top = when {
-            aspectRatio >= 2.1f -> height * 0.305f
-            aspectRatio >= 1.85f -> height * 0.295f
-            else -> height * 0.27f
-        }
-        val bottom = height * 0.76f
-        return RectF(
-            horizontalInset,
-            top,
-            width - horizontalInset,
-            bottom
-        )
-    }
-
-    private fun chooseTitleTextSize(width: Int): Float {
-        return (width * 0.040f).coerceIn(19f, 44f)
-    }
-
-    private fun chooseTranslationTextSize(width: Int, length: Int): Float {
-        val ratio = when {
-            length <= 95 -> 0.038f
-            length <= 170 -> 0.034f
-            length <= 280 -> 0.029f
-            length <= 420 -> 0.025f
-            length <= 700 -> 0.021f
-            else -> 0.018f
-        }
-        return (width * ratio).coerceIn(14f, 42f)
-    }
-
-    private fun fitContentToSafeArea(
-        title: String,
-        titlePaint: TextPaint,
-        translation: String,
-        translationPaint: TextPaint,
-        width: Int,
-        maxHeight: Float
-    ) {
-        val minTitleSize = (width * 0.032f).coerceAtMost(22f).coerceAtLeast(12f)
-        val minTranslationSize = (width * 0.018f).coerceAtMost(15f).coerceAtLeast(8.5f)
-        val gap = (width * 0.014f).coerceAtLeast(6f)
-
-        repeat(44) {
-            val titleLayout = buildLayout(title, titlePaint, width, Int.MAX_VALUE)
-            val translationLayout = buildLayout(translation, translationPaint, width, Int.MAX_VALUE)
-            if (titleLayout.height + gap + translationLayout.height <= maxHeight) {
-                return
+        var withArabic = LockScreenText.showArabic(arabic, translation)
+        var arabicLayout: StaticLayout? = null
+        var translationLayout: StaticLayout
+        var total: Float
+        var size = width * 0.046f
+        while (true) {
+            translationPaint.textSize = size
+            translationLayout = buildLayout(translation, translationPaint, textWidth, Layout.Alignment.ALIGN_CENTER, 1.18f)
+            arabicLayout = if (withArabic) buildLayout(arabic, arabicPaint, textWidth, Layout.Alignment.ALIGN_CENTER, 1.12f) else null
+            total = (arabicLayout?.height?.toFloat()?.plus(ornamentGap) ?: 0f) +
+                translationLayout.height + referenceGap + referenceLayout.height
+            if (total <= area.height()) break
+            if (withArabic && size <= width * 0.034f) {
+                // Not enough room for both: the translation matters more on the lock screen.
+                withArabic = false
+                size = width * 0.046f
+                continue
             }
-
-            if (translationPaint.textSize > minTranslationSize) {
-                translationPaint.textSize *= 0.92f
-            } else if (titlePaint.textSize > minTitleSize) {
-                titlePaint.textSize *= 0.94f
-            } else {
-                return
-            }
+            if (size <= width * 0.020f) break
+            size -= width * 0.002f
         }
+
+        val top = (area.centerY() - total / 2f).coerceAtLeast(area.top)
+        // A soft dark veil behind the block keeps it readable over any photo.
+        val veil = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.argb(105, 4, 20, 16)
+            maskFilter = BlurMaskFilter(width * 0.06f, BlurMaskFilter.Blur.NORMAL)
+        }
+        val padX = width * 0.03f
+        val padY = width * 0.07f
+        canvas.drawRoundRect(
+            RectF(area.left - padX, top - padY, area.right + padX, top + total + padY),
+            width * 0.08f, width * 0.08f, veil
+        )
+
+        var y = top
+        arabicLayout?.let {
+            drawLayout(canvas, it, area.left, y)
+            y += it.height
+            drawOrnament(canvas, area.centerX(), y + ornamentGap / 2f, width)
+            y += ornamentGap
+        }
+        drawLayout(canvas, translationLayout, area.left, y)
+        y += translationLayout.height + referenceGap
+        drawLayout(canvas, referenceLayout, area.left, y)
     }
 
-    private fun drawWrappedText(
-        canvas: Canvas,
-        text: String,
-        paint: TextPaint,
-        x: Float,
-        y: Float,
-        width: Int,
-        alignment: Layout.Alignment,
-        maxLines: Int
-    ): Float {
-        val layout = buildLayout(text, paint, width, maxLines, alignment)
+    /** Hairline – eight-point star – hairline, in gold. */
+    private fun drawOrnament(canvas: Canvas, cx: Float, cy: Float, width: Int) {
+        val gold = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Gold
+            strokeWidth = (width * 0.002f).coerceAtLeast(1.5f)
+            alpha = 190
+        }
+        val outer = width * 0.012f
+        val lineLen = width * 0.09f
+        canvas.drawLine(cx - outer * 2.2f - lineLen, cy, cx - outer * 2.2f, cy, gold)
+        canvas.drawLine(cx + outer * 2.2f, cy, cx + outer * 2.2f + lineLen, cy, gold)
+        val star = android.graphics.Path()
+        for (i in 0 until 16) {
+            val r = if (i % 2 == 0) outer else outer * 0.62f
+            val a = -Math.PI / 2 + i * Math.PI / 8
+            val x = cx + (r * Math.cos(a)).toFloat()
+            val yy = cy + (r * Math.sin(a)).toFloat()
+            if (i == 0) star.moveTo(x, yy) else star.lineTo(x, yy)
+        }
+        star.close()
+        gold.alpha = 255
+        gold.style = Paint.Style.FILL
+        canvas.drawPath(star, gold)
+    }
+
+    private fun drawLayout(canvas: Canvas, layout: StaticLayout, x: Float, y: Float) {
         canvas.save()
         canvas.translate(x, y)
         layout.draw(canvas)
         canvas.restore()
-        return layout.height.toFloat()
     }
 
     private fun buildLayout(
         text: String,
         paint: TextPaint,
         width: Int,
-        maxLines: Int,
-        alignment: Layout.Alignment = Layout.Alignment.ALIGN_NORMAL
-    ): StaticLayout {
-        return StaticLayout.Builder.obtain(text, 0, text.length, paint, width)
-            .setAlignment(alignment)
-            .setLineSpacing(0f, 1.01f)
-            .setMaxLines(maxLines)
-            .setIncludePad(false)
-            .build()
-    }
+        alignment: Layout.Alignment,
+        spacingMultiplier: Float
+    ): StaticLayout = StaticLayout.Builder.obtain(text, 0, text.length, paint, width.coerceAtLeast(1))
+        .setAlignment(alignment)
+        .setLineSpacing(0f, spacingMultiplier)
+        .setIncludePad(false)
+        .build()
+}
 
-    private fun cleanTranslation(text: String): String {
-        return text.replace(Regex("\\s*\\[[^]]+\\]"), "").trim()
-    }
+/** What the lock screen shows of a verse; shared by the renderer and the verse selector. */
+internal object LockScreenText {
+    /** Auto-picked hourly verses longer than this (cleaned translation) are skipped when possible. */
+    const val COMFORTABLE_LENGTH = 300
+
+    /**
+     * Drops bracketed editorial notes and long parenthetical commentary — "(Ya'ni, …)" — which
+     * explain the ayah rather than translate it. Short inline parentheses such as "(ketgani)"
+     * are part of the sentence and stay, so the meaning is never cut.
+     */
+    fun cleanTranslation(text: String): String = text
+        .replace(Regex("\\s*\\[[^]]+\\]"), "")
+        // One level of nesting: "(… Ikkovi(ayol)dan …)" is still a single commentary note.
+        .replace(Regex("\\s*\\((?:[^()]|\\([^()]*\\))*\\)")) { if (it.value.trim().length >= 60) "" else it.value }
+        .replace(Regex("\\s{2,}"), " ")
+        .trim()
+
+    /** The Arabic is shown only for short and medium ayahs; long ones get the translation alone. */
+    fun showArabic(arabic: String, cleanedTranslation: String): Boolean =
+        arabic.isNotBlank() && arabic.length <= 110 && cleanedTranslation.length <= 200
 }

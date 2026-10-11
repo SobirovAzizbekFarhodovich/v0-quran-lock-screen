@@ -69,7 +69,7 @@ sealed class WallpaperOption {
 
 @OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 @Composable
-fun LockScreenPreviewScreen(navController: NavHostController) {
+fun LockScreenPreviewScreen(navController: NavHostController, surah: Int = -1, ayah: Int = -1) {
     // The preview is an immersive, always-dark stage for the wallpaper, in both app themes.
     QuranReminderTheme(darkTheme = true) {
         val context = LocalContext.current
@@ -157,7 +157,9 @@ fun LockScreenPreviewScreen(navController: NavHostController) {
         LaunchedEffect(refreshKey) {
             withContext(Dispatchers.IO) {
                 val database = QuranDatabase.getDatabase(context)
-                val selectedVerse = LockScreenVerseSelector.select(context, database)
+                // An ayah opened from the reader is only previewed here, not saved yet.
+                val selectedVerse = (if (surah > 0 && ayah > 0) database.quranVerseDao().getVerseOnce(surah, ayah) else null)
+                    ?: LockScreenVerseSelector.select(context, database)
             
                 val downloadMap = LockScreenBackgroundManager.remoteSamples.associate {
                     it.id to LockScreenBackgroundManager.isRemoteSampleDownloaded(context, it)
@@ -377,6 +379,7 @@ fun LockScreenPreviewScreen(navController: NavHostController) {
                             val selected = verse ?: return@NurPrimaryButton
                             isWorking = true
                             // The choice is saved only now, on apply.
+                            if (surah > 0 && ayah > 0) LockScreenWallpaperApplier.saveSelectedVerse(context, selected)
                             if (!customChosen) {
                                 when (val option = allOptions.getOrNull(pagerState.currentPage)) {
                                     is WallpaperOption.Local -> LockScreenBackgroundManager.setSample(context, option.sample)
@@ -525,60 +528,23 @@ fun WallpaperFullScreenItem(
                 1.0f to Color.Black.copy(alpha = 0.28f)
             )))
             
-            // Draw Verse with Compose UI using BoxWithConstraints for proportional scaling
+            // The verse layer is drawn by the wallpaper renderer itself, at this card's size, so
+            // the preview is exactly what "apply" puts on the lock screen.
             BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-                val cardWidth = maxWidth
-                val cardHeight = maxHeight
-                
-                // Match renderer's safe area calculations proportionally
-                val topPadding = cardHeight * 0.27f
-                val horizontalPadding = cardWidth * 0.12f
-                
-                // Scale font size proportionally to the card's width
-                val titleFontSize = (cardWidth.value * 0.05f).sp 
-                val translationFontSize = (cardWidth.value * 0.038f).sp
-
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(top = topPadding, start = horizontalPadding, end = horizontalPadding)
-                ) {
-                    var cleanTranslation = verse.translation.replace(Regex("\\[[^\\]]+\\]"), "").trim()
-                    var surahTitle = verse.surahName
-
-                    val selectedLang = LockScreenWallpaperApplier.getLockScreenLanguage(context)
-                    if (selectedLang == "uz_latin" || selectedLang == "uz") {
-                        cleanTranslation = com.quranreminder.app.lockscreen.CyrillicToLatinConverter.convert(cleanTranslation)
-                        surahTitle = com.quranreminder.app.lockscreen.CyrillicToLatinConverter.convert(surahTitle)
+                val density = androidx.compose.ui.platform.LocalDensity.current
+                val wPx = with(density) { maxWidth.roundToPx() }
+                val hPx = with(density) { maxHeight.roundToPx() }
+                val language = LockScreenWallpaperApplier.getLockScreenLanguage(context)
+                val overlay by produceState<androidx.compose.ui.graphics.ImageBitmap?>(null, verse, selectedFont, language, wPx, hPx) {
+                    value = withContext(Dispatchers.Default) {
+                        runCatching {
+                            com.quranreminder.app.lockscreen.LockScreenWallpaperRenderer
+                                .renderTextOverlay(context, verse, wPx, hPx)
+                                .asImageBitmap()
+                        }.getOrNull()
                     }
-
-                    cleanTranslation = com.quranreminder.app.lockscreen.FancyTextConverter.convert(cleanTranslation, selectedFont)
-                    surahTitle = com.quranreminder.app.lockscreen.FancyTextConverter.convert(surahTitle, selectedFont)
-
-                    val title = "$surahTitle ${verse.surahNumber}:${verse.ayahNumber}"
-                    
-                    Text(
-                        text = title,
-                        style = androidx.compose.ui.text.TextStyle(
-                            color = Color.White,
-                            fontSize = titleFontSize,
-                            fontWeight = FontWeight.Bold,
-                            fontFamily = selectedFont.composeFontFamily,
-                            shadow = androidx.compose.ui.graphics.Shadow(color = Color.Black.copy(alpha = 0.67f), offset = androidx.compose.ui.geometry.Offset(3f, 3f), blurRadius = 6f)
-                        )
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = cleanTranslation,
-                        style = androidx.compose.ui.text.TextStyle(
-                            color = Color.White,
-                            fontSize = translationFontSize,
-                            fontWeight = FontWeight.SemiBold,
-                            fontFamily = selectedFont.composeFontFamily,
-                            shadow = androidx.compose.ui.graphics.Shadow(color = Color.Black.copy(alpha = 0.73f), offset = androidx.compose.ui.geometry.Offset(4f, 4f), blurRadius = 8f)
-                        )
-                    )
                 }
+                overlay?.let { Image(bitmap = it, contentDescription = null, modifier = Modifier.fillMaxSize()) }
             }
         }
     }

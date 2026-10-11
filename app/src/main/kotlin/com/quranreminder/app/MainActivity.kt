@@ -425,8 +425,18 @@ fun AppNavigation(
                 session = sessionManager
             )
         }
-        composable("lock_preview") {
-            LockScreenPreviewScreen(navController = navController)
+        composable(
+            "lock_preview?surah={surah}&ayah={ayah}",
+            arguments = listOf(
+                navArgument("surah") { type = NavType.IntType; defaultValue = -1 },
+                navArgument("ayah") { type = NavType.IntType; defaultValue = -1 }
+            )
+        ) { entry ->
+            LockScreenPreviewScreen(
+                navController = navController,
+                surah = entry.arguments?.getInt("surah") ?: -1,
+                ayah = entry.arguments?.getInt("ayah") ?: -1
+            )
         }
         composable("tadabbur_chat") {
             TadabburChatScreen(

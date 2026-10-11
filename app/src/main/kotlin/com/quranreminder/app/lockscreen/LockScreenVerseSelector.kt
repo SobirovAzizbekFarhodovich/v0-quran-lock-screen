@@ -43,6 +43,10 @@ object LockScreenVerseSelector {
                 .firstNotNullOfOrNull { (surah, ayah) -> dao.getVerseOnce(surah, ayah) }
             val newVerse = curated ?: dao.getAllVersesOnce()
                 .filter { verse -> selectedCategory.matches(verse.translation) }
+                .let { matches ->
+                    matches.filter { LockScreenText.cleanTranslation(it.translation).length <= LockScreenText.COMFORTABLE_LENGTH }
+                        .ifEmpty { matches }
+                }
                 .randomOrNull()
             if (newVerse != null) {
                 LockScreenWallpaperApplier.rememberHourlyVerse(context, newVerse)
@@ -50,7 +54,19 @@ object LockScreenVerseSelector {
             }
         }
 
-        return database.quranVerseDao().getRandomVerse()?.also { newVerse ->
+        // Prefer an ayah that reads comfortably at a glance; a long one is still shown in full
+        // when nothing shorter turns up (and always when the user picks it themselves).
+        val dao = database.quranVerseDao()
+        var fallback: QuranVerse? = null
+        repeat(8) {
+            val candidate = dao.getRandomVerse() ?: return@repeat
+            if (fallback == null) fallback = candidate
+            if (LockScreenText.cleanTranslation(candidate.translation).length <= LockScreenText.COMFORTABLE_LENGTH) {
+                LockScreenWallpaperApplier.rememberHourlyVerse(context, candidate)
+                return candidate
+            }
+        }
+        return fallback?.also { newVerse ->
             LockScreenWallpaperApplier.rememberHourlyVerse(context, newVerse)
         }
     }
