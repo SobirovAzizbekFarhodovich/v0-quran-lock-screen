@@ -29,22 +29,27 @@ object LockScreenWallpaperRenderer {
         return bitmap
     }
 
+    /**
+     * The lock screen's pixel size, always in PORTRAIT. The hourly alarm often renders while the
+     * phone is in landscape (a video, a game); window metrics then report 2412x1080, and a
+     * landscape wallpaper gets centre-cropped by the lock screen into a zoomed slice of the
+     * background with the ayah cut off. The display's real size is orientation-independent
+     * once sorted, and works from a non-visual (application) context.
+     */
     internal fun getRealScreenSize(context: Context): Pair<Int, Int> {
-        val wm = context.getSystemService(Context.WINDOW_SERVICE) as? android.view.WindowManager
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            val bounds = wm?.currentWindowMetrics?.bounds
-            if (bounds != null && bounds.width() > 0 && bounds.height() > 0) {
-                return Pair(bounds.width(), bounds.height())
-            }
-        }
+        val display = context.getSystemService(android.hardware.display.DisplayManager::class.java)
+            ?.getDisplay(android.view.Display.DEFAULT_DISPLAY)
         val metrics = android.util.DisplayMetrics()
         @Suppress("DEPRECATION")
-        wm?.defaultDisplay?.getRealMetrics(metrics)
-        if (metrics.widthPixels > 0 && metrics.heightPixels > 0) {
-            return Pair(metrics.widthPixels, metrics.heightPixels)
+        display?.getRealMetrics(metrics)
+        var w = metrics.widthPixels
+        var h = metrics.heightPixels
+        if (w <= 0 || h <= 0) {
+            val fallback = context.resources.displayMetrics
+            w = fallback.widthPixels.coerceAtLeast(360)
+            h = fallback.heightPixels.coerceAtLeast(640)
         }
-        val fallback = context.resources.displayMetrics
-        return Pair(fallback.widthPixels.coerceAtLeast(360), fallback.heightPixels.coerceAtLeast(640))
+        return Pair(minOf(w, h), maxOf(w, h))
     }
 
     private fun drawBackground(context: Context, canvas: Canvas, width: Int, height: Int) {
@@ -130,9 +135,16 @@ object LockScreenWallpaperRenderer {
         }.getOrNull()
     }
 
+    /** Draws [bitmap] centre-cropped to fill the screen, keeping its aspect ratio (never stretched). */
     private fun drawFullBackground(canvas: Canvas, bitmap: Bitmap, width: Int, height: Int) {
+        val scale = maxOf(width.toFloat() / bitmap.width, height.toFloat() / bitmap.height)
+        val srcW = width / scale
+        val srcH = height / scale
+        val left = (bitmap.width - srcW) / 2f
+        val top = (bitmap.height - srcH) / 2f
+        val src = android.graphics.Rect(left.toInt(), top.toInt(), (left + srcW).toInt(), (top + srcH).toInt())
         val dest = RectF(0f, 0f, width.toFloat(), height.toFloat())
-        canvas.drawBitmap(bitmap, null, dest, Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG))
+        canvas.drawBitmap(bitmap, src, dest, Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG))
     }
 
     private fun drawContent(canvas: Canvas, width: Int, height: Int, verse: QuranVerse, context: Context) {

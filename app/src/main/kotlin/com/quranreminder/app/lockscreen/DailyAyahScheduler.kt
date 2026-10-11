@@ -32,7 +32,13 @@ object DailyAyahScheduler {
     }
 
     fun updateToday(context: Context) {
-        val immediateWork = OneTimeWorkRequestBuilder<DailyAyahWallpaperWorker>().build()
+        val builder = OneTimeWorkRequestBuilder<DailyAyahWallpaperWorker>()
+        // Expedited jobs run promptly even when OEM managers defer ordinary background work.
+        // (Below Android 12 expedited work needs a foreground notification; plain work there.)
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+            builder.setExpedited(androidx.work.OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
+        }
+        val immediateWork = builder.build()
         WorkManager.getInstance(context).enqueueUniqueWork(
             IMMEDIATE_WORK_NAME,
             ExistingWorkPolicy.REPLACE,

@@ -92,7 +92,20 @@ fun LockScreenPreviewScreen(navController: NavHostController) {
             list
         }
 
-        val pagerState = rememberPagerState(pageCount = { allOptions.size })
+        // Open on the background that is actually in use, not always on the first one.
+        val initialPage = remember(allOptions) {
+            val source = LockScreenBackgroundManager.getSelectedSource(context)
+            val id = LockScreenBackgroundManager.getSelectedSampleId(context)
+            allOptions.indexOfFirst {
+                when (it) {
+                    is WallpaperOption.Local -> source == "sample" && it.sample.id == id
+                    is WallpaperOption.Remote -> source == "remote" && it.sample.id == id
+                }
+            }.coerceAtLeast(0)
+        }
+        val pagerState = rememberPagerState(initialPage = initialPage, pageCount = { allOptions.size })
+        // A gallery image picked since the last swipe is what "apply" should use.
+        var customChosen by remember { mutableStateOf(false) }
 
         val gallerySetMessage = t("lockPreview.gallerySet")
         val noImageChosenMessage = t("lockPreview.noImageChosen")
@@ -112,6 +125,7 @@ fun LockScreenPreviewScreen(navController: NavHostController) {
                     LockScreenBackgroundManager.setCustomFromUri(context, uri)
                 }
                 if (saved) {
+                    customChosen = true
                     refreshKey++
                     Toast.makeText(context, gallerySetMessage, Toast.LENGTH_SHORT).show()
                 } else {
@@ -120,30 +134,22 @@ fun LockScreenPreviewScreen(navController: NavHostController) {
             }
         }
 
+        // Swiping only previews. Nothing is saved until "apply": browsing the pager and leaving
+        // must not change the lock-screen background behind the user's back (it used to save
+        // every settled page, so the next hourly render showed a background nobody chose).
         LaunchedEffect(pagerState.settledPage) {
             val newIndex = pagerState.settledPage
-            if (newIndex < allOptions.size && newIndex >= 0) {
-                val option = allOptions[newIndex]
-                if (option is WallpaperOption.Local) {
-                    LockScreenBackgroundManager.setSample(context, option.sample)
-                    refreshKey++
-                } else if (option is WallpaperOption.Remote) {
-                    if (remoteDownloads[option.sample.id] == true) {
-                        LockScreenBackgroundManager.setRemoteSample(context, option.sample)
-                        refreshKey++
-                    } else {
-                        activeDownloads = activeDownloads + (option.sample.id to true)
-                        val success = LockScreenBackgroundManager.downloadRemoteSample(context, option.sample)
-                        activeDownloads = activeDownloads - option.sample.id
-                        if (success) {
-                            remoteDownloads = remoteDownloads + (option.sample.id to true)
-                            LockScreenBackgroundManager.setRemoteSample(context, option.sample)
-                            refreshKey++
-                            Toast.makeText(context, imageLoadedMessage, Toast.LENGTH_SHORT).show()
-                        } else {
-                            Toast.makeText(context, downloadFailedMessage, Toast.LENGTH_SHORT).show()
-                        }
-                    }
+            if (newIndex != initialPage) customChosen = false
+            val option = allOptions.getOrNull(newIndex)
+            if (option is WallpaperOption.Remote && remoteDownloads[option.sample.id] != true) {
+                activeDownloads = activeDownloads + (option.sample.id to true)
+                val success = LockScreenBackgroundManager.downloadRemoteSample(context, option.sample)
+                activeDownloads = activeDownloads - option.sample.id
+                if (success) {
+                    remoteDownloads = remoteDownloads + (option.sample.id to true)
+                    Toast.makeText(context, imageLoadedMessage, Toast.LENGTH_SHORT).show()
+                } else {
+                    Toast.makeText(context, downloadFailedMessage, Toast.LENGTH_SHORT).show()
                 }
             }
         }
@@ -370,6 +376,14 @@ fun LockScreenPreviewScreen(navController: NavHostController) {
                         onClick = {
                             val selected = verse ?: return@NurPrimaryButton
                             isWorking = true
+                            // The choice is saved only now, on apply.
+                            if (!customChosen) {
+                                when (val option = allOptions.getOrNull(pagerState.currentPage)) {
+                                    is WallpaperOption.Local -> LockScreenBackgroundManager.setSample(context, option.sample)
+                                    is WallpaperOption.Remote -> LockScreenBackgroundManager.setRemoteSample(context, option.sample)
+                                    null -> Unit
+                                }
+                            }
                             scope.launch {
                                 // Rendering + WallpaperManager.setBitmap run on Dispatchers.IO inside apply().
                                 val message = try {

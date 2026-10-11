@@ -72,7 +72,11 @@ class HourlyWallpaperReceiver : BroadcastReceiver() {
         val pending = goAsync()
         CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
             try {
-                val applied = withTimeoutOrNull(8_000L) { applyHourlyWallpaper(appContext) } ?: false
+                // Cold start in the background on a throttled CPU can take several seconds
+                // (process start, Room, decode, render, setBitmap); 8 s was too tight and the
+                // job then waited on a deferred WorkManager run. Background receivers may run
+                // up to a minute.
+                val applied = withTimeoutOrNull(40_000L) { applyHourlyWallpaper(appContext) } ?: false
                 // Couldn't finish inside the broadcast window: let WorkManager finish the job.
                 if (!applied) DailyAyahScheduler.updateToday(appContext)
             } catch (_: Exception) {

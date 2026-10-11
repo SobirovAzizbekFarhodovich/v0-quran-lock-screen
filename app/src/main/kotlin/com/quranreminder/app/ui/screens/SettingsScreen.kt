@@ -315,7 +315,22 @@ private fun LockScreenGroup(
                 leadingIcon = Icons.Outlined.BatteryChargingFull,
                 trailing = { Chevron() },
                 onClick = {
-                    runCatching {
+                    // Honor/Huawei gate background wake-ups in their own "App launch" manager
+                    // (the alarm fires but the app may not be allowed to start); open it
+                    // directly, else the standard battery-optimization list.
+                    val vendorScreens = listOf(
+                        "com.hihonor.systemmanager" to "com.hihonor.systemmanager.startupmgr.ui.StartupNormalAppListActivity",
+                        "com.huawei.systemmanager" to "com.huawei.systemmanager.startupmgr.ui.StartupNormalAppListActivity"
+                    )
+                    val openedVendor = vendorScreens.any { (pkg, cls) ->
+                        runCatching {
+                            context.startActivity(
+                                android.content.Intent().setClassName(pkg, cls)
+                                    .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                            )
+                        }.isSuccess
+                    }
+                    if (!openedVendor) runCatching {
                         context.startActivity(
                             android.content.Intent(android.provider.Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
                                 .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
