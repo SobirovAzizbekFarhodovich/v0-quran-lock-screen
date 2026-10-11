@@ -29,7 +29,9 @@ data class QuranVerseDto(
     @SerializedName("translation")
     val translation: String,
     @SerializedName("transliteration")
-    val transliteration: String = ""
+    val transliteration: String = "",
+    @SerializedName("footnotes")
+    val footnotes: String? = null
 ) {
     fun toEntity(): QuranVerse {
         return QuranVerse(
@@ -40,7 +42,8 @@ data class QuranVerseDto(
             ayahText = ayahText.removePrefix("\uFEFF").ifBlank { ayahTextArabic.removePrefix("\uFEFF") },
             ayahTextArabic = ayahTextArabic.removePrefix("\uFEFF"),
             translation = translation,
-            transliteration = transliteration
+            transliteration = transliteration,
+            footnotes = footnotes.orEmpty()
         )
     }
 }
@@ -50,6 +53,12 @@ class ContentLoadException(val code: String, cause: Throwable? = null) : Excepti
 
 object QuranDataLoader {
     const val EXPECTED_VERSE_COUNT = 6236
+
+    /**
+     * Version of the bundled Uzbek content. Bump when assets/quran changes so installed apps
+     * reload it once (2: QuranEnc text with footnotes kept apart from the translation).
+     */
+    const val BUNDLED_CONTENT_VERSION = 2
 
     /** Languages whose full Quran content ships inside the APK (assets/quran/<lang>.json). */
     private val bundledLanguages = setOf("uz_latin", "uz_cyrillic")

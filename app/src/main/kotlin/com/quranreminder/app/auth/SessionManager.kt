@@ -70,8 +70,13 @@ class SessionManager(context: Context) {
         get() = prefs.getString(KEY_CONTENT_READY_LANGUAGE, null)
         private set(value) { prefs.edit().putString(KEY_CONTENT_READY_LANGUAGE, value).apply() }
 
+    /** [QuranDataLoader.BUNDLED_CONTENT_VERSION] of the content currently in the database. */
+    val contentVersion: Int
+        get() = prefs.getInt(KEY_CONTENT_VERSION, 1)
+
     fun markContentReady(language: String) {
         contentReadyLanguage = language
+        prefs.edit().putInt(KEY_CONTENT_VERSION, com.quranreminder.app.data.QuranDataLoader.BUNDLED_CONTENT_VERSION).apply()
     }
 
     suspend fun updateLanguage(language: String): Result<AuthUser> = withContext(Dispatchers.IO) {
@@ -280,6 +285,7 @@ class SessionManager(context: Context) {
         private const val KEY_EMAIL = "email"
         private const val KEY_LANGUAGE = "language"
         private const val KEY_CONTENT_READY_LANGUAGE = "content_ready_language"
+        private const val KEY_CONTENT_VERSION = "content_version"
 
         /** Error codes are AppStrings keys so the UI can localize them. */
         const val CODE_NETWORK = "auth.error.network"

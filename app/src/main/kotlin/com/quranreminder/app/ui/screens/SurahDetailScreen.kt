@@ -1,5 +1,11 @@
 package com.quranreminder.app.ui.screens
 
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.getValue
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.foundation.clickable
 import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
@@ -89,6 +95,8 @@ fun SurahDetailScreen(
     val ayahPrefixText = t("surahDetail.ayahPrefix")
     val shareImageDesc = t("surahDetail.shareImage")
     val selectLockScreenDesc = t("surahDetail.selectLockScreen")
+    val footnoteLabel = t("surahDetail.footnote")
+    val footnoteHideLabel = t("surahDetail.footnoteHide")
     val saveDesc = t("surahDetail.save")
     val removeBookmarkDesc = t("surahDetail.removeBookmark")
     val metaText = t("home.sura") + surahNumber + " · " +
@@ -158,6 +166,8 @@ fun SurahDetailScreen(
                     ayahLabel = "$ayahPrefixText${verse.ayahNumber}",
                     shareImageDesc = shareImageDesc,
                     selectLockScreenDesc = selectLockScreenDesc,
+                    footnoteLabel = footnoteLabel,
+                    footnoteHideLabel = footnoteHideLabel,
                     bookmarkDesc = if (isBookmarked) removeBookmarkDesc else saveDesc,
                     isBookmarked = isBookmarked,
                     onBookmarkClick = { viewModel.toggleBookmark(verse.surahNumber, verse.ayahNumber) },
@@ -282,7 +292,9 @@ private fun AyahBlock(
     isBookmarked: Boolean,
     onBookmarkClick: () -> Unit,
     onLockScreenClick: () -> Unit,
-    onShareClick: () -> Unit
+    onShareClick: () -> Unit,
+    footnoteLabel: String = "",
+    footnoteHideLabel: String = ""
 ) {
     val shape = MaterialTheme.shapes.large
     val scheme = MaterialTheme.colorScheme
@@ -323,6 +335,9 @@ private fun AyahBlock(
             style = MaterialTheme.typography.bodyLarge,
             color = scheme.onSurface
         )
+        if (verse.footnotes.isNotBlank()) {
+            FootnoteToggle(verse.footnotes, footnoteLabel, footnoteHideLabel)
+        }
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
@@ -343,6 +358,54 @@ private fun AyahBlock(
                 onClick = onBookmarkClick,
                 emphasized = isBookmarked
             )
+        }
+    }
+}
+
+/**
+ * The translator's commentary, folded away under the translation so the ayah reads cleanly;
+ * a tap opens it beside a thin gold rule.
+ */
+@Composable
+private fun FootnoteToggle(footnotes: String, label: String, hideLabel: String) {
+    var open by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
+    val gold = nurColors.goldText
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(
+            modifier = Modifier
+                .clip(MaterialTheme.shapes.small)
+                .clickable { open = !open }
+                .padding(vertical = 6.dp, horizontal = 2.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            androidx.compose.material3.Icon(
+                imageVector = if (open) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                contentDescription = null,
+                tint = gold,
+                modifier = Modifier.size(18.dp)
+            )
+            Text(
+                text = if (open) hideLabel else label,
+                style = MaterialTheme.typography.labelLarge,
+                color = gold
+            )
+        }
+        androidx.compose.animation.AnimatedVisibility(visible = open) {
+            Row(Modifier.height(androidx.compose.foundation.layout.IntrinsicSize.Min)) {
+                Box(
+                    Modifier
+                        .width(2.dp)
+                        .fillMaxHeight()
+                        .background(gold.copy(alpha = 0.6f))
+                )
+                Text(
+                    text = footnotes,
+                    modifier = Modifier.padding(start = 12.dp),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
     }
 }

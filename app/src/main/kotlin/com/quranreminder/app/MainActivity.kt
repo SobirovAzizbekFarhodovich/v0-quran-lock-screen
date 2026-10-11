@@ -125,6 +125,9 @@ class MainActivity : ComponentActivity() {
                 settings.language.isEmpty() -> LANGUAGE_SELECTION_ROUTE
                 sessionManager.contentReadyLanguage != settings.language ||
                     storedVerses < QuranDataLoader.EXPECTED_VERSE_COUNT -> LOADING_ROUTE
+                // Bundled Uzbek text was updated: reload it once from assets (offline, ~1 s).
+                QuranDataLoader.isBundled(settings.language) &&
+                    sessionManager.contentVersion < QuranDataLoader.BUNDLED_CONTENT_VERSION -> LOADING_ROUTE
                 else -> "home"
             }
         }

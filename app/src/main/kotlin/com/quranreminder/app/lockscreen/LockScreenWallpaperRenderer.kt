@@ -323,14 +323,14 @@ internal object LockScreenText {
     const val COMFORTABLE_LENGTH = 300
 
     /**
-     * Drops bracketed editorial notes and long parenthetical commentary — "(Ya'ni, …)" — which
-     * explain the ayah rather than translate it. Short inline parentheses such as "(ketgani)"
-     * are part of the sentence and stay, so the meaning is never cut.
+     * The translation as it reads on the lock screen, never shortened: footnote markers ("[1]")
+     * go, and the words a translator adds in square brackets ("[all] praise is [due] to Allah")
+     * keep their text without the brackets. Commentary is not here at all since the Uzbek
+     * content keeps it in [com.quranreminder.app.database.QuranVerse.footnotes].
      */
     fun cleanTranslation(text: String): String = text
-        .replace(Regex("\\s*\\[[^]]+\\]"), "")
-        // One level of nesting: "(… Ikkovi(ayol)dan …)" is still a single commentary note.
-        .replace(Regex("\\s*\\((?:[^()]|\\([^()]*\\))*\\)")) { if (it.value.trim().length >= 60) "" else it.value }
+        .replace(Regex("\\s*\\[\\d+\\]"), "")
+        .replace(Regex("\\[([^\\]]+)\\]"), "$1")
         .replace(Regex("\\s{2,}"), " ")
         .trim()
 

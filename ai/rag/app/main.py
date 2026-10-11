@@ -877,6 +877,7 @@ def build_quran_payload(
                 "ayahTextArabic": ayah_arabic,
                 "translation": row["text"],
                 "transliteration": "",
+                "footnotes": row.get("footnotes", ""),
             })
     return {"verses": verses}
 

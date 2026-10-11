@@ -4,11 +4,12 @@ import android.content.Context
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [QuranVerse::class, Reminder::class, Bookmark::class, AppSettings::class],
-    version = 2,
+    version = 3,
     exportSchema = false
 )
 abstract class QuranDatabase : RoomDatabase() {
@@ -21,6 +22,13 @@ abstract class QuranDatabase : RoomDatabase() {
         @Volatile
         private var INSTANCE: QuranDatabase? = null
 
+        /** Adds verse footnotes. Bookmarks, reminders and settings are kept (no destructive reset). */
+        private val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE quran_verses ADD COLUMN footnotes TEXT NOT NULL DEFAULT ''")
+            }
+        }
+
         fun getDatabase(context: Context): QuranDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -28,6 +36,7 @@ abstract class QuranDatabase : RoomDatabase() {
                     QuranDatabase::class.java,
                     "quran_database"
                 )
+                    .addMigrations(MIGRATION_2_3)
                     .fallbackToDestructiveMigration()
                     .addCallback(RoomDatabaseCallback())
                     .build()

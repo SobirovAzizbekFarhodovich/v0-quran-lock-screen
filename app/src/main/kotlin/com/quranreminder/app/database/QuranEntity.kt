@@ -1,5 +1,6 @@
 package com.quranreminder.app.database
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
@@ -21,7 +22,10 @@ data class QuranVerse(
     val ayahText: String,
     val ayahTextArabic: String,
     val translation: String, // Uzbek translation (Sadik Muhammad Yusuf)
-    val transliteration: String = ""
+    val transliteration: String = "",
+    /** The translator's commentary on this ayah, kept apart from the translation (QuranEnc). */
+    @ColumnInfo(defaultValue = "")
+    val footnotes: String = ""
 )
 
 @Entity(tableName = "reminders")

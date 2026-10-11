@@ -271,6 +271,8 @@ object AppStrings {
         "surahDetail.ayahPrefix" to "Oyat ",
         "surahDetail.shareImage" to "Rasm qilib ulashish",
         "surahDetail.selectLockScreen" to "Qulf ekrani uchun tanlash",
+        "surahDetail.footnote" to "Izoh",
+        "surahDetail.footnoteHide" to "Izohni yopish",
         "surahDetail.save" to "Saqlash",
 
         // Lock screen preview
@@ -562,6 +564,8 @@ object AppStrings {
         "surahDetail.ayahPrefix" to "Оят ",
         "surahDetail.shareImage" to "Расм қилиб улашиш",
         "surahDetail.selectLockScreen" to "Қулф экрани учун танлаш",
+        "surahDetail.footnote" to "Изоҳ",
+        "surahDetail.footnoteHide" to "Изоҳни ёпиш",
         "surahDetail.save" to "Сақлаш",
 
         "lockPreview.gallerySet" to "Gallery расми ўрнатилди",
@@ -849,6 +853,8 @@ object AppStrings {
         "surahDetail.ayahPrefix" to "Аят ",
         "surahDetail.shareImage" to "Поделиться изображением",
         "surahDetail.selectLockScreen" to "Выбрать для экрана блокировки",
+        "surahDetail.footnote" to "Комментарий",
+        "surahDetail.footnoteHide" to "Скрыть комментарий",
         "surahDetail.save" to "Сохранить",
 
         "lockPreview.gallerySet" to "Изображение из галереи установлено",
@@ -1136,6 +1142,8 @@ object AppStrings {
         "surahDetail.ayahPrefix" to "Ayah ",
         "surahDetail.shareImage" to "Share as image",
         "surahDetail.selectLockScreen" to "Set for lock screen",
+        "surahDetail.footnote" to "Commentary",
+        "surahDetail.footnoteHide" to "Hide commentary",
         "surahDetail.save" to "Save",
 
         "lockPreview.gallerySet" to "Gallery image set",
