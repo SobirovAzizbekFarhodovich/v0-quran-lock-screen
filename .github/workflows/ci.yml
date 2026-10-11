@@ -8,7 +8,7 @@ on:
 
 env:
   GO_VERSION: "1.25"
-  FLUTTER_VERSION: "3.22.0"
+  FLUTTER_VERSION: "3.24.5"
   PYTHON_VERSION: "3.11"
 
 jobs:
