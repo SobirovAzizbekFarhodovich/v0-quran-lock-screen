@@ -111,7 +111,7 @@ fun LockScreenPreviewScreen(navController: NavHostController, surah: Int = -1, a
         val noImageChosenMessage = t("lockPreview.noImageChosen")
         val imageLoadedMessage = t("lockPreview.imageLoaded")
         var applyToHome by remember { mutableStateOf(LockScreenWallpaperApplier.isApplyToHomeEnabled(context)) }
-        val showHomeHint = !applyToHome && remember { LockScreenWallpaperApplier.lockScreenShowsHomeInDarkMode(context) }
+        val showHomeHint = remember { LockScreenWallpaperApplier.lockScreenShowsHomeInDarkMode(context) }
         val appliedMessage = t("lockPreview.applied")
         val applyFailedMessage = t("lockPreview.applyFailed")
         val shareFailedMessage = t("lockPreview.shareFailed")
@@ -355,6 +355,13 @@ fun LockScreenPreviewScreen(navController: NavHostController, surah: Int = -1, a
                             onCheckedChange = null
                         )
                     }
+                    // Works on every phone; Honor/Huawei get an extra note about their dark mode.
+                    Text(
+                        text = t("lockPreview.applyToHome.desc"),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(bottom = if (showHomeHint) 4.dp else 8.dp, end = 4.dp)
+                    )
                     if (showHomeHint) {
                         Text(
                             text = t("lockPreview.applyToHome.hint"),

@@ -24,8 +24,8 @@ object LockScreenWallpaperApplier {
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
                 val cropHint = android.graphics.Rect(0, 0, bitmap.width, bitmap.height)
-                // Honor/Huawei show the *home* wallpaper on the lock screen while dark mode is
-                // on, so the user can opt in to putting the ayah on both screens.
+                // Any phone can opt in to the ayah on both screens (Honor/Huawei also need it
+                // in dark mode, where their keyguard shows the *home* wallpaper).
                 val flags = if (isApplyToHomeEnabled(context)) {
                     WallpaperManager.FLAG_LOCK or WallpaperManager.FLAG_SYSTEM
                 } else {
