@@ -60,9 +60,14 @@ object LockScreenWallpaperApplier {
         if (isApplyToHomeEnabled(context)) "home" else ""
     ).joinToString("|")
 
+    /**
+     * On by default: the ayah goes on the home screen too, so it shows on every phone (Honor/
+     * Huawei show the home wallpaper on the lock screen in dark mode). Users can turn it off
+     * to keep their own home wallpaper and put the ayah on the lock screen only.
+     */
     fun isApplyToHomeEnabled(context: Context): Boolean =
         context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            .getBoolean(KEY_APPLY_TO_HOME, false)
+            .getBoolean(KEY_APPLY_TO_HOME, true)
 
     fun setApplyToHome(context: Context, enabled: Boolean) {
         context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
