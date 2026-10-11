@@ -185,15 +185,14 @@ object LockScreenWallpaperRenderer {
             translation = CyrillicToLatinConverter.convert(translation)
             surahTitle = CyrillicToLatinConverter.convert(surahTitle)
         }
-        translation = FancyTextConverter.convert(translation, selectedFont)
-        surahTitle = FancyTextConverter.convert(surahTitle, selectedFont)
+        if (selectedFont == LockScreenFontFamily.STANDART) {
+            // Golos has no modifier letter ʻ (oʻ, gʻ); the turned comma ‘ is its typographic twin.
+            translation = translation.replace('ʻ', '‘')
+        }
+        surahTitle = surahTitle.replace('ʻ', '‘')
         val arabic = verse.ayahTextArabic.trim()
 
-        val textFace = when (selectedFont) {
-            LockScreenFontFamily.STANDART -> golos(context, 500)
-            LockScreenFontFamily.KLASSIK -> ResourcesCompat.getFont(context, R.font.pt_serif_regular) ?: Typeface.SERIF
-            else -> selectedFont.typeface
-        }
+        val textFace = if (selectedFont == LockScreenFontFamily.STANDART) golos(context, 500) else selectedFont.typeface(context)
         val arabicFace = ResourcesCompat.getFont(context, R.font.amiri_quran) ?: Typeface.SERIF
         val shadowRadius = width * 0.007f
         val shadowDy = width * 0.0025f
@@ -229,7 +228,7 @@ object LockScreenWallpaperRenderer {
         var arabicLayout: StaticLayout? = null
         var translationLayout: StaticLayout
         var total: Float
-        var size = width * 0.046f
+        var size = width * 0.046f * selectedFont.sizeScale
         while (true) {
             translationPaint.textSize = size
             translationLayout = buildLayout(translation, translationPaint, textWidth, Layout.Alignment.ALIGN_CENTER, 1.18f)
@@ -240,7 +239,7 @@ object LockScreenWallpaperRenderer {
             if (withArabic && size <= width * 0.034f) {
                 // Not enough room for both: the translation matters more on the lock screen.
                 withArabic = false
-                size = width * 0.046f
+                size = width * 0.046f * selectedFont.sizeScale
                 continue
             }
             if (size <= width * 0.020f) break

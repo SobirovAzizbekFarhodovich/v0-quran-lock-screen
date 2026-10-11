@@ -119,30 +119,52 @@ object LockScreenBackgroundManager {
             .apply()
     }
 
-    fun setCustomFromUri(context: Context, uri: Uri): Boolean {
-        val file = File(context.filesDir, CUSTOM_FILE_NAME)
+    /**
+     * Copies a gallery image into a staging file so it can be previewed. Nothing is selected
+     * yet: the lock screen keeps its background until [commitCustom] runs on "apply".
+     * Returns the staged file's path, or null when the pick is not a readable image.
+     */
+    fun stageCustomFromUri(context: Context, uri: Uri): String? {
+        val staged = File(context.filesDir, "$CUSTOM_FILE_NAME.staged")
         val temp = File(context.filesDir, "$CUSTOM_FILE_NAME.part")
         return runCatching {
             context.contentResolver.openInputStream(uri)?.use { input ->
                 temp.outputStream().use { output -> input.copyTo(output) }
-            } ?: return false
-            if (!isValidImage(temp)) {
-                temp.delete()
-                return false
-            }
+            } ?: return null
+            if (!isValidImage(temp)) return null
+            staged.delete()
+            // Same path for every pick, so the previous image must leave the cache.
+            BackgroundBitmapCache.invalidate(staged.absolutePath)
+            if (!temp.renameTo(staged)) return null
+            staged.absolutePath
+        }.getOrNull().also { if (temp.exists()) temp.delete() }
+    }
+
+    /** Selects the custom image at [path] (a staged pick or the one already in use). */
+    fun commitCustom(context: Context, path: String): Boolean {
+        val file = File(context.filesDir, CUSTOM_FILE_NAME)
+        if (path != file.absolutePath) {
+            val staged = File(path)
+            if (!staged.exists()) return false
             file.delete()
-            // Same path for every gallery pick, so the old image must leave the cache.
             BackgroundBitmapCache.invalidate(file.absolutePath)
-            if (!temp.renameTo(file)) return false
-            context.applicationContext
-                .getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-                .edit()
-                .putString(KEY_SOURCE, SOURCE_CUSTOM)
-                .putString(KEY_CUSTOM_PATH, file.absolutePath)
-                .remove(KEY_SAMPLE_ID)
-                .apply()
-            true
-        }.getOrDefault(false).also { if (temp.exists()) temp.delete() }
+            if (!staged.renameTo(file)) return false
+        }
+        context.applicationContext
+            .getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .edit()
+            .putString(KEY_SOURCE, SOURCE_CUSTOM)
+            .putString(KEY_CUSTOM_PATH, file.absolutePath)
+            .remove(KEY_SAMPLE_ID)
+            .apply()
+        return true
+    }
+
+    /** The user's own image when it is the background in use, else null. */
+    fun currentCustomPath(context: Context): String? {
+        val prefs = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        if (prefs.getString(KEY_SOURCE, null) != SOURCE_CUSTOM) return null
+        return prefs.getString(KEY_CUSTOM_PATH, null)?.takeIf { File(it).exists() }
     }
 
     fun getSelectedSource(context: Context): String {

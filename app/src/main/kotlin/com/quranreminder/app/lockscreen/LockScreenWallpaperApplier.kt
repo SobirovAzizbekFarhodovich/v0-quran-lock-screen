@@ -215,81 +215,38 @@ object LockScreenWallpaperApplier {
     const val KEY_APPLY_TO_HOME = "apply_to_home"
 }
 
+/**
+ * Lettering for the lock-screen translation: real bundled fonts that cover Uzbek Latin and
+ * Cyrillic in full (Ққ Ғғ Ўў Ҳҳ ʻ ʼ). The Arabic is always Amiri Quran.
+ */
 enum class LockScreenFontFamily(
     val id: String,
-    val label: String,
-    val typeface: android.graphics.Typeface,
-    val composeFontFamily: androidx.compose.ui.text.font.FontFamily
+    @androidx.annotation.FontRes val fontRes: Int,
+    /** Cormorant is drawn small for its size; scale it up to read like the others. */
+    val sizeScale: Float = 1f
 ) {
-    STANDART("standart", "standart", android.graphics.Typeface.DEFAULT, androidx.compose.ui.text.font.FontFamily.Default),
-    KLASSIK("klassik", "klassik", android.graphics.Typeface.SERIF, androidx.compose.ui.text.font.FontFamily.Serif),
-    FANCY_BOLD_ITALIC("fancy_bold_italic", "𝑵𝒐𝒐𝒓𝒂𝒊𝒏", android.graphics.Typeface.create(android.graphics.Typeface.SERIF, android.graphics.Typeface.BOLD_ITALIC), androidx.compose.ui.text.font.FontFamily.Serif),
-    FANCY_ITALIC("fancy_italic", "𝑁𝑜𝑜𝑟𝑎𝑖𝑛", android.graphics.Typeface.create(android.graphics.Typeface.SERIF, android.graphics.Typeface.ITALIC), androidx.compose.ui.text.font.FontFamily.Serif),
-    FANCY_BOLD("fancy_bold", "𝐍𝐨𝐨𝐫𝐚𝐢𝐧", android.graphics.Typeface.create(android.graphics.Typeface.SANS_SERIF, android.graphics.Typeface.BOLD), androidx.compose.ui.text.font.FontFamily.SansSerif);
+    STANDART("standart", com.quranreminder.app.R.font.golos_text),
+    KLASSIK("klassik", com.quranreminder.app.R.font.lock_lora),
+    NAFIS("nafis", com.quranreminder.app.R.font.lock_cormorant, 1.14f),
+    YUMSHOQ("yumshoq", com.quranreminder.app.R.font.lock_nunito);
+
+    val composeFontFamily: androidx.compose.ui.text.font.FontFamily by lazy {
+        androidx.compose.ui.text.font.FontFamily(androidx.compose.ui.text.font.Font(fontRes))
+    }
+
+    fun typeface(context: Context): android.graphics.Typeface =
+        androidx.core.content.res.ResourcesCompat.getFont(context, fontRes) ?: android.graphics.Typeface.DEFAULT
 
     companion object {
-        fun fromId(id: String?): LockScreenFontFamily {
-            return entries.firstOrNull { it.id == id || (id == "default" && it.id == "standart") } ?: STANDART
+        fun fromId(id: String?): LockScreenFontFamily = when (id) {
+            // The former Unicode "fancy" styles map to the nearest real font.
+            "fancy_bold_italic", "fancy_italic" -> NAFIS
+            "fancy_bold", "default" -> STANDART
+            else -> entries.firstOrNull { it.id == id } ?: STANDART
         }
     }
 }
 
-object FancyTextConverter {
-    fun convert(text: String, font: LockScreenFontFamily): String {
-        return when (font) {
-            LockScreenFontFamily.FANCY_BOLD_ITALIC -> toMathBoldItalic(text)
-            LockScreenFontFamily.FANCY_ITALIC -> toMathItalic(text)
-            LockScreenFontFamily.FANCY_BOLD -> toMathBold(text)
-            else -> text
-        }
-    }
-
-    private fun toMathBoldItalic(text: String): String {
-        val sb = StringBuilder()
-        var i = 0
-        while (i < text.length) {
-            val cp = text.codePointAt(i)
-            when (cp) {
-                in 'a'.code..'z'.code -> sb.appendCodePoint(0x1D482 + (cp - 'a'.code))
-                in 'A'.code..'Z'.code -> sb.appendCodePoint(0x1D468 + (cp - 'A'.code))
-                else -> sb.appendCodePoint(cp)
-            }
-            i += Character.charCount(cp)
-        }
-        return sb.toString()
-    }
-
-    private fun toMathItalic(text: String): String {
-        val sb = StringBuilder()
-        var i = 0
-        while (i < text.length) {
-            val cp = text.codePointAt(i)
-            when (cp) {
-                'h'.code -> sb.append('ℎ')
-                in 'a'.code..'z'.code -> sb.appendCodePoint(0x1D44E + (cp - 'a'.code))
-                in 'A'.code..'Z'.code -> sb.appendCodePoint(0x1D434 + (cp - 'A'.code))
-                else -> sb.appendCodePoint(cp)
-            }
-            i += Character.charCount(cp)
-        }
-        return sb.toString()
-    }
-
-    private fun toMathBold(text: String): String {
-        val sb = StringBuilder()
-        var i = 0
-        while (i < text.length) {
-            val cp = text.codePointAt(i)
-            when (cp) {
-                in 'a'.code..'z'.code -> sb.appendCodePoint(0x1D41A + (cp - 'a'.code))
-                in 'A'.code..'Z'.code -> sb.appendCodePoint(0x1D400 + (cp - 'A'.code))
-                else -> sb.appendCodePoint(cp)
-            }
-            i += Character.charCount(cp)
-        }
-        return sb.toString()
-    }
-}
 
 /**
  * Lock-screen verse categories. Matching is primarily by a curated, language-independent list
