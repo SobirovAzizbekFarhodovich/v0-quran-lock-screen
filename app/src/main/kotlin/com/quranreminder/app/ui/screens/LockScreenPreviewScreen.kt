@@ -104,7 +104,7 @@ private val ThumbShape = RoundedCornerShape(14.dp)
  * rendered ayah) with its neighbours peeking in, a strip of thumbnails, the lettering choice,
  * the home-screen option and one apply button. Nothing is saved until "apply".
  */
-@OptIn(ExperimentalFoundationApi::class)
+@OptIn(ExperimentalFoundationApi::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 fun LockScreenPreviewScreen(navController: NavHostController, surah: Int = -1, ayah: Int = -1) {
     // The preview is an immersive, always-dark stage for the wallpaper, in both app themes.
@@ -239,12 +239,12 @@ fun LockScreenPreviewScreen(navController: NavHostController, surah: Int = -1, a
         // card is pulled down, by a spring otherwise.
         val expand = remember { Animatable(0f) }
         var openOrigin by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
-        var rootHeight by remember { mutableStateOf(0f) }
+        var rootSize by remember { mutableStateOf(IntSize.Zero) }
         var centredBackground by remember { mutableStateOf<Bitmap?>(null) }
         var centredVerse by remember { mutableStateOf<ImageBitmap?>(null) }
         val minPull = with(LocalDensity.current) { 200.dp.toPx() }
         // Pulling by this much takes the card all the way: its bottom edge stays under the finger.
-        fun pullDistance(): Float = (rootHeight - (openOrigin?.bottom ?: 0f)).coerceAtLeast(minPull)
+        fun pullDistance(): Float = (rootSize.height - (openOrigin?.bottom ?: 0f)).coerceAtLeast(minPull)
         fun beginFullscreen(page: Int) {
             if (fullscreenPage == null) {
                 openOrigin = cardBounds
@@ -269,7 +269,7 @@ fun LockScreenPreviewScreen(navController: NavHostController, surah: Int = -1, a
             translationY = (1f - p) * 28.dp.toPx()
         }
 
-        Box(Modifier.fillMaxSize().onSizeChanged { rootHeight = it.height.toFloat() }) {
+        Box(Modifier.fillMaxSize().onSizeChanged { rootSize = it }) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -280,8 +280,10 @@ fun LockScreenPreviewScreen(navController: NavHostController, surah: Int = -1, a
                         1f to MaterialTheme.colorScheme.background
                     )
                 )
-                .statusBarsPadding()
-                .navigationBarsPadding()
+                // Insets ignoring visibility: hiding the bars for the full-screen view must not
+                // shift this page (that jump made the card land in the wrong place and blink).
+                .windowInsetsPadding(WindowInsets.statusBarsIgnoringVisibility)
+                .windowInsetsPadding(WindowInsets.navigationBarsIgnoringVisibility)
         ) {
             // Top bar: back · centred title · share
             Row(
@@ -381,7 +383,12 @@ fun LockScreenPreviewScreen(navController: NavHostController, surah: Int = -1, a
                                                     }
                                                 }
                                             )
-                                            .clickable(onClickLabel = fullscreenLabel, role = Role.Button) { openFullscreen(page) }
+                                            .clickable(
+                                                interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                                                indication = null,
+                                                onClickLabel = fullscreenLabel,
+                                                role = Role.Button
+                                            ) { openFullscreen(page) }
                                     } else Modifier
                                 )
                                 .graphicsLayer {
@@ -651,6 +658,7 @@ fun LockScreenPreviewScreen(navController: NavHostController, surah: Int = -1, a
                     isDownloaded = option !is WallpaperOption.Remote || remoteDownloads[option.sample.id] == true,
                     origin = openOrigin ?: cardBounds,
                     progress = expand,
+                    screenSize = rootSize,
                     placeholderBackground = centredBackground,
                     placeholderVerse = centredVerse,
                     onClose = { velocity -> closeFullscreen(velocity) }
@@ -674,6 +682,7 @@ private fun FullScreenLockPreview(
     isDownloaded: Boolean,
     origin: androidx.compose.ui.geometry.Rect?,
     progress: Animatable<Float, androidx.compose.animation.core.AnimationVector1D>,
+    screenSize: IntSize,
     placeholderBackground: Bitmap?,
     placeholderVerse: ImageBitmap?,
     onClose: (velocity: Float) -> Unit
@@ -682,7 +691,8 @@ private fun FullScreenLockPreview(
     val density = LocalDensity.current
     val view = androidx.compose.ui.platform.LocalView.current
     val drag = remember { Animatable(0f) }
-    var size by remember { mutableStateOf(IntSize.Zero) }
+    // Known from the first frame: an unmeasured first frame drew nothing and the card blinked.
+    var size by remember { mutableStateOf(screenSize) }
     val closeDistance = with(density) { 120.dp.toPx() }
 
     fun close() {
@@ -788,7 +798,8 @@ private fun FullScreenLockPreview(
                     isDownloading = false,
                     placeholderBackground = placeholderBackground,
                     placeholderVerse = placeholderVerse,
-                    renderEnabled = settled
+                    renderEnabled = settled,
+                    initialSize = size
                 )
             }
             Text(
@@ -798,7 +809,8 @@ private fun FullScreenLockPreview(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .padding(bottom = 36.dp)
-                    .graphicsLayer { alpha = hintAlpha }
+                    // Gone the moment it starts closing; it must not ride along over the page.
+                    .graphicsLayer { alpha = if (closing || progress.targetValue < 1f) 0f else hintAlpha }
                     .clip(CircleShape)
                     .background(Color.Black.copy(alpha = 0.45f))
                     .padding(horizontal = 14.dp, vertical = 8.dp)
@@ -866,9 +878,10 @@ private fun LockPreviewCard(
     onRendered: ((Bitmap?, ImageBitmap?) -> Unit)? = null,
     // False while the full-screen view is still growing: decoding and uploading full-size
     // bitmaps mid-animation is what made it stall, so the placeholders carry the motion.
-    renderEnabled: Boolean = true
+    renderEnabled: Boolean = true,
+    initialSize: IntSize = IntSize.Zero
 ) {
-    var cardSize by remember { mutableStateOf(IntSize.Zero) }
+    var cardSize by remember { mutableStateOf(initialSize) }
     val bitmap = rememberBackgroundBitmap(option, isDownloaded, if (renderEnabled) cardSize else IntSize.Zero)
         ?: placeholderBackground
     var renderedVerse by remember { mutableStateOf<ImageBitmap?>(null) }
