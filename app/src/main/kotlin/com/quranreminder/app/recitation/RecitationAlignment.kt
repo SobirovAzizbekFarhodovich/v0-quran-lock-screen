@@ -5,6 +5,9 @@ enum class WordStatus {
     /** Read as written. */
     CORRECT,
 
+    /** The right word, with a harakat read differently (final results only). */
+    HARAKAT,
+
     /** Another word was heard in its place. */
     WRONG,
 
@@ -15,7 +18,7 @@ enum class WordStatus {
     PENDING
 }
 
-data class WordMark(val status: WordStatus, val heard: String? = null)
+data class WordMark(val status: WordStatus, val heard: String? = null, val slip: HarakatSlip? = null)
 
 /** One word of the passage being recited, with the ayah it belongs to. */
 data class TargetWord(val surah: Int, val ayah: Int, val text: String)
@@ -29,6 +32,7 @@ data class WordAlignment(
     val total: Int get() = marks.size
     val correct: Int get() = marks.count { it.status == WordStatus.CORRECT }
     val wrong: Int get() = marks.count { it.status == WordStatus.WRONG }
+    val harakat: Int get() = marks.count { it.status == WordStatus.HARAKAT }
     val missed: Int get() = marks.count { it.status == WordStatus.MISSED }
 
     /** Target words already reached: the karaoke position while reciting. */
@@ -102,7 +106,11 @@ object RecitationAlignment {
             when {
                 i > 0 && j > 0 && cost[i][j] == cost[i - 1][j - 1] + if (sameWord(target[i - 1], heard[j - 1])) 0 else 1 -> {
                     result[i - 1] = if (sameWord(target[i - 1], heard[j - 1])) {
-                        WordMark(WordStatus.CORRECT, heard[j - 1])
+                        // Harakat are judged only once the reader has finished: live partials
+                        // are fast, rough transcriptions.
+                        val slip = if (final) HarakatCheck.slip(target[i - 1], heard[j - 1]) else null
+                        if (slip != null) WordMark(WordStatus.HARAKAT, heard[j - 1], slip)
+                        else WordMark(WordStatus.CORRECT, heard[j - 1])
                     } else {
                         WordMark(WordStatus.WRONG, heard[j - 1])
                     }

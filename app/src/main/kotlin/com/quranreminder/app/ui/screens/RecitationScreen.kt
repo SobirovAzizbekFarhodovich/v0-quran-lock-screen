@@ -194,7 +194,7 @@ fun RecitationScreen(navController: NavHostController, quranViewModel: QuranView
                 ayahNumber = key.second,
                 wordCount = marks.size,
                 correctCount = marks.count { it == WordStatus.CORRECT },
-                wrongCount = marks.count { it == WordStatus.WRONG },
+                wrongCount = marks.count { it == WordStatus.WRONG || it == WordStatus.HARAKAT },
                 missedCount = marks.count { it == WordStatus.MISSED },
                 mode = mode,
                 createdAt = now,
@@ -571,6 +571,7 @@ private fun AyahHighlightCard(words: List<String>, alignment: WordAlignment?, hi
     val c = nurColors
     val muted = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
     val error = MaterialTheme.colorScheme.error
+    val harakatColor = HarakatAmber
     val reached = alignment?.reached ?: 0
     NurSurfaceCard(Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.large) {
         Column(
@@ -603,6 +604,7 @@ private fun AyahHighlightCard(words: List<String>, alignment: WordAlignment?, hi
                             covered -> androidx.compose.ui.graphics.Color.Transparent
                             status == WordStatus.CORRECT -> c.goldText
                             status == WordStatus.WRONG || status == WordStatus.MISSED -> error
+                            status == WordStatus.HARAKAT -> harakatColor
                             index == reached -> MaterialTheme.colorScheme.primary
                             else -> muted
                         }
@@ -738,7 +740,9 @@ private fun StarScoreGauge(score: Int) {
 private fun MistakesCard(words: List<String>, alignment: WordAlignment, transcript: String) {
     val c = nurColors
     var showTranscript by remember { mutableStateOf(false) }
-    val mistakes = alignment.marks.withIndex().filter { it.value.status == WordStatus.WRONG || it.value.status == WordStatus.MISSED }
+    val mistakes = alignment.marks.withIndex().filter {
+        it.value.status == WordStatus.WRONG || it.value.status == WordStatus.MISSED || it.value.status == WordStatus.HARAKAT
+    }
     NurSurfaceCard(Modifier.fillMaxWidth()) {
         Column {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -790,29 +794,52 @@ private fun MistakesCard(words: List<String>, alignment: WordAlignment, transcri
     }
 }
 
-/** «written» skipped, or «written» read as «heard». */
+/** Amber for a harakat slip: the word was right, a vowel was not. */
+private val HarakatAmber = androidx.compose.ui.graphics.Color(0xFFC77A1F)
+
+/** «written» skipped, «written» read as «heard», or a vowel read differently inside «written». */
 @Composable
 private fun MistakeRow(written: String, mark: WordMark) {
-    val error = MaterialTheme.colorScheme.error
+    val isHarakat = mark.status == WordStatus.HARAKAT
+    val accent = if (isHarakat) HarakatAmber else MaterialTheme.colorScheme.error
+    val slip = mark.slip
+    val label = when {
+        mark.status == WordStatus.MISSED -> t("recitation.mistake.missed")
+        isHarakat && slip != null -> t("recitation.mistake.harakat")
+            .replace("{letter}", slip.letter.toString())
+            .replace("{pos}", slip.position.toString())
+            .replace("{expected}", vowelName(slip.expected))
+            .replace("{heard}", vowelName(slip.heard))
+        else -> t("recitation.mistake.wrong")
+    }
     Row(
         Modifier
             .fillMaxWidth()
             .clip(MaterialTheme.shapes.small)
-            .background(MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.45f))
+            .background(accent.copy(alpha = 0.12f))
             .padding(horizontal = 12.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         Text(
-            if (mark.status == WordStatus.MISSED) t("recitation.mistake.missed") else t("recitation.mistake.wrong"),
+            label,
             style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onErrorContainer,
+            color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.weight(1f)
         )
-        if (mark.status == WordStatus.WRONG && !mark.heard.isNullOrBlank()) {
+        if (!isHarakat && mark.status == WordStatus.WRONG && !mark.heard.isNullOrBlank()) {
             Text(mark.heard, style = quranTextStyle(20), color = MaterialTheme.colorScheme.onSurfaceVariant)
             Icon(Icons.Default.ArrowBack, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(16.dp))
         }
-        Text(written, style = quranTextStyle(22), color = error)
+        Text(written, style = quranTextStyle(22), color = accent)
     }
+}
+
+@Composable
+private fun vowelName(vowel: com.quranreminder.app.recitation.Vowel): String = when (vowel) {
+    com.quranreminder.app.recitation.Vowel.FATHA -> t("recitation.vowel.fatha")
+    com.quranreminder.app.recitation.Vowel.KASRA -> t("recitation.vowel.kasra")
+    com.quranreminder.app.recitation.Vowel.DAMMA -> t("recitation.vowel.damma")
+    com.quranreminder.app.recitation.Vowel.SHADDA -> t("recitation.vowel.shadda")
+    com.quranreminder.app.recitation.Vowel.NO_SHADDA -> t("recitation.vowel.noShadda")
 }
