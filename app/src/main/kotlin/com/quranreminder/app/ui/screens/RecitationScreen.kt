@@ -103,6 +103,15 @@ fun RecitationScreen(navController: NavHostController, quranViewModel: QuranView
     var surah by remember { mutableStateOf("1") }
     var ayah by remember { mutableStateOf("1") }
     var fullSurah by remember { mutableStateOf(false) }
+    // Opened from an ayah's menu in the reader: start on that ayah.
+    LaunchedEffect(com.quranreminder.app.ui.AyahHandoff.recite) {
+        com.quranreminder.app.ui.AyahHandoff.recite?.let { (s, a) ->
+            surah = s.toString()
+            ayah = a.toString()
+            fullSurah = false
+            com.quranreminder.app.ui.AyahHandoff.recite = null
+        }
+    }
     var recording by remember { mutableStateOf(false) }
     var result by remember { mutableStateOf<RecitationResult?>(null) }
     val idleStatus = t("recitation.status.idle")

@@ -1,5 +1,14 @@
 package com.quranreminder.app.ui.screens
 
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Wallpaper
+import androidx.compose.material.icons.filled.MoreHoriz
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.getValue
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -31,7 +40,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.BookmarkBorder
-import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -94,7 +102,9 @@ fun SurahDetailScreen(
     val shareFailedText = t("surahDetail.shareFailed")
     val ayahPrefixText = t("surahDetail.ayahPrefix")
     val shareImageDesc = t("surahDetail.shareImage")
-    val selectLockScreenDesc = t("surahDetail.selectLockScreen")
+    val moreDesc = t("surahDetail.more")
+    // The ayah whose action menu is open (from "⋯" or a long press), if any.
+    var menuVerse by remember { mutableStateOf<QuranVerse?>(null) }
     val footnoteLabel = t("surahDetail.footnote")
     val footnoteHideLabel = t("surahDetail.footnoteHide")
     val saveDesc = t("surahDetail.save")
@@ -165,17 +175,13 @@ fun SurahDetailScreen(
                     highlighted = verse.ayahNumber == targetAyahNumber,
                     ayahLabel = "$ayahPrefixText${verse.ayahNumber}",
                     shareImageDesc = shareImageDesc,
-                    selectLockScreenDesc = selectLockScreenDesc,
+                    moreDesc = moreDesc,
                     footnoteLabel = footnoteLabel,
                     footnoteHideLabel = footnoteHideLabel,
                     bookmarkDesc = if (isBookmarked) removeBookmarkDesc else saveDesc,
                     isBookmarked = isBookmarked,
                     onBookmarkClick = { viewModel.toggleBookmark(verse.surahNumber, verse.ayahNumber) },
-                    onLockScreenClick = {
-                        // Open the lock-screen page on this ayah to choose background and font;
-                        // it is saved only when the user presses apply there.
-                        navController.navigate("lock_preview?surah=${verse.surahNumber}&ayah=${verse.ayahNumber}")
-                    },
+                    onMoreClick = { menuVerse = verse },
                     onShareClick = {
                         scope.launch {
                             runCatching { LockScreenWallpaperApplier.shareImage(context, verse) }
@@ -187,6 +193,32 @@ fun SurahDetailScreen(
                 )
                 if (verse != verses.last()) NurDivider(inset = 16.dp)
             }
+        }
+        menuVerse?.let { verse ->
+            AyahActionsSheet(
+                verse = verse,
+                onDismiss = { menuVerse = null },
+                onWallpaper = {
+                    // Opens the lock-screen page on this ayah; saved only on its "apply".
+                    navController.navigate("lock_preview?surah=${verse.surahNumber}&ayah=${verse.ayahNumber}")
+                },
+                onAsk = { question ->
+                    com.quranreminder.app.ui.AyahHandoff.askText = question
+                    navController.navigate("tadabbur_chat") {
+                        popUpTo("home") { saveState = true }
+                        launchSingleTop = true
+                        restoreState = true
+                    }
+                },
+                onRecite = {
+                    com.quranreminder.app.ui.AyahHandoff.recite = verse.surahNumber to verse.ayahNumber
+                    navController.navigate("recitation") {
+                        popUpTo("home") { saveState = true }
+                        launchSingleTop = true
+                        restoreState = true
+                    }
+                }
+            )
         }
         }
     }
@@ -287,11 +319,11 @@ private fun AyahBlock(
     highlighted: Boolean,
     ayahLabel: String,
     shareImageDesc: String,
-    selectLockScreenDesc: String,
+    moreDesc: String,
     bookmarkDesc: String,
     isBookmarked: Boolean,
     onBookmarkClick: () -> Unit,
-    onLockScreenClick: () -> Unit,
+    onMoreClick: () -> Unit,
     onShareClick: () -> Unit,
     footnoteLabel: String = "",
     footnoteHideLabel: String = ""
@@ -307,10 +339,19 @@ private fun AyahBlock(
     } else {
         Modifier
     }
+    val haptics = androidx.compose.ui.platform.LocalHapticFeedback.current
+    val openMenu by androidx.compose.runtime.rememberUpdatedState(onMoreClick)
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .then(container)
+            // A long press anywhere on the ayah opens the same menu as "⋯".
+            .pointerInput(Unit) {
+                detectTapGestures(onLongPress = {
+                    haptics.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                    openMenu()
+                })
+            }
             .padding(horizontal = 14.dp, vertical = 18.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
@@ -351,13 +392,13 @@ private fun AyahBlock(
             )
             Spacer(Modifier.weight(1f))
             NurIconButton(Icons.Default.Share, shareImageDesc, onShareClick)
-            NurIconButton(Icons.Default.Lock, selectLockScreenDesc, onLockScreenClick)
             NurIconButton(
                 icon = if (isBookmarked) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
                 contentDescription = bookmarkDesc,
                 onClick = onBookmarkClick,
                 emphasized = isBookmarked
             )
+            NurIconButton(Icons.Default.MoreHoriz, moreDesc, onMoreClick)
         }
     }
 }
@@ -406,6 +447,115 @@ private fun FootnoteToggle(footnotes: String, label: String, hideLabel: String) 
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
+        }
+    }
+}
+
+/**
+ * What can be done with one ayah beyond sharing and saving: put it on the screen, copy it,
+ * ask the assistant about it, or check one's recitation of it.
+ */
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@Composable
+private fun AyahActionsSheet(
+    verse: QuranVerse,
+    onDismiss: () -> Unit,
+    onWallpaper: () -> Unit,
+    onAsk: (String) -> Unit,
+    onRecite: () -> Unit
+) {
+    val context = LocalContext.current
+    val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
+    val sheetState = androidx.compose.material3.rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val scope = rememberCoroutineScope()
+    val reference = "${verse.surahName} ${verse.surahNumber}:${verse.ayahNumber}"
+    val copiedText = t("surahDetail.copied")
+    val askPrompt = t("surahDetail.askPrompt").replace("{ref}", reference)
+
+    // Closes the sheet with its slide-down, then runs the action.
+    fun closeThen(action: () -> Unit) {
+        scope.launch { sheetState.hide() }.invokeOnCompletion {
+            onDismiss()
+            action()
+        }
+    }
+
+    androidx.compose.material3.ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        containerColor = MaterialTheme.colorScheme.surface
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .navigationBarsPadding()
+                .padding(bottom = 12.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(start = 24.dp, end = 24.dp, bottom = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                QuranStarNumber(number = verse.ayahNumber, size = 36.dp, gold = true)
+                Text(
+                    text = reference,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            }
+            NurDivider(inset = 24.dp)
+            AyahActionRow(Icons.Default.Wallpaper, t("surahDetail.action.wallpaper"), t("surahDetail.action.wallpaper.desc")) {
+                closeThen(onWallpaper)
+            }
+            AyahActionRow(Icons.Default.ContentCopy, t("surahDetail.action.copy"), t("surahDetail.action.copy.desc")) {
+                val text = buildString {
+                    if (verse.ayahTextArabic.isNotBlank()) append(verse.ayahTextArabic.trim()).append("\n\n")
+                    append(verse.translation.trim()).append("\n\n— ").append(reference)
+                }
+                clipboard.setText(androidx.compose.ui.text.AnnotatedString(text))
+                // Android 13+ shows its own "copied" confirmation.
+                if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.TIRAMISU) {
+                    Toast.makeText(context, copiedText, Toast.LENGTH_SHORT).show()
+                }
+                closeThen {}
+            }
+            AyahActionRow(Icons.Default.AutoAwesome, t("surahDetail.action.ask"), t("surahDetail.action.ask.desc")) {
+                closeThen { onAsk(askPrompt) }
+            }
+            AyahActionRow(Icons.Default.Mic, t("surahDetail.action.recite"), t("surahDetail.action.recite.desc")) {
+                closeThen(onRecite)
+            }
+        }
+    }
+}
+
+@Composable
+private fun AyahActionRow(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    title: String,
+    subtitle: String,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClickLabel = title, role = androidx.compose.ui.semantics.Role.Button, onClick = onClick)
+            .padding(horizontal = 24.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .size(44.dp)
+                .clip(androidx.compose.foundation.shape.CircleShape)
+                .background(MaterialTheme.colorScheme.secondaryContainer),
+            contentAlignment = Alignment.Center
+        ) {
+            androidx.compose.material3.Icon(icon, contentDescription = null, tint = nurColors.goldText, modifier = Modifier.size(22.dp))
+        }
+        Column(Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurface)
+            Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }

@@ -110,6 +110,14 @@ fun TadabburChatScreen(navController: NavHostController, language: String = "uz_
     val errorMessage = t("tadabbur.error")
     val listState = rememberLazyListState()
 
+    // A question about an ayah, handed over from the reader's ayah menu.
+    LaunchedEffect(com.quranreminder.app.ui.AyahHandoff.askText) {
+        com.quranreminder.app.ui.AyahHandoff.askText?.let {
+            input = it
+            com.quranreminder.app.ui.AyahHandoff.askText = null
+        }
+    }
+
     // Past answers come from the device, so they show instantly and offline.
     LaunchedEffect(Unit) {
         messages.addAll(0, history.load())
