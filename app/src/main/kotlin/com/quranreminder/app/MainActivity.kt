@@ -450,6 +450,9 @@ fun AppNavigation(
         composable("recitation") {
             RecitationScreen(navController, quranViewModel)
         }
+        composable("recitation_history") {
+            com.quranreminder.app.ui.screens.RecitationHistoryScreen(navController)
+        }
         composable(
             route = "surah_detail/{surahNumber}?ayah={ayahNumber}",
             arguments = listOf(

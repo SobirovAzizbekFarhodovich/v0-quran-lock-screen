@@ -1,6 +1,35 @@
 package com.quranreminder.app.ui.screens
 
 import android.Manifest
+import androidx.compose.foundation.relocation.bringIntoViewRequester
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import com.quranreminder.app.recitation.WordStatus
+import com.quranreminder.app.recitation.WordMark
+import com.quranreminder.app.recitation.TargetWord
+import com.quranreminder.app.recitation.RecitationGoals
+import com.quranreminder.app.recitation.RecitationAlignment
+import com.quranreminder.app.recitation.WordAlignment
+import com.quranreminder.app.database.RecitationResultEntity
+import com.quranreminder.app.database.QuranDatabase
+import com.quranreminder.app.ui.theme.NurPrimaryButton
+import com.quranreminder.app.ui.theme.NurIconButton
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.ArrowForward
+import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.LocalFireDepartment
+import androidx.compose.material.icons.filled.History
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.rememberCoroutineScope
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -94,16 +123,23 @@ import com.quranreminder.app.ui.theme.t
 import com.quranreminder.app.ui.viewmodel.QuranViewModel
 import com.quranreminder.app.recitation.RecitationResult
 
-@Suppress("UNUSED_PARAMETER")
+/** "check": the ayah is shown and marked; "memorize": it is hidden and opens word by word. */
+private const val MODE_CHECK = "check"
+private const val MODE_MEMORIZE = "memorize"
+
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun RecitationScreen(navController: NavHostController, quranViewModel: QuranViewModel) {
     val context = LocalContext.current
     val strings = LocalAppStrings.current
+    val scope = rememberCoroutineScope()
     val client = remember(strings) { RecitationClient(context, strings) }
-    var surah by remember { mutableStateOf("1") }
-    var ayah by remember { mutableStateOf("1") }
-    var fullSurah by remember { mutableStateOf(false) }
-    // Opened from an ayah's menu in the reader: start on that ayah.
+    val history = remember { QuranDatabase.getDatabase(context).recitationHistoryDao() }
+    var surah by rememberSaveable { mutableStateOf("1") }
+    var ayah by rememberSaveable { mutableStateOf("1") }
+    var fullSurah by rememberSaveable { mutableStateOf(false) }
+    var mode by rememberSaveable { mutableStateOf(MODE_CHECK) }
+    // Opened from an ayah's menu or the review list: start on that ayah.
     LaunchedEffect(com.quranreminder.app.ui.AyahHandoff.recite) {
         com.quranreminder.app.ui.AyahHandoff.recite?.let { (s, a) ->
             surah = s.toString()
@@ -114,36 +150,77 @@ fun RecitationScreen(navController: NavHostController, quranViewModel: QuranView
     }
     var recording by remember { mutableStateOf(false) }
     var result by remember { mutableStateOf<RecitationResult?>(null) }
+    var alignment by remember { mutableStateOf<WordAlignment?>(null) }
     val idleStatus = t("recitation.status.idle")
     var message by remember { mutableStateOf(idleStatus) }
-    var matchedWordCount by remember { mutableIntStateOf(0) }
     val surahVerses by quranViewModel.currentSurahVerses.collectAsState()
     val listeningStatus = t("recitation.status.listening")
     val analyzingStatus = t("recitation.status.analyzing")
     val readyStatus = t("recitation.status.ready")
     val needPermissionStatus = t("recitation.status.needPermission")
 
+    val surahNumberNow = surah.toIntOrNull()?.coerceIn(1, 114) ?: 1
     val targetWords = remember(surahVerses, fullSurah, ayah) {
         val ayahNumber = ayah.toIntOrNull()
-        val verses = if (fullSurah) surahVerses else surahVerses.filter { it.ayahNumber == ayahNumber }
-        verses.sortedBy { it.ayahNumber }.flatMap { verse -> verse.ayahTextArabic.trim().split(Regex("\\s+")) }.filter { it.isNotBlank() }
+        val verses = surahVerses
+            .filter { it.surahNumber == surahNumberNow && (fullSurah || it.ayahNumber == ayahNumber) }
+            .sortedBy { it.ayahNumber }
+        verses.flatMap { verse ->
+            RecitationAlignment.words(verse.ayahTextArabic).map { TargetWord(verse.surahNumber, verse.ayahNumber, it) }
+        }
+    }
+    val lastAyah = surahVerses.filter { it.surahNumber == surahNumberNow }.maxOfOrNull { it.ayahNumber } ?: 0
+
+    // Today's goal and the streak, from the history kept on the device.
+    val goal by RecitationGoals.dailyGoal(context)
+    val activity by remember { history.observeAllActivity() }.collectAsState(initial = emptyList())
+    val today = RecitationGoals.today()
+    val todayAyahs = activity.firstOrNull { it.day == today }?.ayahs ?: 0
+    val streak = RecitationGoals.streak(activity, goal, today)
+
+    fun resetResult() {
+        result = null
+        alignment = null
+    }
+
+    fun save(final: WordAlignment) {
+        val words = targetWords
+        if (words.isEmpty() || final.marks.size != words.size) return
+        val now = System.currentTimeMillis()
+        val rows = words.indices.groupBy { words[it].surah to words[it].ayah }.map { (key, indexes) ->
+            val marks = indexes.map { final.marks[it].status }
+            RecitationResultEntity(
+                surahNumber = key.first,
+                ayahNumber = key.second,
+                wordCount = marks.size,
+                correctCount = marks.count { it == WordStatus.CORRECT },
+                wrongCount = marks.count { it == WordStatus.WRONG },
+                missedCount = marks.count { it == WordStatus.MISSED },
+                mode = mode,
+                createdAt = now,
+                day = RecitationGoals.dayOf(now)
+            )
+        }
+        scope.launch(Dispatchers.IO) { runCatching { history.insertAll(rows) } }
     }
 
     fun begin() {
-        val surahNumber = surah.toIntOrNull()?.coerceIn(1, 114) ?: 1
         val ayahNumber = if (fullSurah) 0 else ayah.toIntOrNull()?.coerceAtLeast(1) ?: 1
-        result = null
-        matchedWordCount = 0
-        quranViewModel.loadSurahVerses(surahNumber)
+        resetResult()
+        quranViewModel.loadSurahVerses(surahNumberNow)
+        val texts = targetWords.map { it.text }
+        alignment = RecitationAlignment.align(texts, "", final = false)
         client.start(
-            surahNumber,
+            surahNumberNow,
             ayahNumber,
-            onPartial = { partial -> matchedWordCount = matchArabicWords(partial.transcript, targetWords) },
+            onPartial = { partial -> alignment = RecitationAlignment.align(texts, partial.transcript, final = false) },
             onResult = { value ->
+                val final = RecitationAlignment.align(texts, value.transcript, final = true)
                 result = value
-                matchedWordCount = targetWords.size
+                alignment = final
                 recording = false
                 message = readyStatus
+                if (value.transcript.isNotBlank()) save(final)
             },
             onError = { error -> recording = false; message = error }
         )
@@ -155,9 +232,22 @@ fun RecitationScreen(navController: NavHostController, quranViewModel: QuranView
     }
     DisposableEffect(client) { onDispose { client.close() } }
     LaunchedEffect(surah) { surah.toIntOrNull()?.let { quranViewModel.loadSurahVerses(it) } }
+    // A new passage or mode starts clean.
+    LaunchedEffect(surah, ayah, fullSurah, mode) { if (!recording) resetResult() }
 
-    val surahName = surahVerses.firstOrNull()?.surahName.orEmpty()
+    val surahName = surahVerses.firstOrNull { it.surahNumber == surahNumberNow }?.surahName.orEmpty()
     val showAyah = targetWords.isNotEmpty() && (!fullSurah || recording || result != null)
+    val memorize = mode == MODE_MEMORIZE
+
+    // The goal and mode sit above the ayah, so bring the ayah into view as recitation starts
+    // and when the result arrives: the reader must see the words being marked.
+    val ayahInView = remember { androidx.compose.foundation.relocation.BringIntoViewRequester() }
+    LaunchedEffect(recording, result) {
+        if (recording || result != null) {
+            kotlinx.coroutines.delay(120)
+            ayahInView.bringIntoView()
+        }
+    }
 
     val navBar = LocalNavBarPadding.current
     val onRecordClick = {
@@ -165,11 +255,16 @@ fun RecitationScreen(navController: NavHostController, quranViewModel: QuranView
         else if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) begin()
         else permission.launch(Manifest.permission.RECORD_AUDIO)
     }
+    val openHistory = { navController.navigate("recitation_history") }
 
     Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-        NurScreenHeader(title = t("recitation.title"), eyebrow = t("recitation.eyebrow"))
+        NurScreenHeader(
+            title = t("recitation.title"),
+            eyebrow = t("recitation.eyebrow"),
+            trailing = { NurIconButton(Icons.Default.History, t("recitation.history"), onClick = openHistory) }
+        )
 
-        // Scrolling content: intro, picker, the ayah being recited and the result.
+        // Scrolling content: goal, mode, picker, the ayah being recited and the result.
         Column(
             Modifier
                 .weight(1f)
@@ -193,11 +288,12 @@ fun RecitationScreen(navController: NavHostController, quranViewModel: QuranView
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            Text(
-                t("recitation.intro"),
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp)
+            GoalStrip(todayAyahs = todayAyahs, goal = goal, streak = streak, onClick = openHistory)
+
+            ModeSwitch(
+                memorize = memorize,
+                enabled = !recording,
+                onChange = { mode = if (it) MODE_MEMORIZE else MODE_CHECK }
             )
 
             PickerCard(
@@ -215,15 +311,23 @@ fun RecitationScreen(navController: NavHostController, quranViewModel: QuranView
             if (showAyah) {
                 val reference = buildString {
                     if (surahName.isNotBlank()) append(surahName).append(" · ")
-                    append(surah.toIntOrNull() ?: 1)
+                    append(surahNumberNow)
                     if (!fullSurah) append(':').append(ayah.toIntOrNull() ?: 1)
                 }
-                AyahHighlightCard(words = targetWords, matchedCount = matchedWordCount, reference = reference)
+                Box(Modifier.bringIntoViewRequester(ayahInView)) {
+                    AyahHighlightCard(
+                        words = targetWords.map { it.text },
+                        alignment = alignment,
+                        hideUnread = memorize && result == null,
+                        reference = reference
+                    )
+                }
             }
 
-            result?.let { value ->
-                StarScoreGauge(score = value.score)
-                ResultCard(transcript = value.transcript, issues = value.issues)
+            val final = alignment
+            if (result != null && final != null) {
+                StarScoreGauge(score = final.accuracy)
+                MistakesCard(words = targetWords.map { it.text }, alignment = final, transcript = result?.transcript.orEmpty())
             }
         }
 
@@ -246,18 +350,134 @@ fun RecitationScreen(navController: NavHostController, quranViewModel: QuranView
                     modifier = Modifier.padding(horizontal = 16.dp)
                 )
             } else {
-                NurSecondaryButton(
-                    text = t("recitation.retry"),
-                    icon = Icons.Default.Refresh,
-                    onClick = {
-                        result = null
-                        matchedWordCount = 0
-                        message = idleStatus
+                val current = ayah.toIntOrNull() ?: 1
+                val hasNext = !fullSurah && current < lastAyah
+                Row(
+                    Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    NurSecondaryButton(
+                        text = t("recitation.retry"),
+                        icon = Icons.Default.Refresh,
+                        onClick = {
+                            resetResult()
+                            message = idleStatus
+                        },
+                        modifier = Modifier.weight(1f)
+                    )
+                    if (hasNext) {
+                        NurPrimaryButton(
+                            text = t("recitation.nextAyah"),
+                            icon = Icons.Default.ArrowForward,
+                            onClick = {
+                                ayah = (current + 1).toString()
+                                resetResult()
+                                message = idleStatus
+                            },
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** Today's progress toward the daily goal and the current streak; opens the history. */
+@Composable
+private fun GoalStrip(todayAyahs: Int, goal: Int, streak: Int, onClick: () -> Unit) {
+    val c = nurColors
+    val progress by animateFloatAsState((todayAyahs.toFloat() / goal).coerceIn(0f, 1f), tween(700), label = "goal")
+    val label = t("recitation.goal.today").replace("{done}", todayAyahs.toString()).replace("{goal}", goal.toString())
+    NurSurfaceCard(Modifier.fillMaxWidth()) {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .clickable(role = Role.Button, onClickLabel = t("recitation.history"), onClick = onClick)
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            val track = MaterialTheme.colorScheme.outlineVariant
+            Box(Modifier.size(44.dp), contentAlignment = Alignment.Center) {
+                Canvas(Modifier.size(44.dp)) {
+                    val stroke = 4.dp.toPx()
+                    drawArc(track, 0f, 360f, false, style = Stroke(stroke))
+                    drawArc(c.ornament, -90f, 360f * progress, false, style = Stroke(stroke, cap = StrokeCap.Round))
+                }
+                Text("$todayAyahs", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurface)
+            }
+            Column(Modifier.weight(1f)) {
+                Text(label, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurface)
+                Text(
+                    when {
+                        todayAyahs >= goal -> t("recitation.goal.done")
+                        todayAyahs == 0 -> t("recitation.goal.notStarted")
+                        else -> t("recitation.goal.left").replace("{n}", (goal - todayAyahs).toString())
                     },
-                    modifier = Modifier.padding(vertical = 8.dp)
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                Icon(
+                    Icons.Default.LocalFireDepartment,
+                    contentDescription = null,
+                    tint = if (streak > 0) c.ornament else MaterialTheme.colorScheme.outline,
+                    modifier = Modifier.size(22.dp)
+                )
+                Text(
+                    t("recitation.streak.days").replace("{n}", streak.toString()),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = if (streak > 0) c.goldText else MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }
+    }
+}
+
+/** Check (ayah shown, mistakes marked) or memorize (ayah hidden, revealed as it is recited). */
+@Composable
+private fun ModeSwitch(memorize: Boolean, enabled: Boolean, onChange: (Boolean) -> Unit) {
+    val c = nurColors
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        BoxWithConstraints(
+            Modifier
+                .fillMaxWidth()
+                .height(48.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.surfaceVariant)
+                .padding(4.dp)
+        ) {
+            val half = maxWidth / 2
+            val x by animateDpAsState(if (memorize) half else 0.dp, spring(dampingRatio = 0.75f, stiffness = 500f), label = "mode")
+            Box(Modifier.offset(x = x).width(half).fillMaxHeight().clip(CircleShape).background(MaterialTheme.colorScheme.primary))
+            Row(Modifier.fillMaxSize()) {
+                listOf(false to t("recitation.mode.check"), true to t("recitation.mode.memorize")).forEach { (value, label) ->
+                    val selected = value == memorize
+                    val color by animateColorAsState(
+                        if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                        label = "modeText"
+                    )
+                    Box(
+                        Modifier
+                            .weight(1f)
+                            .fillMaxHeight()
+                            .clip(CircleShape)
+                            .clickable(enabled = enabled, role = Role.RadioButton) { onChange(value) },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(label, style = MaterialTheme.typography.labelLarge, color = color)
+                    }
+                }
+            }
+        }
+        Text(
+            if (memorize) t("recitation.mode.memorize.note") else t("recitation.mode.check.note"),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = 8.dp)
+        )
     }
 }
 
@@ -340,45 +560,18 @@ private fun PickerCard(
 }
 
 /**
- * Strips diacritics, tatweel and the Quranic annotation marks, and folds letter variants, so
- * the Uthmani ayah text and the recognizer's plain Arabic compare word for word. Without the
- * wasla alef «ٱ» and the pause marks (ۚ ۖ ۛ …) folded, «ٱللَّهِ» never matched «الله».
- */
-private fun normalizeArabic(text: String): String {
-    val marks = Regex("[\\u0610-\\u061A\\u064B-\\u065F\\u0640\\u0670\\u06D6-\\u06ED]")
-    return marks.replace(text, "")
-        .replace('ٱ', 'ا').replace('أ', 'ا').replace('إ', 'ا').replace('آ', 'ا')
-        .replace('ى', 'ي').replace('ة', 'ه').replace('ؤ', 'و').replace('ئ', 'ي')
-        .replace("ء", "")
-        .trim()
-}
-
-/**
- * Returns how many of [targetWords], read in order from the start, are matched by the
- * words in [transcript] — a simple karaoke-style "how far has the reader gotten" signal.
- * Whisper may re-transcribe the whole buffer on every partial, so this always re-aligns
- * from the beginning rather than trying to diff against the previous partial.
- */
-private fun matchArabicWords(transcript: String, targetWords: List<String>): Int {
-    if (targetWords.isEmpty() || transcript.isBlank()) return 0
-    val heard = transcript.trim().split(Regex("\\s+")).map { normalizeArabic(it) }.filter { it.isNotBlank() }
-    val target = targetWords.map { normalizeArabic(it) }
-    var matched = 0
-    for (word in heard) {
-        if (matched < target.size && target[matched] == word) matched++
-    }
-    return matched
-}
-
-/**
- * The ayah being recited, in the same gold double frame as the ayah card. Words already
- * recited turn gold, the next word is in the primary color, the rest wait muted.
+ * The ayah being recited, in the same gold double frame as the ayah card. While reciting,
+ * words reached turn gold and the next word takes the primary color; the final result marks
+ * mistakes in red (a skipped word is underlined). In memorize mode the words not reached yet
+ * are covered and open one by one as they are read.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun AyahHighlightCard(words: List<String>, matchedCount: Int, reference: String) {
+private fun AyahHighlightCard(words: List<String>, alignment: WordAlignment?, hideUnread: Boolean, reference: String) {
     val c = nurColors
     val muted = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+    val error = MaterialTheme.colorScheme.error
+    val reached = alignment?.reached ?: 0
     NurSurfaceCard(Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.large) {
         Column(
             Modifier
@@ -401,16 +594,36 @@ private fun AyahHighlightCard(words: List<String>, matchedCount: Int, reference:
                 FlowRow(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     words.forEachIndexed { index, word ->
+                        val status = alignment?.marks?.getOrNull(index)?.status ?: WordStatus.PENDING
+                        val covered = hideUnread && status == WordStatus.PENDING
+                        val target = when {
+                            covered -> androidx.compose.ui.graphics.Color.Transparent
+                            status == WordStatus.CORRECT -> c.goldText
+                            status == WordStatus.WRONG || status == WordStatus.MISSED -> error
+                            index == reached -> MaterialTheme.colorScheme.primary
+                            else -> muted
+                        }
+                        val color by animateColorAsState(target, tween(260), label = "word")
+                        val cover by animateFloatAsState(if (covered) 1f else 0f, tween(260), label = "cover")
+                        val coverColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.10f)
                         Text(
                             text = word,
-                            style = quranTextStyle(28),
-                            color = when {
-                                index < matchedCount -> c.goldText
-                                index == matchedCount -> MaterialTheme.colorScheme.primary
-                                else -> muted
+                            style = quranTextStyle(28).copy(
+                                textDecoration = if (status == WordStatus.MISSED) androidx.compose.ui.text.style.TextDecoration.Underline else null
+                            ),
+                            color = color,
+                            modifier = Modifier.drawBehind {
+                                if (cover > 0f) {
+                                    drawRoundRect(
+                                        coverColor.copy(alpha = coverColor.alpha * cover),
+                                        topLeft = Offset(0f, size.height * 0.18f),
+                                        size = androidx.compose.ui.geometry.Size(size.width, size.height * 0.64f),
+                                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(8.dp.toPx())
+                                    )
+                                }
                             }
                         )
                     }
@@ -520,43 +733,86 @@ private fun StarScoreGauge(score: Int) {
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
+/** What went wrong, word by word, and what was heard. */
 @Composable
-private fun ResultCard(transcript: String, issues: List<String>) {
+private fun MistakesCard(words: List<String>, alignment: WordAlignment, transcript: String) {
+    val c = nurColors
+    var showTranscript by remember { mutableStateOf(false) }
+    val mistakes = alignment.marks.withIndex().filter { it.value.status == WordStatus.WRONG || it.value.status == WordStatus.MISSED }
     NurSurfaceCard(Modifier.fillMaxWidth()) {
         Column {
-            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(t("recitation.transcriptTitle"), style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 if (transcript.isBlank()) {
                     Text(t("recitation.transcriptEmpty"), style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                } else if (mistakes.isEmpty()) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Icon(Icons.Default.CheckCircle, null, tint = c.goldText, modifier = Modifier.size(24.dp))
+                        Text(t("recitation.allCorrect"), style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
+                    }
                 } else {
+                    Text(
+                        t("recitation.mistakes.title").replace("{n}", mistakes.size.toString()),
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    mistakes.forEach { (index, mark) ->
+                        MistakeRow(written = words[index], mark = mark)
+                    }
+                }
+            }
+            if (transcript.isNotBlank()) {
+                NurDivider()
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .clickable { showTranscript = !showTranscript }
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(t("recitation.transcriptTitle"), style = MaterialTheme.typography.labelLarge, color = c.goldText, modifier = Modifier.weight(1f))
+                    Icon(
+                        if (showTranscript) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                        contentDescription = null,
+                        tint = c.goldText
+                    )
+                }
+                androidx.compose.animation.AnimatedVisibility(showTranscript) {
                     Text(
                         transcript,
                         style = quranTextStyle(22),
                         color = MaterialTheme.colorScheme.onSurface,
                         textAlign = TextAlign.Right,
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 16.dp)
                     )
                 }
             }
-            if (issues.isNotEmpty()) {
-                NurDivider()
-                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text(t("recitation.issuesTitle"), style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
-                    FlowRow(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        issues.forEach {
-                            NurPill(
-                                text = it,
-                                tone = MaterialTheme.colorScheme.errorContainer,
-                                contentColor = MaterialTheme.colorScheme.onErrorContainer
-                            )
-                        }
-                    }
-                }
-            }
         }
+    }
+}
+
+/** «written» skipped, or «written» read as «heard». */
+@Composable
+private fun MistakeRow(written: String, mark: WordMark) {
+    val error = MaterialTheme.colorScheme.error
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clip(MaterialTheme.shapes.small)
+            .background(MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.45f))
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        Text(
+            if (mark.status == WordStatus.MISSED) t("recitation.mistake.missed") else t("recitation.mistake.wrong"),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onErrorContainer,
+            modifier = Modifier.weight(1f)
+        )
+        if (mark.status == WordStatus.WRONG && !mark.heard.isNullOrBlank()) {
+            Text(mark.heard, style = quranTextStyle(20), color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Icon(Icons.Default.ArrowBack, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(16.dp))
+        }
+        Text(written, style = quranTextStyle(22), color = error)
     }
 }

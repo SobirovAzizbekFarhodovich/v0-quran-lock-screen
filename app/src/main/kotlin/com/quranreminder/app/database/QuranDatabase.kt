@@ -8,8 +8,8 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
-    entities = [QuranVerse::class, Reminder::class, Bookmark::class, AppSettings::class],
-    version = 3,
+    entities = [QuranVerse::class, Reminder::class, Bookmark::class, AppSettings::class, RecitationResultEntity::class],
+    version = 4,
     exportSchema = false
 )
 abstract class QuranDatabase : RoomDatabase() {
@@ -17,6 +17,7 @@ abstract class QuranDatabase : RoomDatabase() {
     abstract fun reminderDao(): ReminderDao
     abstract fun bookmarkDao(): BookmarkDao
     abstract fun appSettingsDao(): AppSettingsDao
+    abstract fun recitationHistoryDao(): RecitationHistoryDao
 
     companion object {
         @Volatile
@@ -29,6 +30,21 @@ abstract class QuranDatabase : RoomDatabase() {
             }
         }
 
+        /** Recitation history, kept on the device. Everything else is untouched. */
+        private val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `recitation_results` (" +
+                        "`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `surahNumber` INTEGER NOT NULL, " +
+                        "`ayahNumber` INTEGER NOT NULL, `wordCount` INTEGER NOT NULL, `correctCount` INTEGER NOT NULL, " +
+                        "`wrongCount` INTEGER NOT NULL, `missedCount` INTEGER NOT NULL, `mode` TEXT NOT NULL, " +
+                        "`createdAt` INTEGER NOT NULL, `day` INTEGER NOT NULL)"
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_recitation_results_surahNumber_ayahNumber` ON `recitation_results` (`surahNumber`, `ayahNumber`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_recitation_results_day` ON `recitation_results` (`day`)")
+            }
+        }
+
         fun getDatabase(context: Context): QuranDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -36,7 +52,7 @@ abstract class QuranDatabase : RoomDatabase() {
                     QuranDatabase::class.java,
                     "quran_database"
                 )
-                    .addMigrations(MIGRATION_2_3)
+                    .addMigrations(MIGRATION_2_3, MIGRATION_3_4)
                     .fallbackToDestructiveMigration()
                     .addCallback(RoomDatabaseCallback())
                     .build()

@@ -56,6 +56,10 @@ class Settings:
     # RMS (16-bit) under which audio counts as silence and is not transcribed, so
     # Whisper never invents text from room noise. Speech is in the thousands.
     min_speech_rms: float = float(os.getenv("RECITATION_MIN_SPEECH_RMS", "80"))
+    # Segments Whisper itself rates as probably not speech are dropped. On room noise and
+    # hum the Quran model still "hears" a word (often «وَالْمُؤْمِنِينَ») but with
+    # no_speech_prob 0.38-0.49; recitation measured 0.00.
+    max_no_speech_prob: float = float(os.getenv("RECITATION_MAX_NO_SPEECH_PROB", "0.3"))
     whisper_device: str = os.getenv("WHISPER_DEVICE", "cpu")
     whisper_compute: str = os.getenv("WHISPER_COMPUTE", "int8")
     worker_name: str = os.getenv("HOSTNAME", "worker-1")
@@ -531,7 +535,10 @@ def transcribe(audio: bytes, fast: bool = False) -> Transcription:
             vad_filter=settings.vad_filter and not fast,
             vad_parameters=dict(min_silence_duration_ms=500),
         )
-        segment_list = list(segments)
+        segment_list = [
+            segment for segment in segments
+            if getattr(segment, "no_speech_prob", 0.0) <= settings.max_no_speech_prob
+        ]
         parts = [segment.text for segment in segment_list]
         probabilities = [
             segment.avg_logprob for segment in segment_list
