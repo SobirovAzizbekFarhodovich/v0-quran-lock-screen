@@ -43,7 +43,19 @@ class Settings:
     redis_addr: str = os.getenv("REDIS_ADDR", "localhost:6379")
     redis_password: str = os.getenv("REDIS_PASSWORD", "")
     redis_db: int = int(os.getenv("REDIS_DB", "0"))
+    # A model name ("small") or a directory with a CTranslate2 model. Production uses
+    # Tarteel's Quran fine-tune of whisper-base (scripts/convert_tarteel_model.py):
+    # on 45 ayahs by three reciters it made 11% word errors against 23-44% for
+    # "small", in under half the time and half the memory.
     whisper_model: str = os.getenv("WHISPER_MODEL", "small")
+    # Used when WHISPER_MODEL points at a directory that is missing.
+    whisper_fallback_model: str = os.getenv("WHISPER_FALLBACK_MODEL", "small")
+    # Voice-activity filtering cut reciters' long madds as "silence" and doubled the
+    # word errors, so it is off; quiet input is gated by level instead.
+    vad_filter: bool = os.getenv("RECITATION_VAD", "0") == "1"
+    # RMS (16-bit) under which audio counts as silence and is not transcribed, so
+    # Whisper never invents text from room noise. Speech is in the thousands.
+    min_speech_rms: float = float(os.getenv("RECITATION_MIN_SPEECH_RMS", "80"))
     whisper_device: str = os.getenv("WHISPER_DEVICE", "cpu")
     whisper_compute: str = os.getenv("WHISPER_COMPUTE", "int8")
     worker_name: str = os.getenv("HOSTNAME", "worker-1")
@@ -74,6 +86,7 @@ class Settings:
 settings = Settings()
 client: redis.Redis | None = None
 model = None
+loaded_model_name: str | None = None
 session_buffers: dict[str, bytearray] = {}
 session_last_partial_bytes: dict[str, int] = {}
 # Per-session committed partial transcript: (bytes already transcribed, text).
@@ -91,6 +104,44 @@ class Transcription:
     no_speech_probability: float | None = None
 
 
+def resolve_model_name() -> str:
+    name = settings.whisper_model
+    if name.startswith(("/", ".")) and not os.path.isdir(name):
+        logger.error(
+            "Whisper model directory %s is missing; falling back to %s",
+            name,
+            settings.whisper_fallback_model,
+        )
+        return settings.whisper_fallback_model
+    return name
+
+
+def load_whisper_model():
+    global loaded_model_name
+    loaded_model_name = resolve_model_name()
+    return WhisperModel(
+        loaded_model_name,
+        device=settings.whisper_device,
+        compute_type=settings.whisper_compute,
+    )
+
+
+def is_silence(audio: bytes) -> bool:
+    """True when 16-bit PCM is too quiet to hold speech (see Settings.min_speech_rms)."""
+    usable = len(audio) - len(audio) % SAMPLE_WIDTH_BYTES
+    if usable <= 0:
+        return True
+    try:
+        import numpy as np
+
+        samples = np.frombuffer(audio[:usable], dtype=np.int16).astype(np.float64)
+        rms = float(np.sqrt(np.mean(samples * samples)))
+    except ImportError:  # pragma: no cover - numpy ships with faster-whisper
+        samples = memoryview(audio[:usable]).cast("h")
+        rms = (sum(sample * sample for sample in samples) / len(samples)) ** 0.5
+    return rms < settings.min_speech_rms
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global client, model
@@ -103,11 +154,7 @@ async def lifespan(app: FastAPI):
         decode_responses=True,
     )
     if WhisperModel is not None:
-        model = WhisperModel(
-            settings.whisper_model,
-            device=settings.whisper_device,
-            compute_type=settings.whisper_compute,
-        )
+        model = load_whisper_model()
     else:
         logger.error("faster-whisper unavailable, recitation cannot transcribe: %s", WHISPER_IMPORT_ERROR)
     task = asyncio.create_task(consume_audio())
@@ -131,7 +178,7 @@ async def healthz() -> dict[str, str | int | bool]:
         # Without the model every recitation comes back empty: that is not "ok".
         "status": "ok" if model is not None else "degraded",
         "model_loaded": model is not None,
-        "model_name": settings.whisper_model,
+        "model_name": loaded_model_name or settings.whisper_model,
         "buffered_sessions": len(session_buffers),
         "buffered_bytes": sum(len(buffer) for buffer in session_buffers.values()),
     }
@@ -463,7 +510,7 @@ def transcribe(audio: bytes, fast: bool = False) -> Transcription:
     used for the live, non-final partial transcriptions that drive word
     highlighting while the reader is still speaking.
     """
-    if model is None or not audio or len(audio) < 1600:
+    if model is None or not audio or len(audio) < 1600 or is_silence(audio):
         return Transcription("")
 
     # Write to temp WAV file for faster-whisper.
@@ -481,7 +528,7 @@ def transcribe(audio: bytes, fast: bool = False) -> Transcription:
             language="ar",
             task="transcribe",
             beam_size=1 if fast else 5,
-            vad_filter=not fast,
+            vad_filter=settings.vad_filter and not fast,
             vad_parameters=dict(min_silence_duration_ms=500),
         )
         segment_list = list(segments)

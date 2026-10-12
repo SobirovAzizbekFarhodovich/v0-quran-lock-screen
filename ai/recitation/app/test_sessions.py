@@ -105,3 +105,22 @@ def test_partials_are_coalesced_per_batch() -> None:
     entries = [audio("a"), audio("b"), audio("a"), audio("b"), ("id", {"session_id": "b", "event": "stop"})]
     # Only a's latest chunk is transcribed live; b is stopping, so it gets none.
     assert partial_worthy(entries) == {2}
+
+
+def test_silence_is_not_transcribed() -> None:
+    from app.main import is_silence
+    import struct
+
+    quiet = struct.pack("<" + "h" * 1600, *([20, -20] * 800))
+    speech = struct.pack("<" + "h" * 1600, *([2000, -2000] * 800))
+    assert is_silence(quiet)
+    assert not is_silence(speech)
+    assert is_silence(b"")
+
+
+def test_missing_model_directory_falls_back(monkeypatch) -> None:
+    from app import main as m
+
+    monkeypatch.setattr(m.settings, "whisper_model", "/nonexistent/model")
+    monkeypatch.setattr(m.settings, "whisper_fallback_model", "small")
+    assert m.resolve_model_name() == "small"

@@ -339,12 +339,17 @@ private fun PickerCard(
     }
 }
 
-/** Strips Arabic diacritics/tatweel and normalizes alef/ya/hamza variants for robust matching. */
+/**
+ * Strips diacritics, tatweel and the Quranic annotation marks, and folds letter variants, so
+ * the Uthmani ayah text and the recognizer's plain Arabic compare word for word. Without the
+ * wasla alef «ٱ» and the pause marks (ۚ ۖ ۛ …) folded, «ٱللَّهِ» never matched «الله».
+ */
 private fun normalizeArabic(text: String): String {
-    val diacritics = Regex("[\\u064B-\\u0652\\u0640\\u0670]")
-    return diacritics.replace(text, "")
-        .replace('أ', 'ا').replace('إ', 'ا').replace('آ', 'ا')
-        .replace('ى', 'ي').replace('ة', 'ه')
+    val marks = Regex("[\\u0610-\\u061A\\u064B-\\u065F\\u0640\\u0670\\u06D6-\\u06ED]")
+    return marks.replace(text, "")
+        .replace('ٱ', 'ا').replace('أ', 'ا').replace('إ', 'ا').replace('آ', 'ا')
+        .replace('ى', 'ي').replace('ة', 'ه').replace('ؤ', 'و').replace('ئ', 'ي')
+        .replace("ء", "")
         .trim()
 }
 
