@@ -94,3 +94,14 @@ def test_analyze_rejects_oversized_audio(monkeypatch) -> None:
     with pytest.raises(HTTPException) as err:
         asyncio.run(analyze(AnalyzeRequest(audio_b64=audio)))
     assert err.value.status_code == 413
+
+
+def test_partials_are_coalesced_per_batch() -> None:
+    from app.main import partial_worthy
+
+    def audio(session: str) -> tuple[str, dict[str, str]]:
+        return ("id", {"session_id": session, "event": "audio", "audio_b64": ""})
+
+    entries = [audio("a"), audio("b"), audio("a"), audio("b"), ("id", {"session_id": "b", "event": "stop"})]
+    # Only a's latest chunk is transcribed live; b is stopping, so it gets none.
+    assert partial_worthy(entries) == {2}

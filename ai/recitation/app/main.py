@@ -15,8 +15,12 @@ from pydantic import BaseModel
 
 try:
     from faster_whisper import WhisperModel
-except Exception:  # pragma: no cover - keeps health endpoint usable without model deps
+    WHISPER_IMPORT_ERROR: str | None = None
+except Exception as exc:  # pragma: no cover - keeps health endpoint usable without model deps
+    # Never silent: a missing dependency once left every recitation with an empty result
+    # while /healthz still said "ok".
     WhisperModel = None
+    WHISPER_IMPORT_ERROR = f"{type(exc).__name__}: {exc}"
 
 
 logger = logging.getLogger("recitation")
@@ -104,6 +108,8 @@ async def lifespan(app: FastAPI):
             device=settings.whisper_device,
             compute_type=settings.whisper_compute,
         )
+    else:
+        logger.error("faster-whisper unavailable, recitation cannot transcribe: %s", WHISPER_IMPORT_ERROR)
     task = asyncio.create_task(consume_audio())
     yield
     task.cancel()
@@ -122,7 +128,8 @@ app = FastAPI(title="Islamic AI Recitation Service", lifespan=lifespan)
 @app.get("/healthz")
 async def healthz() -> dict[str, str | int | bool]:
     return {
-        "status": "ok",
+        # Without the model every recitation comes back empty: that is not "ok".
+        "status": "ok" if model is not None else "degraded",
         "model_loaded": model is not None,
         "model_name": settings.whisper_model,
         "buffered_sessions": len(session_buffers),
@@ -183,12 +190,12 @@ async def consume_audio() -> None:
                 GROUP_NAME,
                 settings.worker_name,
                 {STREAM_NAME: ">"},
-                count=4,
+                # Take the whole backlog at once so it can be coalesced (see handle_batch).
+                count=256,
                 block=5000,
             )
             for _, entries in messages:
-                for message_id, fields in entries:
-                    await handle_stream_message(message_id, fields)
+                await handle_batch(entries)
         except asyncio.CancelledError:
             raise
         except Exception:
@@ -196,11 +203,38 @@ async def consume_audio() -> None:
             await asyncio.sleep(2)
 
 
-async def handle_stream_message(message_id: str, fields: dict[str, str]) -> None:
+def partial_worthy(entries: list[tuple[str, dict[str, str]]]) -> set[int]:
+    """Indexes of the audio entries that still deserve a live (partial) transcript.
+
+    A transcription costs seconds on the server's CPUs whatever the audio length
+    (Whisper pads to 30 s), so one per 1.5 s of speech piled up: live highlighting
+    never kept pace and the final result waited behind stale partials (~17 s after
+    Stop for a 5 s ayah). Within a batch only each session's latest audio entry is
+    transcribed live, and none when that session's Stop is already queued.
+    """
+    stopping: set[str] = set()
+    last_audio: dict[str, int] = {}
+    for index, (_, fields) in enumerate(entries):
+        session_id = fields.get("session_id") or ""
+        event = fields.get("event", "audio")
+        if event == "stop":
+            stopping.add(session_id)
+        elif event == "audio":
+            last_audio[session_id] = index
+    return {index for session_id, index in last_audio.items() if session_id not in stopping}
+
+
+async def handle_batch(entries: list[tuple[str, dict[str, str]]]) -> None:
+    worthy = partial_worthy(entries)
+    for index, (message_id, fields) in enumerate(entries):
+        await handle_stream_message(message_id, fields, allow_partial=index in worthy)
+
+
+async def handle_stream_message(message_id: str, fields: dict[str, str], allow_partial: bool = True) -> None:
     if client is None:
         return
     try:
-        result = await process_chunk(fields)
+        result = await process_chunk(fields, allow_partial=allow_partial)
         if result is not None:
             payload = json.dumps(result, ensure_ascii=False)
             session_id = result["session_id"]
@@ -270,7 +304,7 @@ def evict_idle_sessions(now: float | None = None) -> int:
     return len(stale)
 
 
-async def process_chunk(fields: dict[str, str]) -> dict | None:
+async def process_chunk(fields: dict[str, str], allow_partial: bool = True) -> dict | None:
     session_id = fields.get("session_id") or ""
     if not session_id:
         raise ValueError("missing session_id")
@@ -288,6 +322,10 @@ async def process_chunk(fields: dict[str, str]) -> dict | None:
         return None
     else:
         buffer = session_buffers.get(session_id, bytearray())
+
+    if not final and not allow_partial:
+        # Newer audio or the Stop for this session is already queued: just buffer it.
+        return None
 
     if not final:
         # Fast, non-final transcription so the client can highlight words
