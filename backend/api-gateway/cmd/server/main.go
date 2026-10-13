@@ -20,6 +20,7 @@ import (
 	"islamic-ai/backend/api-gateway/internal/httpapi"
 	"islamic-ai/backend/api-gateway/internal/rag"
 	"islamic-ai/backend/api-gateway/internal/ratelimit"
+	"islamic-ai/backend/api-gateway/internal/schema"
 	"islamic-ai/backend/api-gateway/internal/ws"
 )
 
@@ -46,6 +47,12 @@ func main() {
 		log.Fatalf("postgres ping: %v", err)
 	}
 
+	// migrations/ only run on a fresh postgres volume; apply the idempotent ones that
+	// back the recitation sync/report APIs to existing databases too.
+	if err := schema.Apply(ctx, db); err != nil {
+		log.Printf("WARNING: schema apply failed, recitation sync/report endpoints will fail: %v", err)
+	}
+
 	redisClient := redis.NewClient(&redis.Options{
 		Addr:     cfg.RedisAddr,
 		Password: cfg.RedisPassword,
@@ -64,6 +71,12 @@ func main() {
 	ragClient := rag.NewClient(cfg.AIRAGURL, 90*time.Second)
 	ragHandler := httpapi.NewRAGHandler(ragClient)
 	legacyChatHandler := httpapi.NewLegacyChatHandler(ragClient)
+	recitationResultsHandler := httpapi.NewRecitationResultsHandler(db)
+	recitationReportsHandler := httpapi.NewRecitationReportsHandler(db, httpapi.RecitationReportsConfig{
+		Dir:        cfg.RecitationReportsDir,
+		DailyLimit: cfg.RecitationReportsDailyLimit,
+		MinFreeMB:  int64(cfg.RecitationReportsMinFreeMB),
+	})
 	wsHandler := ws.NewHandler(redisClient, db, cfg.CORSOrigins)
 
 	router := gin.New()
@@ -92,9 +105,12 @@ func main() {
 		c.Next()
 	})
 
-	// Request body limit (10 MB)
+	// Request body limit (10 MB). Recitation reports carry up to 15 minutes of PCM
+	// audio and enforce their own, larger limit in the handler.
 	router.Use(func(c *gin.Context) {
-		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 10<<20)
+		if c.Request.URL.Path != httpapi.RecitationReportsPath {
+			c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 10<<20)
+		}
 		c.Next()
 	})
 
@@ -140,6 +156,10 @@ func main() {
 		ratelimit.RedisTokenBucket(redisClient, 20, time.Minute),
 		ragHandler.Query,
 	)
+	protected.POST("/recitation/results", recitationResultsHandler.Upload)
+	protected.GET("/recitation/results", recitationResultsHandler.List)
+	protected.DELETE("/recitation/results", recitationResultsHandler.Delete)
+	protected.POST("/recitation/reports", recitationReportsHandler.Create)
 
 	// --- WebSocket ---
 	router.GET("/ws/recitation", auth.WebSocketMiddleware(tokenService), wsHandler.Recitation)
