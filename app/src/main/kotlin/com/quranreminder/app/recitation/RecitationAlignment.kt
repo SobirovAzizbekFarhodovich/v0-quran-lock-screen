@@ -71,11 +71,19 @@ object RecitationAlignment {
 
     fun sameWord(written: String, heard: String): Boolean = sameSkeleton(skeleton(written), skeleton(heard), written, heard)
 
+    /**
+     * Same word, allowing only what is spelling rather than reading: long-vowel letters
+     * (و ي ى, alefs are already gone) and hamza seats. A consonant swapped, dropped or added
+     * is a mistake — «يسعرون» for «يَشْعُرُونَ» (س for ش) is exactly the makhraj error a reader
+     * needs to see, and a one-letter tolerance used to let it through.
+     */
     private fun sameSkeleton(a: String, b: String, written: String, heard: String): Boolean {
         if (a.isEmpty() || b.isEmpty()) return normalize(written) == normalize(heard)
         if (a == b) return true
-        return minOf(a.length, b.length) >= 4 && kotlin.math.abs(a.length - b.length) <= 1 && editDistance(a, b) <= 1
+        return minOf(a.length, b.length) >= 3 && consonants(a) == consonants(b)
     }
+
+    private fun consonants(skeleton: String): String = skeleton.filter { it != 'و' && it != 'ي' && it != 'ى' && it != 'ء' }
 
     fun words(text: String): List<String> =
         text.trim().split(Regex("\\s+")).filter { normalize(it).isNotEmpty() }

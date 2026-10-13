@@ -1,6 +1,7 @@
 package com.quranreminder.app.recitation
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -52,10 +53,16 @@ class RecitationAlignmentTest {
         assertEquals(listOf("بسم"), a.extraWords)
     }
 
-    @Test fun recognizerSpellingSlipOnALongWordIsAccepted() {
-        // One letter off in a long word: far likelier the model than the reader.
+    @Test fun longVowelSpellingIsAccepted() {
         assertTrue(RecitationAlignment.sameWord("ٱلْمُسْتَقِيمَ", "المستقيم"))
         assertTrue(RecitationAlignment.sameWord("ٱلْمُسْتَقِيمَ", "المستقم"))
+        assertTrue(RecitationAlignment.sameWord("ٱلصَّلَوٰةَ", "الصلاة"))
+    }
+
+    @Test fun aSwappedConsonantIsAMistake() {
+        // ش read as س: a makhraj mistake, not spelling.
+        assertFalse(RecitationAlignment.sameWord("يَشْعُرُونَ", "يسعرون"))
+        assertFalse(RecitationAlignment.sameWord("ٱلْعَٰلَمِينَ", "العالم"))
     }
 
     @Test fun emptyTranscriptMissesEverything() {
