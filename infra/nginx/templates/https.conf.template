@@ -1,0 +1,22 @@
+# Rendered by /docker-entrypoint.d/40-noorain-https.sh into
+# /etc/nginx/https.d/https.conf (only ${PUBLIC_HOST} and ${SERVER_NAMES} are
+# substituted; SERVER_NAMES = PUBLIC_HOST plus EXTRA_HOSTS).
+server {
+  listen 443 ssl;
+  http2 on;
+  server_name ${SERVER_NAMES};
+  client_max_body_size 20m;
+
+  # One certificate (named after PUBLIC_HOST) covers every name above.
+  ssl_certificate     /etc/letsencrypt/live/${PUBLIC_HOST}/fullchain.pem;
+  ssl_certificate_key /etc/letsencrypt/live/${PUBLIC_HOST}/privkey.pem;
+  include /etc/nginx/snippets/tls.conf;
+
+  include /etc/nginx/snippets/security-headers.conf;
+  # HTTPS only: HSTS on plain HTTP is ignored by browsers anyway.
+  add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+
+  # /ws/recitation is proxied with Upgrade/Connection headers and a long
+  # read timeout by the /ws/ location in this snippet (wss:// works the same).
+  include /etc/nginx/snippets/app-locations.conf;
+}

@@ -48,6 +48,9 @@ services:
     build:
       context: ./backend/api-gateway
     env_file: .env
+    environment:
+      # Probed by GET /healthz/deep (model_loaded must be true).
+      AI_RECITATION_URL: ${AI_RECITATION_URL:-http://ai-recitation:8001}
     depends_on:
       postgres:
         condition: service_healthy
@@ -91,15 +94,46 @@ services:
 
   nginx:
     image: nginx:1.27-alpine
+    environment:
+      # Public hostname for HTTPS (also names the certificate). Default is the
+      # sslip.io name that resolves to the server IP. Switch to a real domain
+      # with infra/scripts/enable-domain.sh, or by setting PUBLIC_HOST (and
+      # optionally EXTRA_HOSTS="noorain.uz,www.noorain.uz") in .env and running
+      # `docker compose up -d --no-deps nginx certbot`; certbot then issues one
+      # certificate covering all of them.
+      PUBLIC_HOST: ${PUBLIC_HOST:-3-73-130-154.sslip.io}
+      EXTRA_HOSTS: ${EXTRA_HOSTS:-}
     ports:
       - "80:80"
-      # - "443:443"  # Uncomment for HTTPS
+      - "443:443"
     volumes:
       - ./infra/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./infra/nginx/snippets:/etc/nginx/snippets:ro
+      - ./infra/nginx/templates:/etc/nginx/noorain-templates:ro
+      - ./infra/nginx/40-noorain-https.sh:/docker-entrypoint.d/40-noorain-https.sh:ro
       - ./remote_backgrounds:/usr/share/nginx/html/backgrounds:ro
-      # - ./infra/nginx/ssl:/etc/nginx/ssl:ro  # Uncomment for HTTPS
+      - letsencrypt:/etc/letsencrypt:ro
+      - certbot_www:/var/www/certbot:ro
     depends_on:
       - api-gateway
+
+  # Issues and renews the Let's Encrypt certificate for PUBLIC_HOST over
+  # HTTP-01 (nginx serves /.well-known/acme-challenge/ from certbot_www).
+  # Certificates live in the letsencrypt volume, outside the rsynced tree.
+  certbot:
+    image: certbot/certbot:v5.8.0
+    environment:
+      PUBLIC_HOST: ${PUBLIC_HOST:-3-73-130-154.sslip.io}
+      EXTRA_HOSTS: ${EXTRA_HOSTS:-}
+      LETSENCRYPT_EMAIL: ${LETSENCRYPT_EMAIL:-}
+    entrypoint: ["/bin/sh", "/opt/noorain-certbot/certbot-loop.sh"]
+    volumes:
+      - ./infra/certbot:/opt/noorain-certbot:ro
+      - letsencrypt:/etc/letsencrypt
+      - certbot_www:/var/www/certbot
+    depends_on:
+      - nginx
+    restart: unless-stopped
 
   prometheus:
     image: prom/prometheus:v3.1.0
@@ -131,3 +165,5 @@ volumes:
   minio_data:
   prometheus_data:
   grafana_data:
+  letsencrypt:
+  certbot_www:
