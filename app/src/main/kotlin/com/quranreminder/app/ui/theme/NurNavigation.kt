@@ -305,12 +305,19 @@ fun NurNavigationBar(currentRoute: String?, onSelect: (String) -> Unit) {
             val done = withFrameNanos { now ->
                 val dt = if (last == 0L) 1f / 60f else min(1f / 30f, (now - last) / 1_000_000_000f)
                 last = now
-                if (sim.dragging) sim.x.step(sim.tx, 900f, 45f, dt) else sim.x.step(sim.tx, 230f, 17f, dt)
+                if (sim.dragging) sim.x.step(sim.tx, 900f, 45f, dt) else sim.x.step(sim.tx, 230f, 24f, dt)
                 sim.w.step(sim.tw, 260f, 20f, dt)
-                val speed = if (sim.dragging) sim.dragVel else sim.x.v
-                val speedDp = speed / density.density
-                sim.stretch.step(min(0.45f, abs(speedDp) / 1600f), 320f, 9f, dt)
-                val travelling = abs(sim.x.x - sim.tx) > 1.5f || abs(sim.x.v) > 40f
+                // The lens stretches with the finger's speed only while it is being dragged. Once
+                // let go it relaxes straight back (critically damped): no swelling after release.
+                if (sim.dragging) {
+                    val speedDp = sim.dragVel / density.density
+                    sim.stretch.step(min(0.45f, abs(speedDp) / 1600f), 320f, 9f, dt)
+                } else {
+                    sim.stretch.step(0f, 320f, 2f * kotlin.math.sqrt(320f), dt)
+                }
+                // "Arrived" a little before the spring is fully still, so the lens starts settling
+                // into the pill as it lands instead of lingering on the tab.
+                val travelling = abs(sim.x.x - sim.tx) > 4f * density.density || abs(sim.x.v) > 160f * density.density
                 sim.appearTarget = if (sim.dragging || travelling) 1f else 0f
                 // Appears fast and a little springy; leaves softer.
                 if (sim.appearTarget > 0f) sim.appear.step(1f, 520f, 26f, dt) else sim.appear.step(0f, 300f, 2f * kotlin.math.sqrt(300f), dt)
@@ -449,7 +456,9 @@ fun NurNavigationBar(currentRoute: String?, onSelect: (String) -> Unit) {
                         val centre = sim.tx + sim.w.x / 2 + sim.dragVel * 0.05f
                         val best = tabLeft.indices.minByOrNull { abs(tabLeft[it] + tabWidth[it] / 2 - centre) } ?: currentIndex
                         sim.dragging = false
-                        sim.x.v = sim.dragVel
+                        // A little of the flick carries into the settle; the full flick velocity
+                        // made the lens fly and bulge past the tab.
+                        sim.x.v = sim.dragVel * 0.25f
                         sim.tx = tabLeft[best]
                         sim.tw = tabWidth[best]
                         kick++
