@@ -56,6 +56,14 @@ class RecitationClient(context: Context, private val strings: Map<String, String
     private var readerThread: Thread? = null
     @Volatile private var recording = false
 
+    /**
+     * The last recording (up to [MAX_KEPT_BYTES]), kept in memory only so the user can choose
+     * to send it with a "this result is wrong" report. Never stored or sent otherwise.
+     */
+    private val kept = java.io.ByteArrayOutputStream()
+
+    fun lastRecording(): ByteArray = synchronized(kept) { kept.toByteArray() }
+
     /** Incremented per [start]; callbacks from an older attempt are ignored. */
     @Volatile private var generation = 0
     /** Set once the current attempt has delivered a final result or an error. */
@@ -79,6 +87,7 @@ class RecitationClient(context: Context, private val strings: Map<String, String
         socket?.cancel()
         socket = null
 
+        synchronized(kept) { kept.reset() }
         val callbacks = Callbacks(attempt, onPartial, onResult, onError)
         scope.launch {
             // Recitation is server-side: fail fast with a clear message when offline.
@@ -203,6 +212,7 @@ class RecitationClient(context: Context, private val strings: Map<String, String
                 val count = record.read(buffer, 0, buffer.size)
                 if (count > 0) {
                     socket?.send(ByteString.of(*buffer.copyOf(count)))
+                    synchronized(kept) { if (kept.size() + count <= MAX_KEPT_BYTES) kept.write(buffer, 0, count) }
                 } else if (count < 0) {
                     // ERROR_INVALID_OPERATION / ERROR_DEAD_OBJECT: the recorder is unusable.
                     if (recording) {
@@ -272,5 +282,10 @@ class RecitationClient(context: Context, private val strings: Map<String, String
             }
             deliver(block)
         }
+    }
+
+    private companion object {
+        /** Five minutes of 16 kHz mono 16-bit audio. */
+        const val MAX_KEPT_BYTES = 5 * 60 * 16_000 * 2
     }
 }

@@ -62,14 +62,19 @@ object RecitationAlignment {
         .filter { it in 'ء'..'ي' }
 
     /** [normalize] without alefs: Uthmani and plain spellings differ mostly in long-a alefs. */
-    private fun skeleton(word: String): String = normalize(word).replace("ا", "")
+    private fun skeleton(word: String): String = skeletonCache.getOrPut(word) { normalize(word).replace("ا", "") }
 
-    fun sameWord(written: String, heard: String): Boolean {
-        val a = skeleton(written)
-        val b = skeleton(heard)
+    // Words repeat a lot (and the same passage is re-aligned on every live partial).
+    private val skeletonCache = object : LinkedHashMap<String, String>(4096, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, String>?) = size > 40_000
+    }
+
+    fun sameWord(written: String, heard: String): Boolean = sameSkeleton(skeleton(written), skeleton(heard), written, heard)
+
+    private fun sameSkeleton(a: String, b: String, written: String, heard: String): Boolean {
         if (a.isEmpty() || b.isEmpty()) return normalize(written) == normalize(heard)
         if (a == b) return true
-        return minOf(a.length, b.length) >= 4 && editDistance(a, b) <= 1
+        return minOf(a.length, b.length) >= 4 && kotlin.math.abs(a.length - b.length) <= 1 && editDistance(a, b) <= 1
     }
 
     fun words(text: String): List<String> =
@@ -84,28 +89,64 @@ object RecitationAlignment {
         val n = target.size
         val m = heard.size
         if (n == 0) return WordAlignment(emptyList(), heard)
+        // A long passage (a whole surah, or automatic mode following to the surah's end) is
+        // aligned only as far as the reader can have got; the rest is pending, or missed.
+        val reachable = m * 2 + 40
+        if (n > reachable) {
+            val head = alignWithin(target.take(reachable), heard, final = false)
+            if (!final) return WordAlignment(head.marks + List(n - reachable) { WordMark(WordStatus.PENDING) }, head.extraWords)
+            val upTo = minOf(n, head.reached + 20)
+            val judged = alignWithin(target.take(upTo), heard, final = true)
+            return WordAlignment(judged.marks + List(n - upTo) { WordMark(WordStatus.MISSED) }, judged.extraWords)
+        }
+        return alignWithin(target, heard, final)
+    }
 
-        // cost[i][j]: aligning target[0 until i] with heard[0 until j].
-        val cost = Array(n + 1) { IntArray(m + 1) }
-        for (i in 0..n) cost[i][0] = i
-        for (j in 0..m) cost[0][j] = j
+    private const val INF = Int.MAX_VALUE / 4
+
+    /** Edit-distance alignment; banded around the diagonal when the table would be huge. */
+    private fun alignWithin(target: List<String>, heard: List<String>, final: Boolean): WordAlignment {
+        val n = target.size
+        val m = heard.size
+        val ts = Array(n) { skeleton(target[it]) }
+        val hs = Array(m) { skeleton(heard[it]) }
+        fun same(i: Int, j: Int) = sameSkeleton(ts[i], hs[j], target[i], heard[j])
+
+        // Full table for ordinary sizes; a band of ±BAND words around the diagonal for a
+        // whole long surah read through (Al-Baqara is ~6,100 words).
+        val banded = (n + 1L) * (m + 1L) > 4_000_000L
+        val band = if (banded) maxOf(BAND, kotlin.math.abs(n - m) + BAND) else m
+        val lo = IntArray(n + 1) { i -> if (banded) maxOf(0, (i.toLong() * m / maxOf(n, 1)).toInt() - band) else 0 }
+        val hi = IntArray(n + 1) { i -> if (banded) minOf(m, (i.toLong() * m / maxOf(n, 1)).toInt() + band) else m }
+        val cost = Array(n + 1) { i -> IntArray(hi[i] - lo[i] + 1) { INF } }
+        fun get(i: Int, j: Int): Int = if (j < lo[i] || j > hi[i]) INF else cost[i][j - lo[i]]
+        for (j in lo[0]..hi[0]) cost[0][j - lo[0]] = j
         for (i in 1..n) {
-            for (j in 1..m) {
-                val substitute = cost[i - 1][j - 1] + if (sameWord(target[i - 1], heard[j - 1])) 0 else 1
-                cost[i][j] = minOf(substitute, cost[i - 1][j] + 1, cost[i][j - 1] + 1)
+            for (j in lo[i]..hi[i]) {
+                var best = if (j == 0) i else INF
+                if (j > 0) {
+                    val diagonal = get(i - 1, j - 1)
+                    if (diagonal < INF) best = minOf(best, diagonal + if (same(i - 1, j - 1)) 0 else 1)
+                    val left = get(i, j - 1)
+                    if (left < INF) best = minOf(best, left + 1)
+                }
+                val up = get(i - 1, j)
+                if (up < INF) best = minOf(best, up + 1)
+                cost[i][j - lo[i]] = best
             }
         }
 
-        // Live: the reader may have stopped anywhere in the ayah, so end where it is cheapest.
-        var i = if (final) n else (0..n).minByOrNull { cost[it][m] * (n + 1) + (n - it) } ?: n
+        // Live: the reader may have stopped anywhere in the passage, so end where it is cheapest.
+        var i = if (final) n else (0..n).filter { get(it, m) < INF }.minByOrNull { get(it, m).toLong() * (n + 1) + (n - it) } ?: n
         val reachedEnd = i
         var j = m
         val result = arrayOfNulls<WordMark>(n)
         val extras = ArrayList<String>()
         while (i > 0 || j > 0) {
+            val here = get(i, j)
             when {
-                i > 0 && j > 0 && cost[i][j] == cost[i - 1][j - 1] + if (sameWord(target[i - 1], heard[j - 1])) 0 else 1 -> {
-                    result[i - 1] = if (sameWord(target[i - 1], heard[j - 1])) {
+                i > 0 && j > 0 && get(i - 1, j - 1) < INF && here == get(i - 1, j - 1) + if (same(i - 1, j - 1)) 0 else 1 -> {
+                    result[i - 1] = if (same(i - 1, j - 1)) {
                         // Harakat are judged only once the reader has finished: live partials
                         // are fast, rough transcriptions.
                         val slip = if (final) HarakatCheck.slip(target[i - 1], heard[j - 1]) else null
@@ -116,13 +157,17 @@ object RecitationAlignment {
                     }
                     i--; j--
                 }
-                i > 0 && cost[i][j] == cost[i - 1][j] + 1 -> {
+                i > 0 && get(i - 1, j) < INF && here == get(i - 1, j) + 1 -> {
                     result[i - 1] = WordMark(WordStatus.MISSED)
                     i--
                 }
-                else -> {
+                j > 0 -> {
                     extras.add(0, heard[j - 1])
                     j--
+                }
+                else -> {
+                    result[i - 1] = WordMark(WordStatus.MISSED)
+                    i--
                 }
             }
         }
@@ -132,6 +177,8 @@ object RecitationAlignment {
         }
         return WordAlignment(marks, extras)
     }
+
+    private const val BAND = 300
 
     private fun editDistance(a: String, b: String): Int {
         val row = IntArray(b.length + 1) { it }

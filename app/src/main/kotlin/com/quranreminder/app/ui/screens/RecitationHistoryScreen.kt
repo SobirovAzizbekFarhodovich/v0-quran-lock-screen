@@ -50,7 +50,6 @@ import com.quranreminder.app.database.DayActivity
 import com.quranreminder.app.database.QuranDatabase
 import com.quranreminder.app.database.QuranVerse
 import com.quranreminder.app.database.RecitationResultEntity
-import com.quranreminder.app.database.ReviewAyah
 import com.quranreminder.app.recitation.RecitationGoals
 import com.quranreminder.app.ui.AyahHandoff
 import com.quranreminder.app.ui.theme.NurDivider
@@ -79,14 +78,17 @@ fun RecitationHistoryScreen(navController: NavHostController) {
     val goal by RecitationGoals.dailyGoal(context)
     val today = RecitationGoals.today()
     val activity by remember { dao.observeAllActivity() }.collectAsState(initial = emptyList())
-    val review by remember { dao.observeReview() }.collectAsState(initial = emptyList())
+    val all by remember { dao.observeAll() }.collectAsState(initial = emptyList())
+    // Spaced review: mistakes come back at once, perfect readings further and further out.
+    val due = remember(all, today) { com.quranreminder.app.recitation.ReviewSchedule.due(all, today) }
+    androidx.compose.runtime.LaunchedEffect(Unit) { com.quranreminder.app.recitation.RecitationSync.syncNow(context) }
     val recent by remember { dao.observeRecent() }.collectAsState(initial = emptyList())
     val totalAyahs by remember { dao.observeDistinctAyahs() }.collectAsState(initial = 0)
     val streak = RecitationGoals.streak(activity, goal, today)
     val todayAyahs = activity.firstOrNull { it.day == today }?.ayahs ?: 0
 
     // Surah names and ayah text for the rows, read once per list change.
-    val keys = (review.map { it.surahNumber to it.ayahNumber } + recent.map { it.surahNumber to it.ayahNumber }).distinct()
+    val keys = (due.map { it.surah to it.ayah } + recent.map { it.surahNumber to it.ayahNumber }).distinct()
     val verses by produceState(emptyMap<Pair<Int, Int>, QuranVerse>(), keys) {
         value = withContext(Dispatchers.IO) {
             keys.mapNotNull { (s, a) -> database.quranVerseDao().getVerseOnce(s, a)?.let { (s to a) to it } }.toMap()
@@ -120,11 +122,11 @@ fun RecitationHistoryScreen(navController: NavHostController) {
             }
             item(key = "week") { WeekCard(activity = activity, goal = goal, today = today) }
 
-            item(key = "reviewTitle") { NurSectionTitle(t("recitation.review.title")) }
-            if (review.isEmpty()) {
+            item(key = "reviewTitle") { NurSectionTitle(t("recitation.review.due.title")) }
+            if (due.isEmpty()) {
                 item(key = "reviewEmpty") {
                     Text(
-                        if (recent.isEmpty()) t("recitation.history.empty") else t("recitation.review.empty"),
+                        if (recent.isEmpty()) t("recitation.history.empty") else t("recitation.review.due.empty"),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(horizontal = 4.dp)
@@ -134,9 +136,9 @@ fun RecitationHistoryScreen(navController: NavHostController) {
                 item(key = "reviewList") {
                     NurSurfaceCard(Modifier.fillMaxWidth()) {
                         Column {
-                            review.forEachIndexed { index, item ->
-                                ReviewRow(item, verses[item.surahNumber to item.ayahNumber]) { reciteAgain(item.surahNumber, item.ayahNumber) }
-                                if (index < review.lastIndex) NurDivider()
+                            due.take(40).forEachIndexed { index, item ->
+                                DueRow(item, verses[item.surah to item.ayah]) { reciteAgain(item.surah, item.ayah) }
+                                if (index < minOf(due.size, 40) - 1) NurDivider()
                             }
                         }
                     }
@@ -282,13 +284,12 @@ private fun WeekCard(activity: List<DayActivity>, goal: Int, today: Long) {
 }
 
 @Composable
-private fun ReviewRow(item: ReviewAyah, verse: QuranVerse?, onClick: () -> Unit) {
-    val accuracy = if (item.wordCount == 0) 0 else item.correctCount * 100 / item.wordCount
+private fun DueRow(item: com.quranreminder.app.recitation.DueAyah, verse: QuranVerse?, onClick: () -> Unit) {
     HistoryRow(
-        title = "${verse?.surahName ?: item.surahNumber} ${item.surahNumber}:${item.ayahNumber}",
-        subtitle = t("recitation.review.row").replace("{p}", accuracy.toString()).replace("{n}", item.attempts.toString()),
+        title = "${verse?.surahName ?: item.surah} ${item.surah}:${item.ayah}",
+        subtitle = t("recitation.review.due.row").replace("{p}", item.lastAccuracy.toString()).replace("{n}", item.streak.toString()),
         arabic = verse?.ayahTextArabic,
-        accuracy = accuracy,
+        accuracy = item.lastAccuracy,
         onClick = onClick
     )
 }

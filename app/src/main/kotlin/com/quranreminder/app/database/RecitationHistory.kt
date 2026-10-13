@@ -14,7 +14,11 @@ import kotlinx.coroutines.flow.Flow
  */
 @Entity(
     tableName = "recitation_results",
-    indices = [Index(value = ["surahNumber", "ayahNumber"]), Index(value = ["day"])]
+    indices = [
+        Index(value = ["surahNumber", "ayahNumber"]),
+        Index(value = ["day"]),
+        Index(value = ["clientId"], unique = true)
+    ]
 )
 data class RecitationResultEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
@@ -28,7 +32,13 @@ data class RecitationResultEntity(
     val mode: String,
     val createdAt: Long,
     /** Local calendar day (epoch day), so "today" and streaks follow the user's clock. */
-    val day: Long
+    val day: Long,
+    /** Stable id shared with the server backup, so a row is never stored twice. */
+    @androidx.room.ColumnInfo(defaultValue = "")
+    val clientId: String = java.util.UUID.randomUUID().toString(),
+    /** Sent to the server backup. */
+    @androidx.room.ColumnInfo(defaultValue = "0")
+    val synced: Boolean = false
 )
 
 data class DayActivity(val day: Long, val ayahs: Int)
@@ -47,6 +57,22 @@ data class ReviewAyah(
 interface RecitationHistoryDao {
     @Insert
     suspend fun insertAll(results: List<RecitationResultEntity>)
+
+    /** Rows restored from the server backup; ones already here (same clientId) are skipped. */
+    @Insert(onConflict = androidx.room.OnConflictStrategy.IGNORE)
+    suspend fun insertRestored(results: List<RecitationResultEntity>)
+
+    @Query("SELECT * FROM recitation_results WHERE synced = 0 ORDER BY createdAt LIMIT :limit")
+    suspend fun unsynced(limit: Int = 500): List<RecitationResultEntity>
+
+    @Query("UPDATE recitation_results SET synced = 1 WHERE clientId IN (:clientIds)")
+    suspend fun markSynced(clientIds: List<String>)
+
+    @Query("SELECT * FROM recitation_results ORDER BY createdAt")
+    fun observeAll(): Flow<List<RecitationResultEntity>>
+
+    @Query("DELETE FROM recitation_results")
+    suspend fun clear()
 
     /** Distinct ayahs recited per day since [fromDay]. */
     @Query(
