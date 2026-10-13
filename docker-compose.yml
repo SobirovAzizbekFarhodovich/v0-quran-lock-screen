@@ -123,6 +123,8 @@ services:
       - ./infra/nginx/templates:/etc/nginx/noorain-templates:ro
       - ./infra/nginx/40-noorain-https.sh:/docker-entrypoint.d/40-noorain-https.sh:ro
       - ./remote_backgrounds:/usr/share/nginx/html/backgrounds:ro
+      # The noorain.uz website (static build, copied by deploy/deploy-website.sh).
+      - ./site:/usr/share/nginx/site:ro
       - letsencrypt:/etc/letsencrypt:ro
       - certbot_www:/var/www/certbot:ro
     depends_on:

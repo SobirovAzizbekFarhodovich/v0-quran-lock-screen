@@ -34,7 +34,7 @@ jobs:
       - name: Sync backend code
         run: |
           rsync -az --delete -e "ssh -i ~/.ssh/deploy_key" \
-            --exclude='/.git' --exclude='/.github' --exclude='/.env' --exclude='/.env.bak-*' --exclude='/.impeccable' \
+            --exclude='/.git' --exclude='/.github' --exclude='/.env' --exclude='/.env.bak-*' --exclude='/site' --exclude='/.impeccable' \
             --exclude='/app' --exclude='/mobile' --exclude='/brand' --exclude='/gradle' \
             --exclude='/gradlew*' --exclude='/*.gradle.kts' --exclude='/gradle.properties' \
             --exclude='/backend/api-gateway/server' --exclude='__pycache__' --exclude='/build.log' \

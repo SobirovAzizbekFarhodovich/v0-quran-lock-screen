@@ -1,0 +1,17 @@
+# Rendered by /docker-entrypoint.d/40-noorain-https.sh into /etc/nginx/https.d/site.conf
+# when the certificate also covers the website names (${SITE_NAMES}).
+server {
+  listen 443 ssl;
+  http2 on;
+  server_name ${SITE_NAMES};
+
+  ssl_certificate     /etc/letsencrypt/live/${PUBLIC_HOST}/fullchain.pem;
+  ssl_certificate_key /etc/letsencrypt/live/${PUBLIC_HOST}/privkey.pem;
+  include /etc/nginx/snippets/tls.conf;
+
+  include /etc/nginx/snippets/security-headers.conf;
+  add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+
+  set $site_to_https 0;
+  include /etc/nginx/snippets/site-locations.conf;
+}

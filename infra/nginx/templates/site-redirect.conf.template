@@ -1,0 +1,3 @@
+# Rendered into /etc/nginx/site-https.d/redirect.conf once the website has HTTPS:
+# its plain-HTTP requests (except ACME challenges) move to HTTPS.
+set $site_to_https 1;
