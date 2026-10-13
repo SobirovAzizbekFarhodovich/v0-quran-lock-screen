@@ -8,60 +8,51 @@ on:
       - "ai/**"
       - "docker-compose.yml"
       - "infra/**"
+  workflow_dispatch:
 
-env:
-  REGISTRY: ghcr.io
-  IMAGE_PREFIX: ${{ github.repository }}
+# One deploy at a time; a newer push waits for the running one.
+concurrency:
+  group: deploy-backend
+  cancel-in-progress: false
 
 jobs:
-  build-and-push:
-    name: Build & Push Images
+  deploy:
+    name: Deploy to server
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-    strategy:
-      matrix:
-        include:
-          - context: ./backend/api-gateway
-            image: api-gateway
-          - context: ./ai/recitation
-            image: ai-recitation
-          - context: ./ai/rag
-            image: ai-rag
     steps:
       - uses: actions/checkout@v4
 
-      - name: Log in to Container registry
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Set up SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H "${{ secrets.VPS_HOST }}" >> ~/.ssh/known_hosts
 
-      - name: Build and push
-        uses: docker/build-push-action@v6
-        with:
-          context: ${{ matrix.context }}
-          push: true
-          tags: |
-            ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/${{ matrix.image }}:latest
-            ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/${{ matrix.image }}:${{ github.sha }}
+      # The server has no git checkout: the backend tree is synced into /opt/noorain.
+      # Its .env (generated secrets) and the Android/Flutter sources are never touched.
+      - name: Sync backend code
+        run: |
+          rsync -az --delete -e "ssh -i ~/.ssh/deploy_key" \
+            --exclude='/.git' --exclude='/.github' --exclude='/.env' --exclude='/.impeccable' \
+            --exclude='/app' --exclude='/mobile' --exclude='/brand' --exclude='/gradle' \
+            --exclude='/gradlew*' --exclude='/*.gradle.kts' --exclude='/gradle.properties' \
+            --exclude='/backend/api-gateway/server' --exclude='__pycache__' --exclude='/build.log' \
+            ./ "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/opt/noorain/"
 
-  deploy:
-    name: Deploy to VPS
-    needs: build-and-push
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
-    steps:
-      - name: Deploy via SSH
-        uses: appleboy/ssh-action@v1
-        with:
-          host: ${{ secrets.VPS_HOST }}
-          username: ${{ secrets.VPS_USER }}
-          key: ${{ secrets.VPS_SSH_KEY }}
-          script: |
-            cd /opt/islamic-ai
-            docker compose pull
-            docker compose up -d --remove-orphans
-            docker system prune -f
+      # ai-rag-init is skipped on purpose: the ChromaDB index is built offline and shipped
+      # into the volume (a rebuild takes hours on the server's 2 CPUs). nginx is restarted
+      # because it caches upstream container IPs and would 502 after the recreate.
+      - name: Build and restart services
+        run: |
+          ssh -i ~/.ssh/deploy_key "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}" '
+            set -e
+            cd /opt/noorain
+            sudo docker compose build api-gateway ai-rag ai-recitation
+            sudo docker compose up -d --no-deps postgres redis chromadb
+            sudo docker compose up -d --no-deps ai-rag ai-recitation api-gateway
+            sudo docker compose restart nginx
+            sudo docker image prune -f
+            sleep 15
+            curl -fsS http://localhost/healthz
+          '

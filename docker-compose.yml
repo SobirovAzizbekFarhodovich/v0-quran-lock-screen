@@ -60,6 +60,9 @@ services:
     build:
       context: ./ai/recitation
     env_file: .env
+    # Whisper weights (~460 MB for "small") survive rebuilds instead of re-downloading.
+    volumes:
+      - whisper_models:/root/.cache/huggingface
     depends_on:
       redis:
         condition: service_healthy
@@ -121,6 +124,7 @@ services:
       - prometheus
 
 volumes:
+  whisper_models:
   postgres_data:
   redis_data:
   chroma_data:
