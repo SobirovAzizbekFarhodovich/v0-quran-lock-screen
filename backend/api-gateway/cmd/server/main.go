@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -17,6 +18,7 @@ import (
 
 	"islamic-ai/backend/api-gateway/internal/auth"
 	"islamic-ai/backend/api-gateway/internal/config"
+	"islamic-ai/backend/api-gateway/internal/health"
 	"islamic-ai/backend/api-gateway/internal/httpapi"
 	"islamic-ai/backend/api-gateway/internal/rag"
 	"islamic-ai/backend/api-gateway/internal/ratelimit"
@@ -111,6 +113,16 @@ func main() {
 	healthHandler := func(c *gin.Context) { c.JSON(http.StatusOK, gin.H{"status": "ok"}) }
 	router.GET("/health", healthHandler)
 	router.GET("/healthz", healthHandler)
+	// Deep check (monitoring, post-deploy): 503 unless every dependency can
+	// do real work. /healthz stays a cheap liveness probe.
+	deepHealth := health.NewChecker(5*time.Second,
+		health.PingCheck("postgres", 2*time.Second, db.Ping),
+		health.PingCheck("redis", 2*time.Second, func(ctx context.Context) error { return redisClient.Ping(ctx).Err() }),
+		health.HTTPCheck("ai_rag", strings.TrimRight(cfg.AIRAGURL, "/")+"/healthz", 5*time.Second, nil,
+			health.StatusOKValidator("documents_in_db", "total_documents", "missing_collections")),
+		health.HTTPCheck("ai_recitation", cfg.AIRecitationURL+"/healthz", 3*time.Second, nil, health.RecitationValidator),
+	)
+	router.GET("/healthz/deep", deepHealth.Handler)
 	router.GET("/metrics", gin.WrapH(promhttp.Handler()))
 
 	v1 := router.Group("/api/v1")
