@@ -296,9 +296,10 @@ fun RecitationScreen(navController: NavHostController, quranViewModel: QuranView
             }
         }
     }
-    val reference = remember(current, pageView, pages) {
+    val loadedVerses by quranViewModel.currentSurahVerses.collectAsState()
+    val reference = remember(current, pageView, pages, loadedVerses) {
         val c = current ?: return@remember ""
-        val name = quranViewModel.currentSurahVerses.value.firstOrNull { it.surahNumber == c.surah }?.surahName
+        val name = loadedVerses.firstOrNull { it.surahNumber == c.surah }?.surahName
         val page = if (pageView && pages != null && locator != null) QuranText.pageAyahs(locator!!, pages!!, c.surah, c.ayah).first else 0
         buildString {
             if (!name.isNullOrBlank()) append(name).append(" · ")
@@ -357,8 +358,6 @@ fun RecitationScreen(navController: NavHostController, quranViewModel: QuranView
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            GoalStrip(todayAyahs = todayAyahs, goal = goal, streak = streak, onClick = openHistory)
-
             ModeSwitch(
                 memorize = memorize,
                 enabled = !recording,
@@ -429,6 +428,9 @@ fun RecitationScreen(navController: NavHostController, quranViewModel: QuranView
                     )
                 }
             }
+
+            // Today's goal and streak sit below the work, not between the reader and the ayah.
+            GoalStrip(todayAyahs = todayAyahs, goal = goal, streak = streak, onClick = openHistory)
         }
 
         // Pinned action area, always on screen and above the floating glass bar.
@@ -790,7 +792,13 @@ private fun SurahPickerDialog(
     var query by remember { mutableStateOf("") }
     val shown = remember(query, surahs) {
         val q = query.trim().lowercase()
-        if (q.isEmpty()) surahs else surahs.filter { it.surahName.lowercase().contains(q) || it.surahNumber.toString() == q || it.surahNameArabic.contains(q) }
+        // Typed in Latin or Cyrillic, whatever script the names are shown in.
+        val latinQuery = com.quranreminder.app.lockscreen.CyrillicToLatinConverter.convert(q).lowercase().filter { it.isLetterOrDigit() }
+        if (q.isEmpty()) surahs else surahs.filter {
+            val latinName = com.quranreminder.app.lockscreen.CyrillicToLatinConverter.convert(it.surahName).lowercase().filter { c -> c.isLetterOrDigit() }
+            it.surahName.lowercase().contains(q) || latinName.contains(latinQuery) ||
+                it.surahNumber.toString() == q || it.surahNameArabic.contains(q)
+        }
     }
     androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
         NurSurfaceCard(Modifier.fillMaxWidth().heightIn(max = 560.dp)) {
@@ -1046,11 +1054,11 @@ private fun RecordButton(recording: Boolean, onClick: () -> Unit) {
     val content = if (recording) MaterialTheme.colorScheme.onError else MaterialTheme.colorScheme.onPrimary
     val description = if (recording) t("recitation.stop") else t("recitation.start")
 
-    Box(modifier = Modifier.size(144.dp), contentAlignment = Alignment.Center) {
+    Box(modifier = Modifier.size(116.dp), contentAlignment = Alignment.Center) {
         // Resting gold star keyline around the button; it pulses outward while recording.
         Canvas(
             Modifier
-                .size(144.dp)
+                .size(116.dp)
                 .graphicsLayer {
                     val s = if (recording) ringScale else 0.82f
                     scaleX = s; scaleY = s
@@ -1065,7 +1073,7 @@ private fun RecordButton(recording: Boolean, onClick: () -> Unit) {
         }
         Box(
             modifier = Modifier
-                .size(88.dp)
+                .size(76.dp)
                 .graphicsLayer { scaleX = if (recording) pulse else 1f; scaleY = if (recording) pulse else 1f }
                 .clip(CircleShape)
                 .background(container)
@@ -1077,7 +1085,7 @@ private fun RecordButton(recording: Boolean, onClick: () -> Unit) {
                 imageVector = if (recording) Icons.Default.Stop else Icons.Default.Mic,
                 contentDescription = null,
                 tint = content,
-                modifier = Modifier.size(40.dp)
+                modifier = Modifier.size(34.dp)
             )
         }
     }
