@@ -171,6 +171,11 @@ func main() {
 		legacyChatHandler.Complete,
 	)
 
+	// The noorain.uz website lets visitors try the AI assistant without an account:
+	// 3 questions a day per IP, 15 s apart; repeated questions come from a cache.
+	publicAskHandler := httpapi.NewPublicAskHandler(ragClient, redisClient, 3, 15*time.Second)
+	v1.POST("/public/ask", publicAskHandler.Ask)
+
 	// --- Protected endpoints ---
 	protected := v1.Group("")
 	protected.Use(auth.Middleware(tokenService))
