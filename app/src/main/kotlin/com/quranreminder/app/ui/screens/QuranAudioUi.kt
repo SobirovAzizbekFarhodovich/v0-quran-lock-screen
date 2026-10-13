@@ -81,7 +81,14 @@ fun SurahListenButton(surah: Int, surahName: String, ayahCount: Int) {
         emphasized = true,
         onClick = {
             if (ayahCount <= 0) return@NurIconButton
-            if (here) QuranPlayer.toggle(context) else QuranPlayer.play(context, surah, surahName, ayahCount, reciterName)
+            if (here) {
+                QuranPlayer.toggle(context)
+            } else {
+                // "Listen to the surah" means the whole surah: a single-ayah loop left over
+                // from an earlier session would keep it on ayah 1.
+                if (audio.repeat == QuranPlayer.Repeat.AYAH_LOOP) QuranPlayer.setRepeat(context, QuranPlayer.Repeat.OFF)
+                QuranPlayer.play(context, surah, surahName, ayahCount, reciterName)
+            }
         }
     )
 }
@@ -147,15 +154,16 @@ fun QuranMiniPlayer(modifier: Modifier = Modifier) {
         0 -> "${audio.surahName} · ${t("audio.basmala")}"
         else -> "${audio.surahName} · ${audio.ayah}"
     }
-    val subtitle = when {
-        audio.error -> t("audio.error")
-        audio.buffering -> t("audio.loading")
-        else -> t(audio.reciter.nameKey)
-    }
     val repeatLabel = when (audio.repeat) {
         QuranPlayer.Repeat.OFF -> t("audio.repeat.off")
         QuranPlayer.Repeat.AYAH_3 -> t("audio.repeat.ayah3")
         QuranPlayer.Repeat.AYAH_LOOP -> t("audio.repeat.loop")
+    }
+    val subtitle = when {
+        audio.error -> t("audio.error")
+        audio.buffering -> t("audio.loading")
+        audio.repeat != QuranPlayer.Repeat.OFF -> "${t(audio.reciter.nameKey)} · $repeatLabel"
+        else -> t(audio.reciter.nameKey)
     }
     NurSurfaceCard(modifier = modifier.fillMaxWidth(), shape = MaterialTheme.shapes.large) {
         Column(Modifier.padding(start = 16.dp, end = 10.dp, top = 12.dp, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -172,12 +180,12 @@ fun QuranMiniPlayer(modifier: Modifier = Modifier) {
                 }
                 PlainIcon(Icons.Default.Close, t("audio.close")) { QuranPlayer.stop(context) }
             }
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 PlayerChip(
                     icon = if (audio.repeat == QuranPlayer.Repeat.AYAH_LOOP) Icons.Default.RepeatOne else Icons.Default.Repeat,
-                    label = repeatLabel,
+                    label = if (audio.repeat == QuranPlayer.Repeat.AYAH_3) "×3" else null,
                     selected = audio.repeat != QuranPlayer.Repeat.OFF,
-                    description = t("audio.repeat")
+                    description = "${t("audio.repeat")}: $repeatLabel"
                 ) {
                     val next = QuranPlayer.Repeat.entries[(audio.repeat.ordinal + 1) % QuranPlayer.Repeat.entries.size]
                     QuranPlayer.setRepeat(context, next)
@@ -216,7 +224,7 @@ private fun PlainIcon(icon: ImageVector, description: String, onClick: () -> Uni
 }
 
 @Composable
-private fun PlayerChip(icon: ImageVector, label: String, selected: Boolean, description: String, onClick: () -> Unit) {
+private fun PlayerChip(icon: ImageVector, label: String?, selected: Boolean, description: String, onClick: () -> Unit) {
     val scheme = MaterialTheme.colorScheme
     Row(
         modifier = Modifier
@@ -225,12 +233,12 @@ private fun PlayerChip(icon: ImageVector, label: String, selected: Boolean, desc
             .background(if (selected) scheme.secondaryContainer else scheme.surfaceVariant)
             .then(if (selected) Modifier.border(1.dp, nurColors.frame, CircleShape) else Modifier)
             .clickable(onClickLabel = description, role = Role.Button, onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 6.dp),
+            .padding(horizontal = if (label == null) 9.dp else 11.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp)
     ) {
         Icon(icon, contentDescription = null, tint = if (selected) nurColors.goldText else scheme.primary, modifier = Modifier.size(18.dp))
-        Text(label, style = MaterialTheme.typography.labelMedium, color = scheme.onSurface, maxLines = 1)
+        if (label != null) Text(label, style = MaterialTheme.typography.labelMedium, color = scheme.onSurface, maxLines = 1)
     }
 }
 
