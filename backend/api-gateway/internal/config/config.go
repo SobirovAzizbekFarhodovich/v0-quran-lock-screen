@@ -21,6 +21,7 @@ type Config struct {
 	AccessTTL        time.Duration
 	RefreshTTL       time.Duration
 	AIRAGURL         string
+	AIRecitationURL  string
 	CORSOrigins      []string
 	SentryDSN        string
 	PublicBaseURL    string
@@ -49,6 +50,7 @@ func Load() Config {
 		AccessTTL:        envDuration("JWT_ACCESS_TTL", 15*time.Minute),
 		RefreshTTL:       envDuration("JWT_REFRESH_TTL", 30*24*time.Hour),
 		AIRAGURL:         env("AI_RAG_URL", "http://localhost:8002"),
+		AIRecitationURL:  strings.TrimRight(env("AI_RECITATION_URL", "http://localhost:8001"), "/"),
 		CORSOrigins:      envSlice("CORS_ORIGINS", []string{"*"}),
 		SentryDSN:        env("SENTRY_DSN", ""),
 		PublicBaseURL:    strings.TrimRight(env("PUBLIC_BASE_URL", "http://localhost:8080"), "/"),

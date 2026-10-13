@@ -1,5 +1,6 @@
 services:
   postgres:
+    restart: unless-stopped
     image: postgres:16-alpine
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-islamic_ai}
@@ -15,6 +16,7 @@ services:
       retries: 5
 
   redis:
+    restart: unless-stopped
     image: redis:7-alpine
     command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD:-redis-pass-change-me}"]
     volumes:
@@ -26,11 +28,13 @@ services:
       retries: 5
 
   chromadb:
+    restart: unless-stopped
     image: chromadb/chroma:0.5.23
     volumes:
       - chroma_data:/chroma/chroma
 
   minio:
+    restart: unless-stopped
     image: minio/minio:latest
     command: server /data --console-address ":9001"
     environment:
@@ -45,9 +49,13 @@ services:
       retries: 3
 
   api-gateway:
+    restart: unless-stopped
     build:
       context: ./backend/api-gateway
     env_file: .env
+    environment:
+      # Probed by GET /healthz/deep (model_loaded must be true).
+      AI_RECITATION_URL: ${AI_RECITATION_URL:-http://ai-recitation:8001}
     depends_on:
       postgres:
         condition: service_healthy
@@ -55,8 +63,12 @@ services:
         condition: service_healthy
       ai-rag:
         condition: service_started
+    volumes:
+      # Audio users send with 'this result is wrong' reports.
+      - recitation_reports:/data/recitation-reports
 
   ai-recitation:
+    restart: unless-stopped
     build:
       context: ./ai/recitation
     env_file: .env
@@ -78,6 +90,7 @@ services:
     restart: "no"
 
   ai-rag:
+    restart: unless-stopped
     build:
       context: ./ai/rag
     env_file: .env
@@ -90,18 +103,51 @@ services:
         condition: service_completed_successfully
 
   nginx:
+    restart: unless-stopped
     image: nginx:1.27-alpine
+    environment:
+      # Public hostname for HTTPS (also names the certificate). Default is the
+      # sslip.io name that resolves to the server IP. Switch to a real domain
+      # with infra/scripts/enable-domain.sh, or by setting PUBLIC_HOST (and
+      # optionally EXTRA_HOSTS="noorain.uz,www.noorain.uz") in .env and running
+      # `docker compose up -d --no-deps nginx certbot`; certbot then issues one
+      # certificate covering all of them.
+      PUBLIC_HOST: ${PUBLIC_HOST:-3-73-130-154.sslip.io}
+      EXTRA_HOSTS: ${EXTRA_HOSTS:-}
     ports:
       - "80:80"
-      # - "443:443"  # Uncomment for HTTPS
+      - "443:443"
     volumes:
       - ./infra/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./infra/nginx/snippets:/etc/nginx/snippets:ro
+      - ./infra/nginx/templates:/etc/nginx/noorain-templates:ro
+      - ./infra/nginx/40-noorain-https.sh:/docker-entrypoint.d/40-noorain-https.sh:ro
       - ./remote_backgrounds:/usr/share/nginx/html/backgrounds:ro
-      # - ./infra/nginx/ssl:/etc/nginx/ssl:ro  # Uncomment for HTTPS
+      - letsencrypt:/etc/letsencrypt:ro
+      - certbot_www:/var/www/certbot:ro
     depends_on:
       - api-gateway
 
+  # Issues and renews the Let's Encrypt certificate for PUBLIC_HOST over
+  # HTTP-01 (nginx serves /.well-known/acme-challenge/ from certbot_www).
+  # Certificates live in the letsencrypt volume, outside the rsynced tree.
+  certbot:
+    image: certbot/certbot:v5.8.0
+    environment:
+      PUBLIC_HOST: ${PUBLIC_HOST:-3-73-130-154.sslip.io}
+      EXTRA_HOSTS: ${EXTRA_HOSTS:-}
+      LETSENCRYPT_EMAIL: ${LETSENCRYPT_EMAIL:-}
+    entrypoint: ["/bin/sh", "/opt/noorain-certbot/certbot-loop.sh"]
+    volumes:
+      - ./infra/certbot:/opt/noorain-certbot:ro
+      - letsencrypt:/etc/letsencrypt
+      - certbot_www:/var/www/certbot
+    depends_on:
+      - nginx
+    restart: unless-stopped
+
   prometheus:
+    restart: unless-stopped
     image: prom/prometheus:v3.1.0
     ports:
       - "127.0.0.1:9090:9090"
@@ -112,6 +158,7 @@ services:
       - api-gateway
 
   grafana:
+    restart: unless-stopped
     image: grafana/grafana:11.5.2
     ports:
       - "127.0.0.1:3000:3000"
@@ -124,6 +171,7 @@ services:
       - prometheus
 
 volumes:
+  recitation_reports:
   whisper_models:
   postgres_data:
   redis_data:
@@ -131,3 +179,5 @@ volumes:
   minio_data:
   prometheus_data:
   grafana_data:
+  letsencrypt:
+  certbot_www:

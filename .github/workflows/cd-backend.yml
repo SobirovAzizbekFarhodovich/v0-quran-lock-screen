@@ -34,7 +34,7 @@ jobs:
       - name: Sync backend code
         run: |
           rsync -az --delete -e "ssh -i ~/.ssh/deploy_key" \
-            --exclude='/.git' --exclude='/.github' --exclude='/.env' --exclude='/.impeccable' \
+            --exclude='/.git' --exclude='/.github' --exclude='/.env' --exclude='/.env.bak-*' --exclude='/.impeccable' \
             --exclude='/app' --exclude='/mobile' --exclude='/brand' --exclude='/gradle' \
             --exclude='/gradlew*' --exclude='/*.gradle.kts' --exclude='/gradle.properties' \
             --exclude='/backend/api-gateway/server' --exclude='__pycache__' --exclude='/build.log' \
@@ -43,6 +43,8 @@ jobs:
       # ai-rag-init is skipped on purpose: the ChromaDB index is built offline and shipped
       # into the volume (a rebuild takes hours on the server's 2 CPUs). nginx is restarted
       # because it caches upstream container IPs and would 502 after the recreate.
+      # "up nginx certbot" applies compose changes to them (ports, mounts). TLS
+      # certificates live in the letsencrypt volume, so the rsync above never removes them.
       - name: Build and restart services
         run: |
           ssh -i ~/.ssh/deploy_key "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}" '
@@ -51,8 +53,28 @@ jobs:
             sudo docker compose build api-gateway ai-rag ai-recitation
             sudo docker compose up -d --no-deps postgres redis chromadb
             sudo docker compose up -d --no-deps ai-rag ai-recitation api-gateway
+            sudo docker compose up -d --no-deps nginx certbot
             sudo docker compose restart nginx
             sudo docker image prune -f
             sleep 15
             curl -fsS http://localhost/healthz
+          '
+
+      # /healthz only proves the gateway process is up. The deep check also requires
+      # postgres, redis, ai-rag and a loaded recitation model; the model takes a while
+      # to load after a recreate, so poll for up to ~4 minutes before failing the deploy.
+      - name: Deep health check
+        run: |
+          ssh -i ~/.ssh/deploy_key "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}" '
+            for attempt in $(seq 1 24); do
+              if body=$(curl -fsS --max-time 20 http://localhost/healthz/deep); then
+                echo "$body"
+                exit 0
+              fi
+              echo "attempt $attempt: deep health degraded, retrying in 10s"
+              sleep 10
+            done
+            echo "::error::deep health still degraded after deploy"
+            curl -sS --max-time 20 http://localhost/healthz/deep
+            exit 1
           '

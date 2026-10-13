@@ -1,0 +1,72 @@
+name: Health Monitor
+
+# Uptime check without Prometheus/Grafana (kept off for RAM). Every 15 minutes
+# GitHub calls the gateway's deep health endpoint; a degraded or unreachable
+# backend fails the run, and GitHub emails failed scheduled runs to the user
+# who last changed this file's cron schedule.
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+    inputs:
+      url:
+        description: "Deep health URL (default: HEALTH_URL variable, else the sslip.io HTTPS URL)"
+        required: false
+
+concurrency:
+  group: health-monitor
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deep-health:
+    name: Deep health
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check /healthz/deep
+        env:
+          # Override without editing this file: Settings > Secrets and variables >
+          # Actions > Variables > HEALTH_URL (e.g. after moving to a real domain).
+          HEALTH_URL: ${{ inputs.url || vars.HEALTH_URL || 'https://3-73-130-154.sslip.io/healthz/deep' }}
+        run: |
+          # Three tries 30s apart, so a network blip or a deploy restart does not alert.
+          code=000
+          for attempt in 1 2 3; do
+            rm -f body.json
+            code=$(curl -sS -o body.json -w '%{http_code}' --max-time 25 "$HEALTH_URL") || code=000
+            if [ "$code" = "200" ]; then
+              echo "healthy: $HEALTH_URL"
+              cat body.json
+              exit 0
+            fi
+            echo "attempt $attempt: HTTP $code"
+            if [ -s body.json ]; then cat body.json; echo; fi
+            if [ "$attempt" -lt 3 ]; then sleep 30; fi
+          done
+          {
+            echo "### Noorain backend degraded"
+            echo "URL: $HEALTH_URL (last HTTP status $code)"
+            echo '```json'
+            cat body.json 2>/dev/null || true
+            echo
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::error::Noorain deep health failed (HTTP $code) at $HEALTH_URL"
+          exit 1
+
+      # Renewal is automatic (certbot service); this catches it silently failing.
+      - name: Certificate valid for 14+ more days
+        if: startsWith(env.HEALTH_URL_FOR_CERT, 'https://')
+        env:
+          HEALTH_URL_FOR_CERT: ${{ inputs.url || vars.HEALTH_URL || 'https://3-73-130-154.sslip.io/healthz/deep' }}
+        run: |
+          host=$(echo "$HEALTH_URL_FOR_CERT" | sed -E 's#^https://([^/:]+).*#\1#')
+          cert=$(echo | timeout 20 openssl s_client -connect "$host:443" -servername "$host" 2>/dev/null)
+          echo "$cert" | openssl x509 -noout -subject -issuer -enddate
+          if ! echo "$cert" | openssl x509 -noout -checkend $((14 * 86400)); then
+            echo "::error::TLS certificate for $host expires within 14 days; check the certbot service logs"
+            exit 1
+          fi
