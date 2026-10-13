@@ -27,17 +27,17 @@ android {
         // our backend, which holds the provider credentials.
         val localPropsFile = rootProject.file("local.properties")
 
-        // The temporary HTTP server can be used for device testing.  Supply
-        // SERVER_BASE_URL=https://api.example.com at release time when a
-        // domain and TLS certificate are available.
+        // HTTPS only (the manifest forbids cleartext). The default is the interim
+        // sslip.io name of the server; once api.noorain.uz resolves, switch the default
+        // or pass -PSERVER_BASE_URL=https://api.noorain.uz.
         val serverBaseUrl = if (localPropsFile.exists()) {
             val props = Properties()
             localPropsFile.inputStream().use { props.load(it) }
             props.getProperty("SERVER_BASE_URL")
                 ?: (project.findProperty("SERVER_BASE_URL") as? String)
-                ?: "http://3.73.130.154"
+                ?: "https://3-73-130-154.sslip.io"
         } else {
-            (project.findProperty("SERVER_BASE_URL") as? String) ?: "http://3.73.130.154"
+            (project.findProperty("SERVER_BASE_URL") as? String) ?: "https://3-73-130-154.sslip.io"
         }.trimEnd('/')
         buildConfigField("String", "SERVER_BASE_URL", "\"$serverBaseUrl\"")
 
