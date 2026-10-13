@@ -197,8 +197,10 @@ fun NurNavigationBar(currentRoute: String?, onSelect: (String) -> Unit) {
     val shaderGlass = glass != null && nurGlassSupported
     val trackFill = when {
         !shaderGlass -> palette.track
-        c.isDark -> Color(0xFF0A1C16).copy(alpha = 0.50f)
-        else -> Color.White.copy(alpha = 0.46f)
+        // Nearly opaque: content scrolling behind never fights the labels, and no screen-wide
+        // blur is needed (that cost a frame's budget on every scroll and switch).
+        c.isDark -> Color(0xFF0C2019).copy(alpha = 0.92f)
+        else -> Color(0xFFFBF8F1).copy(alpha = 0.93f)
     }
     var trackOrigin by remember { mutableStateOf(Offset.Zero) }
 

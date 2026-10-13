@@ -62,6 +62,14 @@ android {
                 "proguard-rules.pro"
             )
         }
+        // Release-speed build for testing on a phone: optimised and not debuggable like
+        // release, but signed with the debug key so it installs over the debug app and
+        // keeps its data. (Compose debug builds are several times slower than release.)
+        create("fast") {
+            initWith(getByName("release"))
+            signingConfig = signingConfigs.getByName("debug")
+            matchingFallbacks += listOf("release")
+        }
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17

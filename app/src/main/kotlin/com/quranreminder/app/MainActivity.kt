@@ -264,7 +264,8 @@ fun AppNavigation(
         startDestination = startDestination,
         modifier = androidx.compose.ui.Modifier
             .fillMaxSize()
-            .then(com.quranreminder.app.ui.theme.nurGlassBackdropIf(currentRoute in com.quranreminder.app.ui.theme.NurTopLevelRoutes, glassState))
+            // No backdrop effect on the content layer: a RenderEffect there re-rendered (and
+            // blurred) the whole screen on every frame anything moved — scrolling, switches.
     ) {
         composable("auth") {
             AuthScreen(
