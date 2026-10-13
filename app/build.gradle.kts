@@ -105,6 +105,10 @@ dependencies {
     // WorkManager for background tasks
     implementation("androidx.work:work-runtime-ktx:2.9.0")
 
+    // Quran audio: background playback with lock-screen / notification controls
+    implementation("androidx.media3:media3-exoplayer:1.3.1")
+    implementation("androidx.media3:media3-session:1.3.1")
+
     // Preferences DataStore
     implementation("androidx.datastore:datastore-preferences:1.0.0")
 

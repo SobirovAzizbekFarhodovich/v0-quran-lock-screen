@@ -197,8 +197,8 @@ fun NurNavigationBar(currentRoute: String?, onSelect: (String) -> Unit) {
     val shaderGlass = glass != null && nurGlassSupported
     val trackFill = when {
         !shaderGlass -> palette.track
-        c.isDark -> Color(0xFF0A1C16).copy(alpha = 0.66f)
-        else -> Color.White.copy(alpha = 0.62f)
+        c.isDark -> Color(0xFF0A1C16).copy(alpha = 0.50f)
+        else -> Color.White.copy(alpha = 0.46f)
     }
     var trackOrigin by remember { mutableStateOf(Offset.Zero) }
 
@@ -234,7 +234,9 @@ fun NurNavigationBar(currentRoute: String?, onSelect: (String) -> Unit) {
     val trackHeightPx = with(density) { trackHeight.toPx() }
     val inset = with(density) { 4.dp.toPx() }
     val lensBaseH = with(density) { (trackHeight + proud * 2).toPx() }
-    val lensBaseW = lensBaseH * 1.06f
+    // A capsule, wider than tall, like iOS: a little wider than one tab.
+    val avgTab = if (tabWidth.isNotEmpty() && tabWidth.last() > 0f) tabWidth.sum() / tabWidth.size else lensBaseH
+    val lensBaseW = max(avgTab * 1.22f, lensBaseH * 1.32f)
 
     // Per-frame lens values are read ONLY inside layout/draw/layer lambdas (never during
     // composition), so moving the lens redraws the glass without recomposing the bar.
@@ -246,11 +248,25 @@ fun NurNavigationBar(currentRoute: String?, onSelect: (String) -> Unit) {
     }
     fun lensSxNow() = lensLift * (1f + lensStretch.coerceIn(-0.25f, 0.45f))
     fun lensSyNow() = lensLift / (1f + lensStretch.coerceIn(-0.25f, 0.45f) * 0.9f)
+    // 0 = the resting pill, 1 = the full lens. The lens grows out of the pill and, when it
+    // lets go, settles back into exactly the pill's shape (no uniform shrink-and-vanish).
+    fun lensMorphNow(): Float {
+        val a = lensAppear.coerceIn(0f, 1f)
+        return a * a * (3f - 2f * a)
+    }
     // Lens centre in the track layer's own pixels (the track starts `inset` before the tabs).
-    fun lensLocalNow() = Offset(lensCxNow() + inset, trackHeightPx / 2f)
-    // The drop grows out of the touch point as it appears and shrinks away as it goes.
-    fun lensGrowNow() = 0.45f + 0.55f * lensAppear.coerceIn(0f, 1.2f)
-    fun lensHalfNow() = Offset(lensBaseW / 2f * lensSxNow() * lensGrowNow(), lensBaseH / 2f * lensSyNow() * lensGrowNow())
+    fun lensLocalNow(): Offset {
+        val k = lensMorphNow()
+        val pillCx = lensX + lensW / 2f
+        return Offset(pillCx + (lensCxNow() - pillCx) * k + inset, trackHeightPx / 2f)
+    }
+    val pillHalfH = with(density) { (trackHeight - 8.dp).toPx() } / 2f
+    fun lensHalfNow(): Offset {
+        val k = lensMorphNow()
+        val full = Offset(lensBaseW / 2f * lensSxNow(), lensBaseH / 2f * lensSyNow())
+        val pill = Offset(kotlin.math.max(lensW, pillHalfH * 2f) / 2f, pillHalfH)
+        return Offset(pill.x + (full.x - pill.x) * k, pill.y + (full.y - pill.y) * k)
+    }
 
     fun publish() {
         lensX = sim.x.x; lensW = sim.w.x; lensStretch = sim.stretch.x; lensLift = sim.lift.x
@@ -259,7 +275,9 @@ fun NurNavigationBar(currentRoute: String?, onSelect: (String) -> Unit) {
         glass?.let {
             it.lensCenter = trackOrigin + lensLocalNow()
             it.lensHalf = lensHalfNow()
-            it.visible = sim.w.x > 0f && sim.appear.x > 0.01f
+            it.visible = sim.w.x > 0f
+            it.lensOn = sim.w.x > 0f && sim.appear.x > 0.01f
+            it.lensStrength = lensMorphNow()
         }
     }
 
@@ -292,12 +310,15 @@ fun NurNavigationBar(currentRoute: String?, onSelect: (String) -> Unit) {
                 val speed = if (sim.dragging) sim.dragVel else sim.x.v
                 val speedDp = speed / density.density
                 sim.stretch.step(min(0.45f, abs(speedDp) / 1600f), 320f, 9f, dt)
-                sim.lift.step(if (sim.dragging) 1.14f else 1f, 380f, 20f, dt)
                 val travelling = abs(sim.x.x - sim.tx) > 1.5f || abs(sim.x.v) > 40f
                 sim.appearTarget = if (sim.dragging || travelling) 1f else 0f
                 // Appears fast and a little springy; leaves softer.
-                if (sim.appearTarget > 0f) sim.appear.step(1f, 520f, 26f, dt) else sim.appear.step(0f, 260f, 30f, dt)
+                if (sim.appearTarget > 0f) sim.appear.step(1f, 520f, 26f, dt) else sim.appear.step(0f, 300f, 2f * kotlin.math.sqrt(300f), dt)
                 if (sim.appear.x < 0f) { sim.appear.x = 0f; sim.appear.v = 0f }
+                // The lift is part of the same motion as the appearance: the lens rises out of
+                // the pill in one move and settles back into it in one move (no second shrink).
+                sim.lift.x = 1f + 0.12f * sim.appear.x.coerceIn(0f, 1f)
+                sim.lift.v = 0f
                 if (sim.resting) {
                     sim.x.x = sim.tx; sim.w.x = sim.tw; sim.stretch.x = 0f; sim.lift.x = 1f
                     sim.appear.x = sim.appearTarget
@@ -332,12 +353,40 @@ fun NurNavigationBar(currentRoute: String?, onSelect: (String) -> Unit) {
                 .nurLensRefraction(
                     center = { lensLocalNow() },
                     half = { lensHalfNow() },
+                    strength = { lensMorphNow() },
                     enabled = { shaderGlass && lensReady && lensAppear > 0.01f }
                 )
                 .clip(CircleShape)
                 .background(trackFill)
-                .border(1.dp, if (shaderGlass) Color.White.copy(alpha = if (c.isDark) 0.14f else 0.75f) else Color.Transparent, CircleShape)
+                .border(
+                    1.dp,
+                    if (shaderGlass) {
+                        Brush.verticalGradient(
+                            0f to Color.White.copy(alpha = if (c.isDark) 0.26f else 0.95f),
+                            1f to Color.White.copy(alpha = if (c.isDark) 0.06f else 0.35f)
+                        )
+                    } else {
+                        Brush.verticalGradient(listOf(Color.Transparent, Color.Transparent))
+                    },
+                    CircleShape
+                )
                 .drawWithContent {
+                    if (shaderGlass && lensW > 0f) {
+                        // The selection at rest: a soft pill under the tab. It fades as the lens
+                        // rises out of it and returns where the lens settles.
+                        val fade = 1f - lensMorphNow()
+                        if (fade > 0f) {
+                            val ph = size.height - 8.dp.toPx()
+                            drawRoundRect(
+                                (if (c.isDark) Color.White else NurColors.Green).copy(
+                                    alpha = (if (c.isDark) 0.12f else 0.08f) * fade
+                                ),
+                                topLeft = Offset(lensX + 4.dp.toPx(), 4.dp.toPx()),
+                                size = Size(lensW, ph),
+                                cornerRadius = CornerRadius(ph / 2, ph / 2)
+                            )
+                        }
+                    }
                     drawContent()
                     val r = CornerRadius(size.height / 2, size.height / 2)
                     drawRoundRect(
@@ -484,49 +533,58 @@ fun NurNavigationBar(currentRoute: String?, onSelect: (String) -> Unit) {
                     .offset { IntOffset((lensLocalNow().x - lensBaseW / 2f).roundToInt(), (-proud).roundToPx()) }
                     .size(wDp, hDp)
                     .graphicsLayer {
-                        val grow = lensGrowNow()
-                        scaleX = lensSxNow() * grow
-                        scaleY = lensSyNow() * grow
-                        alpha = lensAppear.coerceIn(0f, 1f)
+                        val half = lensHalfNow()
+                        scaleX = half.x * 2f / lensBaseW
+                        scaleY = half.y * 2f / lensBaseH
+                        alpha = lensMorphNow()
                     }
-                    .shadow(14.dp, CircleShape, ambientColor = Color.Black.copy(alpha = 0.22f), spotColor = Color.Black.copy(alpha = 0.30f))
+                    .shadow(12.dp, CircleShape, ambientColor = Color.Black.copy(alpha = 0.16f), spotColor = Color.Black.copy(alpha = 0.24f))
                     .drawWithContent {
                         val w = size.width
                         val h = size.height
+                        val r = CornerRadius(h / 2f, h / 2f)
                         val sw = 1.dp.toPx()
-                        // Edge falloff: transparent middle, faint glass toward the rim.
-                        drawOval(
-                            Brush.radialGradient(
-                                0f to Color.Transparent,
-                                0.72f to Color.White.copy(alpha = 0.02f),
-                                1f to Color.White.copy(alpha = if (c.isDark) 0.10f else 0.18f),
-                                center = Offset(w / 2f, h / 2f), radius = max(w, h) / 2f
-                            )
+                        // Barely-there body: clear glass, a touch lighter toward the rim.
+                        drawRoundRect(
+                            Brush.verticalGradient(
+                                0f to Color.White.copy(alpha = if (c.isDark) 0.06f else 0.08f),
+                                0.45f to Color.Transparent,
+                                1f to Color.White.copy(alpha = if (c.isDark) 0.04f else 0.07f)
+                            ),
+                            cornerRadius = r
                         )
-                        // Dark band hugging the inside of the top rim (refraction shadow).
-                        drawArc(
-                            Brush.verticalGradient(0f to Color.Black.copy(alpha = 0.45f), 0.35f to Color.Transparent),
-                            startAngle = 200f, sweepAngle = 140f, useCenter = false,
-                            topLeft = Offset(sw * 3f, sw * 3f), size = Size(w - sw * 6f, h - sw * 6f),
-                            style = Stroke(width = 5.dp.toPx())
+                        // Light enters at the top edge: a bright, thin specular line.
+                        drawRoundRect(
+                            Brush.verticalGradient(
+                                0f to Color.White.copy(alpha = if (c.isDark) 0.55f else 0.9f),
+                                0.35f to Color.Transparent
+                            ),
+                            topLeft = Offset(sw * 1.5f, sw * 1.5f),
+                            size = Size(w - sw * 3f, h - sw * 3f),
+                            cornerRadius = CornerRadius((h - sw * 3f) / 2f, (h - sw * 3f) / 2f),
+                            style = Stroke(width = 1.6.dp.toPx())
                         )
-                        // Light pooled along the bottom inside edge.
-                        drawArc(
-                            Brush.verticalGradient(0.6f to Color.Transparent, 1f to Color.White.copy(alpha = 0.55f)),
-                            startAngle = 25f, sweepAngle = 130f, useCenter = false,
-                            topLeft = Offset(sw * 3f, sw * 3f), size = Size(w - sw * 6f, h - sw * 6f),
-                            style = Stroke(width = 3.dp.toPx())
+                        // ...and pools softly along the bottom inside edge.
+                        drawRoundRect(
+                            Brush.verticalGradient(
+                                0.6f to Color.Transparent,
+                                1f to Color.White.copy(alpha = if (c.isDark) 0.28f else 0.5f)
+                            ),
+                            topLeft = Offset(sw * 2.5f, sw * 2.5f),
+                            size = Size(w - sw * 5f, h - sw * 5f),
+                            cornerRadius = CornerRadius((h - sw * 5f) / 2f, (h - sw * 5f) / 2f),
+                            style = Stroke(width = 2.dp.toPx())
                         )
-                        // Colour split at the rim: warm just outside, cool just inside.
-                        drawOval(Color(0xFFFF6A5C).copy(alpha = 0.28f), topLeft = Offset(-sw * 0.6f, -sw * 0.3f), size = Size(w + sw * 1.2f, h + sw * 0.6f), style = Stroke(sw))
-                        drawOval(Color(0xFF5CC8FF).copy(alpha = 0.28f), topLeft = Offset(sw * 1.4f, sw * 1.4f), size = Size(w - sw * 2.8f, h - sw * 2.8f), style = Stroke(sw))
-                        // Thin bright rim.
-                        drawOval(Color.White.copy(alpha = if (c.isDark) 0.45f else 0.85f), style = Stroke(sw))
-                        // Small specular glint, upper left.
-                        drawOval(
-                            Brush.radialGradient(0f to Color.White.copy(alpha = 0.8f), 1f to Color.Transparent,
-                                center = Offset(w * 0.28f, h * 0.2f), radius = w * 0.12f),
-                            topLeft = Offset(w * 0.16f, h * 0.12f), size = Size(w * 0.24f, h * 0.16f)
+                        // Rim: brighter where it faces the light.
+                        drawRoundRect(
+                            Brush.linearGradient(
+                                0f to Color.White.copy(alpha = if (c.isDark) 0.55f else 0.95f),
+                                0.5f to Color.White.copy(alpha = if (c.isDark) 0.18f else 0.45f),
+                                1f to Color.White.copy(alpha = if (c.isDark) 0.35f else 0.75f),
+                                start = Offset.Zero, end = Offset(w, h)
+                            ),
+                            cornerRadius = r,
+                            style = Stroke(sw)
                         )
                     }
             )

@@ -216,6 +216,10 @@ fun SettingsScreen(
                 }
             }
 
+            // ---------------------------------------------------------- recitation audio
+            item { SettingSection(t("settings.audio"), Modifier.padding(top = 12.dp)) }
+            item { AudioSettingsCard() }
+
             // ---------------------------------------------------------- lock screen
             item { SettingSection(t("settings.lockScreen"), Modifier.padding(top = 12.dp)) }
             item {

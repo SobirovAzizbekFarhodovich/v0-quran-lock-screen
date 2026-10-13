@@ -7,6 +7,8 @@ import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Wallpaper
 import androidx.compose.material.icons.filled.MoreHoriz
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.RepeatOne
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.runtime.setValue
@@ -59,6 +61,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
+import com.quranreminder.app.audio.QuranPlayer
+import com.quranreminder.app.audio.ReciterPrefs
 import com.quranreminder.app.database.QuranVerse
 import com.quranreminder.app.lockscreen.LockScreenWallpaperApplier
 import com.quranreminder.app.ui.theme.NurBand
@@ -113,6 +117,24 @@ fun SurahDetailScreen(
         t("surah.ayahCount").replace("{n}", verses.size.toString())
 
     LaunchedEffect(surahNumber) { viewModel.loadSurahVerses(surahNumber) }
+    LaunchedEffect(Unit) { QuranPlayer.connect(context) }
+
+    // The ayah the reciter is on (in this surah), lit up and kept in view.
+    val audio = QuranPlayer.state.collectAsState().value
+    val recitingAyah = if (audio.active && audio.surah == surahNumber) audio.ayah else null
+    LaunchedEffect(recitingAyah, verses) {
+        val ayah = recitingAyah ?: return@LaunchedEffect
+        if (ayah < 1) return@LaunchedEffect
+        val index = verses.indexOfFirst { it.ayahNumber == ayah }
+        if (index < 0) return@LaunchedEffect
+        val item = index + ITEMS_BEFORE_AYAHS
+        val info = listState.layoutInfo
+        val shown = info.visibleItemsInfo.firstOrNull { it.index == item }
+        val fullyVisible = shown != null && shown.offset >= info.viewportStartOffset &&
+            shown.offset + shown.size <= info.viewportEndOffset - 160
+        if (!fullyVisible) listState.animateScrollToItem(item)
+    }
+    val reciterName = t((ReciterPrefs.flow(context).collectAsState().value ?: com.quranreminder.app.audio.Reciter.HUSARY).nameKey)
 
     LaunchedEffect(verses, targetAyahNumber) {
         val target = targetAyahNumber ?: return@LaunchedEffect
@@ -133,7 +155,11 @@ fun SurahDetailScreen(
             arabicName = firstVerse?.surahNameArabic.orEmpty(),
             fallbackSubtitle = eyebrowFallbackText,
             backText = backText,
-            onBack = { navController.popBackStack() }
+            onBack = { navController.popBackStack() },
+            actions = if (verses.isEmpty()) null else ({
+                SurahDownloadButton(surah = surahNumber, ayahCount = verses.size)
+                SurahListenButton(surah = surahNumber, surahName = firstVerse?.surahName.orEmpty(), ayahCount = verses.size)
+            })
         )
 
         if (verses.isEmpty()) {
@@ -153,12 +179,14 @@ fun SurahDetailScreen(
                 )
             }
         } else {
+        Box(Modifier.fillMaxSize()) {
         LazyColumn(
             state = listState,
             modifier = Modifier
                 .fillMaxSize()
                 .navigationBarsPadding(),
-            contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 20.dp, bottom = 24.dp)
+            // Room under the last ayah for the player when it is open.
+            contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 20.dp, bottom = if (audio.active) 168.dp else 24.dp)
         ) {
             item(key = "opening") {
                 OpeningCard(
@@ -172,7 +200,7 @@ fun SurahDetailScreen(
                 val isBookmarked = QuranViewModel.verseKey(verse.surahNumber, verse.ayahNumber) in bookmarkedVerseKeys
                 AyahBlock(
                     verse = verse,
-                    highlighted = verse.ayahNumber == targetAyahNumber,
+                    highlighted = verse.ayahNumber == targetAyahNumber || verse.ayahNumber == recitingAyah,
                     ayahLabel = "$ayahPrefixText${verse.ayahNumber}",
                     shareImageDesc = shareImageDesc,
                     moreDesc = moreDesc,
@@ -194,6 +222,13 @@ fun SurahDetailScreen(
                 if (verse != verses.last()) NurDivider(inset = 16.dp)
             }
         }
+        QuranMiniPlayer(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .navigationBarsPadding()
+                .padding(horizontal = 12.dp, vertical = 12.dp)
+        )
+        }
         menuVerse?.let { verse ->
             AyahActionsSheet(
                 verse = verse,
@@ -209,6 +244,11 @@ fun SurahDetailScreen(
                         launchSingleTop = true
                         restoreState = true
                     }
+                },
+                onListen = { loop ->
+                    if (loop) QuranPlayer.setRepeat(context, QuranPlayer.Repeat.AYAH_LOOP)
+                    else if (QuranPlayer.state.value.repeat == QuranPlayer.Repeat.AYAH_LOOP) QuranPlayer.setRepeat(context, QuranPlayer.Repeat.OFF)
+                    QuranPlayer.play(context, surahNumber, verse.surahName, verses.size, reciterName, fromAyah = verse.ayahNumber)
                 },
                 onRecite = {
                     com.quranreminder.app.ui.AyahHandoff.recite = verse.surahNumber to verse.ayahNumber
@@ -231,7 +271,8 @@ private fun ReaderHeader(
     arabicName: String,
     fallbackSubtitle: String,
     backText: String,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    actions: (@Composable () -> Unit)? = null
 ) {
     NurBand(bottomPadding = 16.dp) {
         Row(
@@ -265,6 +306,7 @@ private fun ReaderHeader(
                     )
                 }
             }
+            actions?.invoke()
         }
     }
 }
@@ -462,6 +504,7 @@ private fun AyahActionsSheet(
     onDismiss: () -> Unit,
     onWallpaper: () -> Unit,
     onAsk: (String) -> Unit,
+    onListen: (loop: Boolean) -> Unit,
     onRecite: () -> Unit
 ) {
     val context = LocalContext.current
@@ -504,6 +547,12 @@ private fun AyahActionsSheet(
                 )
             }
             NurDivider(inset = 24.dp)
+            AyahActionRow(Icons.Default.PlayArrow, t("surahDetail.action.listen"), t("surahDetail.action.listen.desc")) {
+                closeThen { onListen(false) }
+            }
+            AyahActionRow(Icons.Default.RepeatOne, t("surahDetail.action.loop"), t("surahDetail.action.loop.desc")) {
+                closeThen { onListen(true) }
+            }
             AyahActionRow(Icons.Default.Wallpaper, t("surahDetail.action.wallpaper"), t("surahDetail.action.wallpaper.desc")) {
                 closeThen(onWallpaper)
             }
