@@ -66,6 +66,8 @@ services:
     volumes:
       # Audio users send with 'this result is wrong' reports.
       - recitation_reports:/data/recitation-reports
+      # Profile photos (one JPEG per user).
+      - avatars:/data/avatars
 
   ai-recitation:
     restart: unless-stopped
@@ -174,6 +176,7 @@ services:
 
 volumes:
   recitation_reports:
+  avatars:
   whisper_models:
   postgres_data:
   redis_data:

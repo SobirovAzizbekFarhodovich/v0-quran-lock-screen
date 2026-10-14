@@ -32,6 +32,7 @@ type Config struct {
 	AppleClientID    string
 
 	RecitationReportsDir        string
+	AvatarsDir                  string
 	RecitationReportsDailyLimit int
 	RecitationReportsMinFreeMB  int
 }
@@ -61,6 +62,7 @@ func Load() Config {
 		AppleClientID:    env("APPLE_CLIENT_ID", ""),
 
 		RecitationReportsDir:        env("RECITATION_REPORTS_DIR", "/data/recitation-reports"),
+		AvatarsDir:                  env("AVATARS_DIR", "/data/avatars"),
 		RecitationReportsDailyLimit: envInt("RECITATION_REPORTS_DAILY_LIMIT", 20),
 		RecitationReportsMinFreeMB:  envInt("RECITATION_REPORTS_MIN_FREE_MB", 1024),
 	}

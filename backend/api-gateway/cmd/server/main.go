@@ -180,8 +180,14 @@ func main() {
 	protected := v1.Group("")
 	protected.Use(auth.Middleware(tokenService))
 	protected.POST("/auth/logout", authHandler.Logout)
-	protected.GET("/profile", profileHandler.Get)
+	// The profile page: details (age, gender, Quran level, goal) and the photo.
+	profileDetails := httpapi.NewProfileDetailsHandler(db, cfg.AvatarsDir)
+	protected.GET("/profile", profileDetails.Get)
 	protected.PUT("/profile", profileHandler.Update)
+	protected.PATCH("/profile", profileDetails.Patch)
+	protected.POST("/profile/avatar", ratelimit.RedisTokenBucket(redisClient, 10, time.Hour), profileDetails.UploadAvatar)
+	protected.GET("/profile/avatar", profileDetails.Avatar)
+	protected.DELETE("/profile/avatar", profileDetails.DeleteAvatar)
 	protected.GET("/sessions", profileHandler.Sessions)
 	protected.POST("/sessions", profileHandler.CreateSession)
 	protected.POST("/spiritual/query",
