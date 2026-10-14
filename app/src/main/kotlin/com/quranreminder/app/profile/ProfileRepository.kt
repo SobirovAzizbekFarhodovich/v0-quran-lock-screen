@@ -114,7 +114,9 @@ object ProfileRepository {
     /** Square-crops, scales to 512 px and uploads the picked photo. */
     suspend fun uploadAvatar(context: Context, uri: Uri): Result<Profile> = withContext(Dispatchers.IO) {
         runCatching {
-            val jpeg = prepareAvatar(context, uri)
+            val jpeg = runCatching { prepareAvatar(context, uri) }
+                .onFailure { android.util.Log.w("Profile", "could not prepare the photo", it) }
+                .getOrThrow()
             val body = MultipartBody.Builder().setType(MultipartBody.FORM)
                 .addFormDataPart("file", "avatar.jpg", jpeg.toRequestBody("image/jpeg".toMediaType()))
                 .build()
@@ -174,15 +176,43 @@ object ProfileRepository {
     }
 
     private fun prepareAvatar(context: Context, uri: Uri): ByteArray {
+        val decoded = decodeScaled(context, uri)
+        val side = min(decoded.width, decoded.height)
+        val scale = min(1f, TARGET.toFloat() / side)
+        val matrix = Matrix().apply { postScale(scale, scale) }
+        val square = Bitmap.createBitmap(decoded, (decoded.width - side) / 2, (decoded.height - side) / 2, side, side, matrix, true)
+        if (square !== decoded) decoded.recycle()
+        return ByteArrayOutputStream().use { out ->
+            square.compress(Bitmap.CompressFormat.JPEG, 88, out)
+            square.recycle()
+            out.toByteArray()
+        }
+    }
+
+    /** Decodes the photo near [TARGET] px on its short side, upright. */
+    private fun decodeScaled(context: Context, uri: Uri): Bitmap {
         val resolver = context.contentResolver
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
+            // ImageDecoder reads HEIC/HEIF camera photos too and applies the EXIF rotation.
+            val source = android.graphics.ImageDecoder.createSource(resolver, uri)
+            return android.graphics.ImageDecoder.decodeBitmap(source) { decoder, info, _ ->
+                val w = info.size.width
+                val h = info.size.height
+                val f = TARGET.toFloat() / min(w, h)
+                if (f < 1f) decoder.setTargetSize(maxOf(1, (w * f).toInt()), maxOf(1, (h * f).toInt()))
+                decoder.allocator = android.graphics.ImageDecoder.ALLOCATOR_SOFTWARE
+            }
+        }
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-        resolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, bounds) } ?: throw IOException("cannot open photo")
+        // (With inJustDecodeBounds decodeStream always returns null; only the options are filled.)
+        (resolver.openInputStream(uri) ?: throw IOException("cannot open photo")).use { BitmapFactory.decodeStream(it, null, bounds) }
+        if (bounds.outWidth <= 0 || bounds.outHeight <= 0) throw IOException("unsupported image")
         var sample = 1
         while (min(bounds.outWidth, bounds.outHeight) / (sample * 2) >= TARGET) sample *= 2
-        val decoded = resolver.openInputStream(uri)?.use {
+        val bitmap = (resolver.openInputStream(uri) ?: throw IOException("cannot open photo")).use {
             BitmapFactory.decodeStream(it, null, BitmapFactory.Options().apply { inSampleSize = sample })
         } ?: throw IOException("cannot decode photo")
-        // Photos from the camera are stored sideways with an EXIF rotation flag.
+        // Camera photos are stored sideways with an EXIF rotation flag.
         val rotation = runCatching {
             resolver.openInputStream(uri)?.use {
                 when (android.media.ExifInterface(it).getAttributeInt(android.media.ExifInterface.TAG_ORIENTATION, 1)) {
@@ -193,19 +223,10 @@ object ProfileRepository {
                 }
             } ?: 0f
         }.getOrDefault(0f)
-        val side = min(decoded.width, decoded.height)
-        val matrix = Matrix().apply {
-            val scale = TARGET.toFloat() / side
-            postScale(scale, scale)
-            postRotate(rotation)
-        }
-        val square = Bitmap.createBitmap(decoded, (decoded.width - side) / 2, (decoded.height - side) / 2, side, side, matrix, true)
-        if (square !== decoded) decoded.recycle()
-        return ByteArrayOutputStream().use { out ->
-            square.compress(Bitmap.CompressFormat.JPEG, 88, out)
-            square.recycle()
-            out.toByteArray()
-        }
+        if (rotation == 0f) return bitmap
+        val rotated = Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, Matrix().apply { postRotate(rotation) }, true)
+        if (rotated !== bitmap) bitmap.recycle()
+        return rotated
     }
 
     private const val TARGET = 512
