@@ -70,12 +70,14 @@ object ProfileRepository {
         val json = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(KEY_JSON, null)
         val cached = json?.let { runCatching { gson.fromJson(it, Profile::class.java) }.getOrNull() }
         _profile.value = cached
+        Personalization.apply(cached)
         return cached
     }
 
     private fun store(context: Context, profile: Profile) {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString(KEY_JSON, gson.toJson(profile)).apply()
         _profile.value = profile
+        Personalization.apply(profile)
         SessionManager(context).cacheName(profile.name)
     }
 
@@ -84,6 +86,7 @@ object ProfileRepository {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().clear().apply()
         avatarFile(context).delete()
         _profile.value = null
+        Personalization.apply(null)
         _avatarVersion.value++
     }
 

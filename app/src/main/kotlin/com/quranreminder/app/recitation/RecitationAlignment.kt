@@ -52,6 +52,10 @@ data class WordAlignment(
  * word is also accepted, since it is far more often the recognizer's spelling than a mistake.
  */
 object RecitationAlignment {
+    /** False for beginners (see Personalization): harakat slips then count as correct. */
+    @Volatile
+    var checkHarakat: Boolean = true
+
     private val marks = Regex("[\\u0610-\\u061A\\u064B-\\u065F\\u0640\\u0670\\u06D6-\\u06ED]")
 
     /** Letters only: no harakat or marks, letter variants folded. Also used for display matching. */
@@ -157,7 +161,7 @@ object RecitationAlignment {
                     result[i - 1] = if (same(i - 1, j - 1)) {
                         // Harakat are judged only once the reader has finished: live partials
                         // are fast, rough transcriptions.
-                        val slip = if (final) HarakatCheck.slip(target[i - 1], heard[j - 1]) else null
+                        val slip = if (final && checkHarakat) HarakatCheck.slip(target[i - 1], heard[j - 1]) else null
                         if (slip != null) WordMark(WordStatus.HARAKAT, heard[j - 1], slip)
                         else WordMark(WordStatus.CORRECT, heard[j - 1])
                     } else {

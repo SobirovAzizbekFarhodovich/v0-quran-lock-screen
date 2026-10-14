@@ -96,8 +96,8 @@ class RagChatRepository(context: Context) {
         }
         try {
             connection.outputStream.bufferedWriter(Charsets.UTF_8).use {
-                val gender = com.quranreminder.app.profile.ProfileRepository.load(appContext)?.gender
-                it.write(gson.toJson(RagRequest(message, language, userName, gender)))
+                val profile = com.quranreminder.app.profile.ProfileRepository.load(appContext)
+                it.write(gson.toJson(RagRequest(message, language, userName, profile?.gender, profile?.quranLevel)))
             }
             val code = connection.responseCode
             if (code == HttpURLConnection.HTTP_UNAUTHORIZED) throw UnauthorizedException()
@@ -161,7 +161,9 @@ private data class RagRequest(
     val language: String,
     @com.google.gson.annotations.SerializedName("user_name") val userName: String = "",
     // From the profile; the assistant uses masculine/feminine address. Null = neutral.
-    @com.google.gson.annotations.SerializedName("user_gender") val userGender: String? = null
+    @com.google.gson.annotations.SerializedName("user_gender") val userGender: String? = null,
+    // From the profile; beginners get simpler explanations.
+    @com.google.gson.annotations.SerializedName("user_level") val userLevel: String? = null
 )
 private data class RagResponse(val answer: String = "", val sources: List<RagSource> = emptyList())
 private data class RagSource(val text: String = "", val score: Double = 0.0, val metadata: JsonObject = JsonObject())

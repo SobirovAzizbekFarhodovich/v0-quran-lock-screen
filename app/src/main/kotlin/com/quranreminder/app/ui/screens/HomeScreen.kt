@@ -88,6 +88,9 @@ fun HomeScreen(
     val bandHeight = (LocalConfiguration.current.screenHeightDp * 0.36f).dp
     val navBar = LocalNavBarPadding.current
 
+    // Once after sign-in: how the assistant should address the user.
+    GenderAskSheet()
+
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
@@ -130,6 +133,14 @@ fun HomeScreen(
                     }
                 }
             }
+        }
+
+        item(key = "today") {
+            TodayCard(
+                navController = navController,
+                surahName = { n -> surahs.firstOrNull { it.surahNumber == n }?.surahName },
+                modifier = Modifier.padding(horizontal = 20.dp)
+            )
         }
 
         item(key = "features") {

@@ -64,6 +64,8 @@ class QueryRequest(BaseModel):
     user_name: str | None = Field(default=None, max_length=USER_NAME_MAX_CHARS)
     # From the user's profile; decides masculine/feminine forms of address.
     user_gender: Literal["male", "female"] | None = None
+    # From the profile: how well the user reads the Quran (shapes how simply to explain).
+    user_level: Literal["beginner", "fluent", "hafiz"] | None = None
 
     @field_validator("message")
     @classmethod
@@ -608,6 +610,7 @@ async def generate_grounded_answer(
     sources: list[dict[str, Any]],
     history: list[dict[str, str]],
     user_gender: str | None = None,
+    user_level: str | None = None,
 ) -> tuple[str, list[dict[str, Any]], bool]:
     """Islomiy savol: faqat manbalardan, topilmasa — halol 'topilmadi'.
 
@@ -627,6 +630,7 @@ async def generate_grounded_answer(
     # No name here: grounded answers are cached and shared between users (per gender).
     user_prompt = (
         f"{address_line(None, user_gender)}"
+        f"{level_line(user_level)}"
         f"KNOWLEDGE BASE PASSAGES:\n\n{context}\n\nUSER QUESTION: {message}"
     )
     convo = history[-8:] + [{"role": "user", "content": user_prompt}]
@@ -643,6 +647,21 @@ async def generate_grounded_answer(
         title = meta.get("source") or meta.get("title") or "Manba"
         lines.append(f"{idx}. **{title}**:\n{s['text']}")
     return "\n\n".join(lines), sources[:4], False
+
+
+def level_line(user_level: str | None) -> str:
+    """How deep to go, by the user's Quran reading level (from their profile)."""
+    if user_level == "beginner":
+        return (
+            "USER IS A BEGINNER (still learning to read the Quran): explain simply, in short "
+            "sentences; explain any Arabic term you use; quote fewer, shorter passages.\n"
+        )
+    if user_level == "hafiz":
+        return (
+            "USER IS A HAFIZ (knows the Quran by heart): you may refer to ayahs briefly and "
+            "go deeper into meaning; skip basics.\n"
+        )
+    return ""
 
 
 def address_line(user_name: str | None, user_gender: str | None) -> str:
@@ -676,6 +695,7 @@ async def generate_emotional_answer(
     history: list[dict[str, str]],
     user_name: str | None,
     user_gender: str | None = None,
+    user_level: str | None = None,
 ) -> tuple[str, list[dict[str, Any]], bool]:
     """Ruhiy holat: Tadabbur uslubidagi iliq, manbali tasalli. (answer, sources, ok)"""
     system = "\n\n".join([
@@ -687,6 +707,7 @@ async def generate_emotional_answer(
     context = build_context(sources, limit=8) if sources else "(no passages found)"
     user_prompt = (
         f"{address_line(user_name, user_gender)}"
+        f"{level_line(user_level)}"
         f"KNOWLEDGE BASE PASSAGES:\n\n{context}\n\n"
         f"USER'S MESSAGE (their emotional state): {message}"
     )
@@ -786,7 +807,7 @@ async def query(req: QueryRequest) -> QueryResponse:
     if intent["intent"] == "emotional":
         sources = await retrieve(search_query, lang, limit=8)
         answer, used_sources, ok = await generate_emotional_answer(
-            req.message, lang, sources or [], history, req.user_name, req.user_gender
+            req.message, lang, sources or [], history, req.user_name, req.user_gender, req.user_level
         )
         if ok:
             await save_turn(req.user_id, req.message, answer)
@@ -795,7 +816,7 @@ async def query(req: QueryRequest) -> QueryResponse:
     # 2c. Islomiy savol — kesh faqat kontekstsiz (birinchi) savollar uchun
     use_cache = redis_client is not None and not history
     # Answers address the reader by gender, so each gender has its own cache entry.
-    cache_key = semantic_cache_key(req.message, f"{lang}:{req.user_gender or 'any'}")
+    cache_key = semantic_cache_key(req.message, f"{lang}:{req.user_gender or 'any'}:{req.user_level or 'any'}")
     if use_cache:
         try:
             cached = await redis_client.get(cache_key)
@@ -815,7 +836,7 @@ async def query(req: QueryRequest) -> QueryResponse:
         return QueryResponse(answer=error_message, sources=[], cached=False)
 
     answer, used_sources, ok = await generate_grounded_answer(
-        req.message, lang, sources, history, req.user_gender
+        req.message, lang, sources, history, req.user_gender, req.user_level
     )
     if not ok:
         # Raw-source fallback (LLM unavailable): shown once, never cached

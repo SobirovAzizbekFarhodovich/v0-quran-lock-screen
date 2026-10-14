@@ -162,7 +162,11 @@ fun RecitationScreen(navController: NavHostController, quranViewModel: QuranView
     // Automatic: just start reading, the ayah is recognised. Chosen: a surah and ayah picked.
     var automatic by rememberSaveable { mutableStateOf(true) }
     var pageView by rememberSaveable { mutableStateOf(false) }
-    var mode by rememberSaveable { mutableStateOf(MODE_CHECK) }
+    // Huffaz and those memorising start with the ayah hidden (their profile says so).
+    val profileNow = remember { com.quranreminder.app.profile.ProfileRepository.load(context) }
+    var mode by rememberSaveable {
+        mutableStateOf(if (com.quranreminder.app.profile.Personalization.recitationStartsInMemorize(profileNow)) MODE_MEMORIZE else MODE_CHECK)
+    }
     // Opened from an ayah's menu or the review list: that ayah, chosen.
     LaunchedEffect(com.quranreminder.app.ui.AyahHandoff.recite) {
         com.quranreminder.app.ui.AyahHandoff.recite?.let { (s, a) ->
@@ -363,6 +367,15 @@ fun RecitationScreen(navController: NavHostController, quranViewModel: QuranView
                 enabled = !recording,
                 onChange = { mode = if (it) MODE_MEMORIZE else MODE_CHECK }
             )
+            if (!com.quranreminder.app.recitation.RecitationAlignment.checkHarakat) {
+                // Beginner level (profile): say why harakat slips are not marked.
+                Text(
+                    t("recitation.beginnerNote"),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp)
+                )
+            }
 
             SourceCard(
                 automatic = automatic,

@@ -80,9 +80,6 @@ fun SettingsScreen(
 ) {
     val settings = viewModel.settings.collectAsState().value ?: AppSettings()
     val context = LocalContext.current
-    val selectedCategory = remember {
-        mutableStateOf(LockScreenWallpaperApplier.getSelectedCategory(context))
-    }
     var showLogoutConfirm by remember { mutableStateOf(false) }
     val displayName = remember { session.displayName.trim() }
     val notificationAccess = rememberNotificationAccess()
@@ -129,8 +126,51 @@ fun SettingsScreen(
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 20.dp, bottom = navBar + 28.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
+            // ---------------------------------------------------------- account
+            item { SettingSection(t("settings.account")) }
+            item {
+                NurSurfaceCard(Modifier.fillMaxWidth()) {
+                    Column {
+                        val context = androidx.compose.ui.platform.LocalContext.current
+                        val profile by com.quranreminder.app.profile.ProfileRepository.profile.collectAsState()
+                        androidx.compose.runtime.LaunchedEffect(Unit) { com.quranreminder.app.profile.ProfileRepository.load(context) }
+                        val shownName = profile?.name?.takeIf { it.isNotBlank() } ?: displayName
+                        NurListRow(
+                            title = shownName.ifBlank { t("settings.account") },
+                            subtitle = t("profile.open"),
+                            leading = { NurAvatar(name = shownName, size = 44.dp) },
+                            trailing = { Chevron() },
+                            onClick = { navController.navigate("profile") }
+                        )
+                    }
+                }
+            }
+
+            // ---------------------------------------------------------- appearance
+            item { SettingSection(t("settings.appearance"), Modifier.padding(top = 12.dp)) }
+            item {
+                NurSurfaceCard(Modifier.fillMaxWidth()) {
+                    Column {
+                        NurListRow(
+                            title = t("settings.language.title"),
+                            subtitle = languageDisplayName(settings.language),
+                            leadingIcon = Icons.Outlined.Language,
+                            trailing = { Chevron() },
+                            onClick = { navController.navigate("language_selection?isFirstRun=false") }
+                        )
+                        NurDivider()
+                        SwitchRow(
+                            title = t("settings.darkMode"),
+                            icon = Icons.Outlined.DarkMode,
+                            checked = settings.darkMode,
+                            onCheckedChange = { dark -> if (dark != settings.darkMode) viewModel.toggleDarkMode() }
+                        )
+                    }
+                }
+            }
+
             // ---------------------------------------------------------- notifications
-            item { SettingSection(t("settings.notifications")) }
+            item { SettingSection(t("settings.notifications"), Modifier.padding(top = 12.dp)) }
             item {
                 NurSurfaceCard(Modifier.fillMaxWidth()) {
                     Column {
@@ -177,41 +217,6 @@ fun SettingsScreen(
                             checked = settings.soundEnabled,
                             onCheckedChange = { viewModel.toggleSound() }
                         )
-                        NurDivider()
-                        SwitchRow(
-                            title = t("settings.notifications.lockScreen"),
-                            icon = Icons.Outlined.Lock,
-                            checked = settings.lockScreenNotifications,
-                            onCheckedChange = { viewModel.toggleLockScreenNotifications() }
-                        )
-                    }
-                }
-            }
-
-            // ---------------------------------------------------------- appearance
-            item { SettingSection(t("settings.appearance"), Modifier.padding(top = 12.dp)) }
-            item {
-                NurSurfaceCard(Modifier.fillMaxWidth()) {
-                    Column {
-                        NurListRow(
-                            title = t("settings.language.title"),
-                            subtitle = languageDisplayName(settings.language),
-                            leadingIcon = Icons.Outlined.Language,
-                            trailing = { Chevron() },
-                            onClick = { navController.navigate("language_selection?isFirstRun=false") }
-                        )
-                        NurDivider()
-                        SwitchRow(
-                            title = t("settings.darkMode"),
-                            icon = Icons.Outlined.DarkMode,
-                            checked = settings.darkMode,
-                            onCheckedChange = { dark -> if (dark != settings.darkMode) viewModel.toggleDarkMode() }
-                        )
-                        NurDivider()
-                        FontSizeControl(
-                            value = settings.fontSize,
-                            onValueChange = { viewModel.setFontSize(it) }
-                        )
                     }
                 }
             }
@@ -220,60 +225,14 @@ fun SettingsScreen(
             item { SettingSection(t("settings.audio"), Modifier.padding(top = 12.dp)) }
             item { AudioSettingsCard() }
 
-            // ---------------------------------------------------------- lock screen
-            item { SettingSection(t("settings.lockScreen"), Modifier.padding(top = 12.dp)) }
+            // ---------------------------------------------------------- about + sign out
             item {
-                LockScreenGroup(
-                    selectedCategory = selectedCategory.value,
-                    onPreview = { navController.navigate("lock_preview") },
-                    onRandom = {
-                        LockScreenWallpaperApplier.clearSelectedVerse(context)
-                        DailyAyahScheduler.updateToday(context)
-                    },
-                    onCategorySelected = { category ->
-                        LockScreenWallpaperApplier.clearSelectedVerse(context)
-                        LockScreenWallpaperApplier.setSelectedCategory(context, category)
-                        selectedCategory.value = category
-                        DailyAyahScheduler.updateToday(context)
-                    }
-                )
-            }
-
-            // ---------------------------------------------------------- about
-            item { SettingSection(t("settings.about"), Modifier.padding(top = 12.dp)) }
-            item {
-                NurSurfaceCard(Modifier.fillMaxWidth()) {
+                NurSurfaceCard(Modifier.fillMaxWidth().padding(top = 12.dp)) {
                     Column {
                         NurListRow(
                             title = "Noorain",
-                            subtitle = t("settings.about.tagline"),
+                            subtitle = t("settings.about.tagline") + " · " + com.quranreminder.app.BuildConfig.VERSION_NAME,
                             leading = { NurEmblem(size = 44.dp) }
-                        )
-                        Text(
-                            text = t("settings.about.description"),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 16.dp)
-                        )
-                    }
-                }
-            }
-
-            // ---------------------------------------------------------- account
-            item { SettingSection(t("settings.account"), Modifier.padding(top = 12.dp)) }
-            item {
-                NurSurfaceCard(Modifier.fillMaxWidth()) {
-                    Column {
-                        val context = androidx.compose.ui.platform.LocalContext.current
-                        val profile by com.quranreminder.app.profile.ProfileRepository.profile.collectAsState()
-                        androidx.compose.runtime.LaunchedEffect(Unit) { com.quranreminder.app.profile.ProfileRepository.load(context) }
-                        val shownName = profile?.name?.takeIf { it.isNotBlank() } ?: displayName
-                        NurListRow(
-                            title = shownName.ifBlank { t("settings.account") },
-                            subtitle = t("profile.open"),
-                            leading = { NurAvatar(name = shownName, size = 44.dp) },
-                            trailing = { Chevron() },
-                            onClick = { navController.navigate("profile") }
                         )
                         NurDivider()
                         SignOutRow(onClick = { showLogoutConfirm = true })
@@ -284,159 +243,7 @@ fun SettingsScreen(
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
-@Composable
-private fun LockScreenGroup(
-    selectedCategory: LockScreenAyahCategory?,
-    onPreview: () -> Unit,
-    onRandom: () -> Unit,
-    onCategorySelected: (LockScreenAyahCategory?) -> Unit
-) {
-    val c = nurColors
-    NurSurfaceCard(Modifier.fillMaxWidth()) {
-        Column {
-            NurListRow(
-                title = t("settings.lockScreen.preview"),
-                subtitle = t("settings.lockScreen.preview.desc"),
-                leadingIcon = Icons.Outlined.Wallpaper,
-                trailing = { Chevron() },
-                onClick = onPreview
-            )
-            NurDivider()
-            NurListRow(
-                title = t("settings.lockScreen.random"),
-                subtitle = t("settings.lockScreen.random.desc"),
-                leadingIcon = Icons.Outlined.Shuffle,
-                trailing = if (selectedCategory == null) {
-                    { Icon(Icons.Default.Check, contentDescription = null, tint = MaterialTheme.colorScheme.primary) }
-                } else null,
-                onClick = {
-                    onCategorySelected(null)
-                    onRandom()
-                }
-            )
-            NurDivider()
-            // Hourly ayah changes in the background; OEM battery managers (Honor, Xiaomi…) can
-            // hold the alarm back unless the app is allowed to run in the background.
-            val context = androidx.compose.ui.platform.LocalContext.current
-            NurListRow(
-                title = t("settings.lockScreen.background"),
-                subtitle = t("settings.lockScreen.background.desc"),
-                leadingIcon = Icons.Outlined.BatteryChargingFull,
-                trailing = { Chevron() },
-                onClick = {
-                    // Honor/Huawei gate background wake-ups in their own "App launch" manager
-                    // (the alarm fires but the app may not be allowed to start); open it
-                    // directly, else the standard battery-optimization list.
-                    val vendorScreens = listOf(
-                        "com.hihonor.systemmanager" to "com.hihonor.systemmanager.startupmgr.ui.StartupNormalAppListActivity",
-                        "com.huawei.systemmanager" to "com.huawei.systemmanager.startupmgr.ui.StartupNormalAppListActivity"
-                    )
-                    val openedVendor = vendorScreens.any { (pkg, cls) ->
-                        runCatching {
-                            context.startActivity(
-                                android.content.Intent().setClassName(pkg, cls)
-                                    .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-                            )
-                        }.isSuccess
-                    }
-                    if (!openedVendor) runCatching {
-                        context.startActivity(
-                            android.content.Intent(android.provider.Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
-                                .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-                        )
-                    }.onFailure {
-                        context.startActivity(
-                            android.content.Intent(
-                                android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-                                android.net.Uri.fromParts("package", context.packageName, null)
-                            ).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-                        )
-                    }
-                }
-            )
-            NurDivider()
-            Column(
-                Modifier.padding(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                Text(
-                    text = t("settings.lockScreen.category"),
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    LockScreenAyahCategory.entries.forEach { category ->
-                        val isSelected = selectedCategory == category
-                        FilterChip(
-                            selected = isSelected,
-                            onClick = { onCategorySelected(category) },
-                            label = {
-                                Text(
-                                    t("settings.lockScreen.category.${category.id}"),
-                                    style = MaterialTheme.typography.labelLarge
-                                )
-                            },
-                            leadingIcon = if (isSelected) {
-                                { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(18.dp)) }
-                            } else null,
-                            shape = CircleShape,
-                            colors = FilterChipDefaults.filterChipColors(
-                                containerColor = MaterialTheme.colorScheme.surface,
-                                labelColor = MaterialTheme.colorScheme.onSurface,
-                                selectedContainerColor = MaterialTheme.colorScheme.primary,
-                                selectedLabelColor = MaterialTheme.colorScheme.onPrimary,
-                                selectedLeadingIconColor = MaterialTheme.colorScheme.onPrimary
-                            ),
-                            border = FilterChipDefaults.filterChipBorder(
-                                borderColor = c.frame,
-                                selectedBorderColor = c.ornament
-                            ),
-                            modifier = Modifier.heightIn(min = 40.dp)
-                        )
-                    }
-                }
-                Text(
-                    text = t("settings.lockScreen.languageNote"),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        }
-    }
-}
 
-@Composable
-private fun FontSizeControl(value: Int, onValueChange: (Int) -> Unit) {
-    Column(Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
-        NurListRow(
-            title = t("settings.fontSize"),
-            leadingIcon = Icons.Outlined.FormatSize,
-            trailing = {
-                Text(
-                    text = value.toString(),
-                    style = MaterialTheme.typography.titleMedium,
-                    color = nurColors.goldText
-                )
-            }
-        )
-        Slider(
-            value = value.toFloat(),
-            onValueChange = { onValueChange(it.toInt()) },
-            valueRange = 12f..24f,
-            steps = 11,
-            colors = SliderDefaults.colors(
-                thumbColor = MaterialTheme.colorScheme.primary,
-                activeTrackColor = MaterialTheme.colorScheme.primary,
-                inactiveTrackColor = MaterialTheme.colorScheme.outlineVariant
-            ),
-            modifier = Modifier.padding(horizontal = 16.dp)
-        )
-    }
-}
 
 @Composable
 private fun SwitchRow(
