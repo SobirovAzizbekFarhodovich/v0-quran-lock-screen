@@ -264,10 +264,16 @@ fun SettingsScreen(
             item {
                 NurSurfaceCard(Modifier.fillMaxWidth()) {
                     Column {
+                        val context = androidx.compose.ui.platform.LocalContext.current
+                        val profile by com.quranreminder.app.profile.ProfileRepository.profile.collectAsState()
+                        androidx.compose.runtime.LaunchedEffect(Unit) { com.quranreminder.app.profile.ProfileRepository.load(context) }
+                        val shownName = profile?.name?.takeIf { it.isNotBlank() } ?: displayName
                         NurListRow(
-                            title = displayName.ifBlank { t("settings.account") },
-                            subtitle = t("settings.account.signedIn"),
-                            leadingIcon = Icons.Outlined.Person
+                            title = shownName.ifBlank { t("settings.account") },
+                            subtitle = t("profile.open"),
+                            leading = { NurAvatar(name = shownName, size = 44.dp) },
+                            trailing = { Chevron() },
+                            onClick = { navController.navigate("profile") }
                         )
                         NurDivider()
                         SignOutRow(onClick = { showLogoutConfirm = true })

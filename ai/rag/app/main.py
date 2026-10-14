@@ -27,7 +27,7 @@ import os
 import time
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import httpx
 import redis.asyncio as redis
@@ -62,6 +62,8 @@ class QueryRequest(BaseModel):
     language: str = Field(default="uz_cyrillic", max_length=16)
     # ixtiyoriy: shaxsiy murojaat uchun
     user_name: str | None = Field(default=None, max_length=USER_NAME_MAX_CHARS)
+    # From the user's profile; decides masculine/feminine forms of address.
+    user_gender: Literal["male", "female"] | None = None
 
     @field_validator("message")
     @classmethod
@@ -605,6 +607,7 @@ async def generate_grounded_answer(
     language: str,
     sources: list[dict[str, Any]],
     history: list[dict[str, str]],
+    user_gender: str | None = None,
 ) -> tuple[str, list[dict[str, Any]], bool]:
     """Islomiy savol: faqat manbalardan, topilmasa — halol 'topilmadi'.
 
@@ -621,7 +624,9 @@ async def generate_grounded_answer(
         GROUNDED_RULES.format(not_found=not_found),
         LANGUAGE_DIRECTIVES.get(language, LANGUAGE_DIRECTIVES["en"]),
     ])
+    # No name here: grounded answers are cached and shared between users (per gender).
     user_prompt = (
+        f"{address_line(None, user_gender)}"
         f"KNOWLEDGE BASE PASSAGES:\n\n{context}\n\nUSER QUESTION: {message}"
     )
     convo = history[-8:] + [{"role": "user", "content": user_prompt}]
@@ -640,12 +645,37 @@ async def generate_grounded_answer(
     return "\n\n".join(lines), sources[:4], False
 
 
+def address_line(user_name: str | None, user_gender: str | None) -> str:
+    """How to address the user: their name, and masculine/feminine forms by gender."""
+    lines = []
+    name = sanitize_user_name(user_name)
+    if name:
+        lines.append(f"USER'S NAME: {name}")
+    if user_gender == "male":
+        lines.append(
+            "USER IS A MAN: address him with masculine forms only (Uzbek: aka, birodar, "
+            "ukajon; Russian: брат). Never feminine forms, never 'singlim/ukajonim'."
+        )
+    elif user_gender == "female":
+        lines.append(
+            "USER IS A WOMAN: address her with feminine forms only (Uzbek: opa, singlim; "
+            "Russian: сестра). Never masculine forms, never 'singlim/ukajonim'."
+        )
+    else:
+        lines.append(
+            "USER'S GENDER IS UNKNOWN: use a gender-neutral address (Uzbek: aziz do'stim; "
+            "Russian: дорогой друг). Never combine both forms like 'singlim/ukajonim'."
+        )
+    return "\n".join(lines) + "\n"
+
+
 async def generate_emotional_answer(
     message: str,
     language: str,
     sources: list[dict[str, Any]],
     history: list[dict[str, str]],
     user_name: str | None,
+    user_gender: str | None = None,
 ) -> tuple[str, list[dict[str, Any]], bool]:
     """Ruhiy holat: Tadabbur uslubidagi iliq, manbali tasalli. (answer, sources, ok)"""
     system = "\n\n".join([
@@ -655,10 +685,8 @@ async def generate_emotional_answer(
     ])
 
     context = build_context(sources, limit=8) if sources else "(no passages found)"
-    user_name = sanitize_user_name(user_name)
-    name_line = f"USER'S NAME: {user_name}\n" if user_name else ""
     user_prompt = (
-        f"{name_line}"
+        f"{address_line(user_name, user_gender)}"
         f"KNOWLEDGE BASE PASSAGES:\n\n{context}\n\n"
         f"USER'S MESSAGE (their emotional state): {message}"
     )
@@ -758,7 +786,7 @@ async def query(req: QueryRequest) -> QueryResponse:
     if intent["intent"] == "emotional":
         sources = await retrieve(search_query, lang, limit=8)
         answer, used_sources, ok = await generate_emotional_answer(
-            req.message, lang, sources or [], history, req.user_name
+            req.message, lang, sources or [], history, req.user_name, req.user_gender
         )
         if ok:
             await save_turn(req.user_id, req.message, answer)
@@ -766,7 +794,8 @@ async def query(req: QueryRequest) -> QueryResponse:
 
     # 2c. Islomiy savol — kesh faqat kontekstsiz (birinchi) savollar uchun
     use_cache = redis_client is not None and not history
-    cache_key = semantic_cache_key(req.message, lang)
+    # Answers address the reader by gender, so each gender has its own cache entry.
+    cache_key = semantic_cache_key(req.message, f"{lang}:{req.user_gender or 'any'}")
     if use_cache:
         try:
             cached = await redis_client.get(cache_key)
@@ -786,7 +815,7 @@ async def query(req: QueryRequest) -> QueryResponse:
         return QueryResponse(answer=error_message, sources=[], cached=False)
 
     answer, used_sources, ok = await generate_grounded_answer(
-        req.message, lang, sources, history
+        req.message, lang, sources, history, req.user_gender
     )
     if not ok:
         # Raw-source fallback (LLM unavailable): shown once, never cached

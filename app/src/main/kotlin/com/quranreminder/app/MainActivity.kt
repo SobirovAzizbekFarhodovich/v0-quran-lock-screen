@@ -422,6 +422,9 @@ fun AppNavigation(
                 quranViewModel = quranViewModel
             )
         }
+        composable("profile") {
+            com.quranreminder.app.ui.screens.ProfileScreen(navController = navController)
+        }
         composable("settings") {
             SettingsScreen(
                 navController = navController,

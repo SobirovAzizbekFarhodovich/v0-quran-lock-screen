@@ -96,7 +96,8 @@ class RagChatRepository(context: Context) {
         }
         try {
             connection.outputStream.bufferedWriter(Charsets.UTF_8).use {
-                it.write(gson.toJson(RagRequest(message, language, userName)))
+                val gender = com.quranreminder.app.profile.ProfileRepository.load(appContext)?.gender
+                it.write(gson.toJson(RagRequest(message, language, userName, gender)))
             }
             val code = connection.responseCode
             if (code == HttpURLConnection.HTTP_UNAUTHORIZED) throw UnauthorizedException()
@@ -155,6 +156,12 @@ class RagChatRepository(context: Context) {
 private const val FALLBACK_TIMEOUT_MS = 45_000L
 private val fallbackScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
-private data class RagRequest(val message: String, val language: String, @com.google.gson.annotations.SerializedName("user_name") val userName: String = "")
+private data class RagRequest(
+    val message: String,
+    val language: String,
+    @com.google.gson.annotations.SerializedName("user_name") val userName: String = "",
+    // From the profile; the assistant uses masculine/feminine address. Null = neutral.
+    @com.google.gson.annotations.SerializedName("user_gender") val userGender: String? = null
+)
 private data class RagResponse(val answer: String = "", val sources: List<RagSource> = emptyList())
 private data class RagSource(val text: String = "", val score: Double = 0.0, val metadata: JsonObject = JsonObject())

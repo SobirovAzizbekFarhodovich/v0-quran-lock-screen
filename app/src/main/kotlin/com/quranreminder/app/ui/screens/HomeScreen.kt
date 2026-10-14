@@ -4,6 +4,7 @@ import com.quranreminder.app.ui.theme.LocalNavBarPadding
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -99,7 +100,8 @@ fun HomeScreen(
                 HomeBand(
                     minHeight = bandHeight,
                     onReminders = { navController.navigate("reminders") },
-                    onSearch = { navController.openTopLevel("search") }
+                    onSearch = { navController.openTopLevel("search") },
+                    onProfile = { navController.navigate("profile") }
                 )
                 Column(
                     modifier = Modifier
@@ -193,7 +195,8 @@ fun HomeScreen(
 private fun HomeBand(
     minHeight: Dp,
     onReminders: () -> Unit,
-    onSearch: () -> Unit
+    onSearch: () -> Unit,
+    onProfile: () -> Unit
 ) {
     NurBand(
         modifier = Modifier.heightIn(min = minHeight),
@@ -209,6 +212,22 @@ private fun HomeBand(
             NurLockup(modifier = Modifier.weight(1f), markSize = 36.dp)
             NurIconButton(Icons.Default.NotificationsActive, t("home.reminders"), onReminders)
             NurIconButton(Icons.Default.Search, t("home.searchIcon"), onSearch)
+            // The user's photo opens the profile page.
+            val context = androidx.compose.ui.platform.LocalContext.current
+            val profile by com.quranreminder.app.profile.ProfileRepository.profile.collectAsState()
+            androidx.compose.runtime.LaunchedEffect(Unit) { com.quranreminder.app.profile.ProfileRepository.load(context) }
+            Box(
+                Modifier
+                    .size(48.dp)
+                    .clip(androidx.compose.foundation.shape.CircleShape)
+                    .clickable(onClickLabel = t("profile.title"), role = androidx.compose.ui.semantics.Role.Button, onClick = onProfile),
+                contentAlignment = Alignment.Center
+            ) {
+                NurAvatar(
+                    name = profile?.name ?: com.quranreminder.app.auth.SessionManager(context).displayName,
+                    size = 42.dp
+                )
+            }
         }
         Spacer(Modifier.height(22.dp))
         Text(

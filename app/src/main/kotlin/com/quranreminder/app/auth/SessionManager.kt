@@ -172,6 +172,11 @@ class SessionManager(context: Context) {
      * Signs out locally right away and revokes the session on the server best-effort
      * in the background. Downloaded/bundled Quran content state is kept.
      */
+    /** Keeps the name shown across the app in step with the profile page. */
+    fun cacheName(name: String) {
+        if (name.isNotBlank()) prefs.edit().putString(KEY_NAME, name).apply()
+    }
+
     fun signOut() {
         val access = accessToken
         val refresh = refreshToken
@@ -196,6 +201,8 @@ class SessionManager(context: Context) {
     private fun clearSession() {
         // The assistant conversation is personal: don't leave it for the next account.
         com.quranreminder.app.tadabbur.ChatHistoryStore(appContext).clear()
+        // Nor the profile and its photo.
+        com.quranreminder.app.profile.ProfileRepository.clear(appContext)
         prefs.edit()
             .remove(KEY_ACCESS_TOKEN)
             .remove(KEY_REFRESH_TOKEN)

@@ -32,6 +32,8 @@ const (
 type QueryRequest struct {
 	UserID   string `json:"user_id,omitempty"`
 	UserName string `json:"user_name,omitempty" binding:"max=64"`
+	// From the profile: lets the assistant use masculine/feminine forms of address.
+	UserGender string `json:"user_gender,omitempty" binding:"omitempty,oneof=male female"`
 	Message  string `json:"message" binding:"required,max=2000"`
 	Language string `json:"language" binding:"max=16"`
 }
