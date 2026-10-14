@@ -6,6 +6,7 @@ server {
   http2 on;
   server_name ${SERVER_NAMES};
   client_max_body_size 20m;
+  limit_conn perip 200;
 
   # One certificate (named after PUBLIC_HOST) covers every name above.
   ssl_certificate     /etc/letsencrypt/live/${PUBLIC_HOST}/fullchain.pem;
