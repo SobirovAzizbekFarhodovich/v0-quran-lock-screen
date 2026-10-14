@@ -18,7 +18,10 @@ services:
   redis:
     restart: unless-stopped
     image: redis:7-alpine
-    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD:-redis-pass-change-me}"]
+    # maxmemory: a hard ceiling (normal use is ~25 MB) so a flood of recitation
+    # audio cannot push the 3.7 GB host into swap; noeviction keeps logout
+    # blacklist entries from being silently dropped.
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD:-redis-pass-change-me}", "--maxmemory", "512mb", "--maxmemory-policy", "noeviction"]
     volumes:
       - redis_data:/data
     healthcheck:
@@ -74,6 +77,15 @@ services:
     build:
       context: ./ai/recitation
     env_file: .env
+    # .env is shared; withhold the secrets this service never uses, so a bug in
+    # the ML stack cannot leak the key that signs every login token.
+    environment:
+      JWT_SECRET: ""
+      DATABASE_URL: ""
+      POSTGRES_PASSWORD: ""
+      GRAFANA_PASSWORD: ""
+      GEMINI_API_KEY: ""
+      OPENROUTER_API_KEY: ""
     # Whisper weights (~460 MB for "small") survive rebuilds instead of re-downloading.
     volumes:
       - whisper_models:/root/.cache/huggingface
@@ -96,6 +108,12 @@ services:
     build:
       context: ./ai/rag
     env_file: .env
+    # See ai-recitation: secrets ai-rag never uses are withheld.
+    environment:
+      JWT_SECRET: ""
+      DATABASE_URL: ""
+      POSTGRES_PASSWORD: ""
+      GRAFANA_PASSWORD: ""
     depends_on:
       redis:
         condition: service_healthy

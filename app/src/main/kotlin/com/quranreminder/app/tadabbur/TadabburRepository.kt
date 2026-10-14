@@ -11,6 +11,10 @@ import java.util.Locale
 class TadabburRepository(private val context: Context) {
     private val appContext = context.applicationContext
 
+    init {
+        TadabburApiClient.tokenProvider = { com.quranreminder.app.auth.SessionManager(appContext).accessToken }
+    }
+
     // AI uchun mavjud topic nomlari
     private val validTopicLabels: List<String>
         get() = topicProfiles.map { it.label }

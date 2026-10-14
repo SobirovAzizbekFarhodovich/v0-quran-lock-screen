@@ -156,6 +156,8 @@ object ProfileRepository {
             return
         }
         if (new == old && file.exists()) return
+        // The bearer token goes to SERVER_BASE_URL + new: only ever a server-relative path.
+        if (!new.startsWith("/") || new.startsWith("//")) return
         val bytes = SessionManager(context).withAuthorization { token ->
             http.newCall(Request.Builder().url("${BuildConfig.SERVER_BASE_URL}$new").header("Authorization", "Bearer $token").build())
                 .execute().use { response ->
@@ -201,7 +203,10 @@ object ProfileRepository {
             return android.graphics.ImageDecoder.decodeBitmap(source) { decoder, info, _ ->
                 val w = info.size.width
                 val h = info.size.height
-                val f = TARGET.toFloat() / min(w, h)
+                if (w.toLong() * h > MAX_SOURCE_PIXELS) throw IOException("image too large")
+                // Short side near TARGET, but never a long side over MAX_SIDE: a 100000x600
+                // panorama would otherwise decode to ~175 MB.
+                val f = min(TARGET.toFloat() / min(w, h), MAX_SIDE.toFloat() / maxOf(w, h))
                 if (f < 1f) decoder.setTargetSize(maxOf(1, (w * f).toInt()), maxOf(1, (h * f).toInt()))
                 decoder.allocator = android.graphics.ImageDecoder.ALLOCATOR_SOFTWARE
             }
@@ -210,8 +215,11 @@ object ProfileRepository {
         // (With inJustDecodeBounds decodeStream always returns null; only the options are filled.)
         (resolver.openInputStream(uri) ?: throw IOException("cannot open photo")).use { BitmapFactory.decodeStream(it, null, bounds) }
         if (bounds.outWidth <= 0 || bounds.outHeight <= 0) throw IOException("unsupported image")
+        if (bounds.outWidth.toLong() * bounds.outHeight > MAX_SOURCE_PIXELS) throw IOException("image too large")
         var sample = 1
-        while (min(bounds.outWidth, bounds.outHeight) / (sample * 2) >= TARGET) sample *= 2
+        while (min(bounds.outWidth, bounds.outHeight) / (sample * 2) >= TARGET ||
+            maxOf(bounds.outWidth, bounds.outHeight) / sample > MAX_SIDE
+        ) sample *= 2
         val bitmap = (resolver.openInputStream(uri) ?: throw IOException("cannot open photo")).use {
             BitmapFactory.decodeStream(it, null, BitmapFactory.Options().apply { inSampleSize = sample })
         } ?: throw IOException("cannot decode photo")
@@ -233,4 +241,6 @@ object ProfileRepository {
     }
 
     private const val TARGET = 512
+    private const val MAX_SIDE = 2048
+    private const val MAX_SOURCE_PIXELS = 100_000_000L
 }

@@ -55,7 +55,7 @@ func (s *TokenService) Parse(tokenValue string) (*Claims, error) {
 			return nil, errors.New("unexpected signing method")
 		}
 		return s.secret, nil
-	})
+	}, jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}), jwt.WithExpirationRequired())
 	if err != nil {
 		return nil, err
 	}

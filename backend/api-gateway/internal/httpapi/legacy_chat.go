@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"regexp"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/gin-gonic/gin"
 
@@ -46,7 +47,11 @@ func (h *LegacyChatHandler) Complete(c *gin.Context) {
 		return
 	}
 
-	question := legacyQuestion(prompt)
+	question := strings.TrimSpace(legacyQuestion(prompt))
+	if question == "" || utf8.RuneCountInString(question) > maxLegacyQuestionRunes {
+		c.JSON(http.StatusBadRequest, gin.H{"error": gin.H{"message": "question must be 1-2000 characters"}})
+		return
+	}
 	result, err := h.rag.Query(c.Request.Context(), rag.QueryRequest{
 		Message:  question,
 		Language: "uz_latin",
@@ -74,6 +79,9 @@ func (h *LegacyChatHandler) respond(c *gin.Context, content interface{}) {
 		"choices": []gin.H{{"message": gin.H{"content": string(encoded)}}},
 	})
 }
+
+// maxLegacyQuestionRunes matches ai-rag's own message limit.
+const maxLegacyQuestionRunes = 2000
 
 var tadabburQuestionPattern = regexp.MustCompile(`Foydalanuvchining holati:\s*"([^"]+)"`)
 

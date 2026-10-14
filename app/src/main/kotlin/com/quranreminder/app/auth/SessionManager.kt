@@ -181,6 +181,7 @@ class SessionManager(context: Context) {
         val access = accessToken
         val refresh = refreshToken
         clearSession()
+        clearRecitationData()
         if (access.isNullOrBlank() && refresh.isNullOrBlank()) return
         backgroundScope.launch {
             runCatching { request("/api/v1/auth/logout", "POST", null, access) }
@@ -212,14 +213,30 @@ class SessionManager(context: Context) {
             .apply()
     }
 
+    /** Recitation history and its sync position belong to one account. */
+    private fun clearRecitationData() {
+        appContext.getSharedPreferences("recitation_sync", Context.MODE_PRIVATE).edit().clear().apply()
+        prefs.edit().remove(KEY_DATA_OWNER).apply()
+        backgroundScope.launch {
+            runCatching {
+                com.quranreminder.app.database.QuranDatabase.getDatabase(appContext).recitationHistoryDao().clear()
+            }
+        }
+    }
+
     private suspend fun authenticate(path: String, body: Any): Result<AuthUser> = withContext(Dispatchers.IO) {
         runCatching {
             val response = request(path, "POST", body)
             val auth = gson.fromJson(response, AuthResponse::class.java)
             if (auth.accessToken.isNullOrBlank() || auth.user == null) throw SessionException(CODE_BAD_RESPONSE)
+            // Recitation history survives an expired session (the same person
+            // usually signs straight back in) but never passes to another account.
+            val owner = prefs.getString(KEY_DATA_OWNER, null)
+            if (owner != null && !owner.equals(auth.user.email, ignoreCase = true)) clearRecitationData()
             prefs.edit()
                 .putString(KEY_ACCESS_TOKEN, auth.accessToken)
                 .putString(KEY_REFRESH_TOKEN, auth.refreshToken)
+                .putString(KEY_DATA_OWNER, auth.user.email)
                 .apply()
             saveUser(auth.user)
             auth.user
@@ -291,6 +308,7 @@ class SessionManager(context: Context) {
         private const val KEY_NAME = "name"
         private const val KEY_EMAIL = "email"
         private const val KEY_LANGUAGE = "language"
+        private const val KEY_DATA_OWNER = "data_owner_email"
         private const val KEY_CONTENT_READY_LANGUAGE = "content_ready_language"
         private const val KEY_CONTENT_VERSION = "content_version"
 

@@ -16,6 +16,10 @@ import java.net.URL
  * ilovada hech qanday tashqi API kaliti saqlanmaydi. Internet kerak.
  */
 object TadabburApiClient {
+    /** Supplies the signed-in user's access token; the backend route needs a session. */
+    @Volatile
+    var tokenProvider: (() -> String?)? = null
+
     // SERVER_BASE_URL release build vaqtida almashtiriladi. Hozircha u
     // vaqtinchalik HTTP serverga, keyin esa HTTPS domain'ga ko'rsatiladi.
     private val backendChatUrl = "${BuildConfig.SERVER_BASE_URL}/api/v1/chat/completions"
@@ -153,6 +157,7 @@ Quyidagi tuzilmaga qat'iy rioya qilgan holda, FAQAT TOZA JSON formatida javob be
         val connection = (url.openConnection() as HttpURLConnection).apply {
             requestMethod = "POST"
             setRequestProperty("Content-Type", "application/json")
+            tokenProvider?.invoke()?.takeIf { it.isNotBlank() }?.let { setRequestProperty("Authorization", "Bearer $it") }
             setRequestProperty("HTTP-Referer", "https://quran-reminder.app")
             setRequestProperty("X-Title", "Quran Reminder Tadabbur AI")
             connectTimeout = CONNECT_TIMEOUT_MS
@@ -168,7 +173,7 @@ Quyidagi tuzilmaga qat'iy rioya qilgan holda, FAQAT TOZA JSON formatida javob be
         val responseCode = connection.responseCode
         if (responseCode != HttpURLConnection.HTTP_OK) {
             val errorText = connection.errorStream?.bufferedReader()?.use { it.readText() } ?: "Unknown"
-            android.util.Log.e("TadabburAI", "OpenRouter error $responseCode: $errorText")
+            android.util.Log.e("TadabburAI", "backend error $responseCode (${errorText.length} chars)")
             // 401/403 = API key noto'g'ri, retry qilmaslik kerak
             if (responseCode == 401 || responseCode == 403) {
                 throw RuntimeException("API key noto'g'ri yoki amal qilish muddati tugagan")
@@ -188,7 +193,7 @@ Quyidagi tuzilmaga qat'iy rioya qilgan holda, FAQAT TOZA JSON formatida javob be
 
         val content = response.choices?.firstOrNull()?.message?.content
         if (content.isNullOrBlank()) {
-            android.util.Log.w("TadabburAI", "Bo'sh javob qaytdi. Raw: ${responseText.take(500)}")
+            android.util.Log.w("TadabburAI", "Bo'sh javob qaytdi (${responseText.length} chars)")
             return null
         }
 
@@ -232,7 +237,7 @@ FAQAT quyidagi JSON formatida javob bering (boshqa hech narsa qo'shmang):
             val jsonStr = extractJson(content) ?: return null
             gson.fromJson(jsonStr, QwenAnalysis::class.java)
         } catch (e: Exception) {
-            android.util.Log.e("TadabburAI", "Failed to parse analysis: $content", e)
+            android.util.Log.e("TadabburAI", "Failed to parse analysis (${content.length} chars)", e)
             null
         }
     }
@@ -266,7 +271,7 @@ $evidenceSummary"""
                 evidenceNotes = unified.evidenceNotes
             )
         } catch (e: Exception) {
-            android.util.Log.e("TadabburAI", "Failed to parse personal response: $content", e)
+            android.util.Log.e("TadabburAI", "Failed to parse personal response (${content.length} chars)", e)
             null
         }
     }

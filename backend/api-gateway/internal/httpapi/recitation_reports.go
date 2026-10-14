@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 	"unicode/utf8"
 
@@ -104,6 +105,10 @@ type RecitationReportsHandler struct {
 	cfg       RecitationReportsConfig
 	now       func() time.Time
 	freeBytes func(dir string) (uint64, bool)
+	// inflight holds the users with an upload in progress. The daily count is
+	// read before the (long) upload is inserted, so parallel uploads would all
+	// pass it; one upload at a time per user makes the count hold.
+	inflight sync.Map
 }
 
 func NewRecitationReportsHandler(db *pgxpool.Pool, cfg RecitationReportsConfig) *RecitationReportsHandler {
@@ -131,6 +136,13 @@ func (h *RecitationReportsHandler) Create(c *gin.Context) {
 		c.JSON(http.StatusRequestEntityTooLarge, gin.H{"error": "audio longer than 15 minutes"})
 		return
 	}
+
+	if _, busy := h.inflight.LoadOrStore(userID, struct{}{}); busy {
+		c.Header("Retry-After", "60")
+		c.JSON(http.StatusTooManyRequests, gin.H{"error": "another report is still uploading"})
+		return
+	}
+	defer h.inflight.Delete(userID)
 
 	count, err := h.store.CountReportsSince(ctx, userID, h.now().Add(-24*time.Hour))
 	if err != nil {

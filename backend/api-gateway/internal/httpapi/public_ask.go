@@ -138,9 +138,15 @@ func (h *PublicAskHandler) Ask(c *gin.Context) {
 		return
 	}
 
-	result, err := h.client.Query(ctx, rag.QueryRequest{Message: question, Language: lang})
+	// The question runs to the end even if the visitor disconnects: the LLM is
+	// paid for either way, the grounded answer still lands in the cache, and
+	// dropping the connection no longer hands the question back (which made
+	// the daily budget unlimited).
+	queryCtx, cancelQuery := context.WithTimeout(context.WithoutCancel(ctx), publicAskQueryTimeout)
+	defer cancelQuery()
+	result, err := h.client.Query(queryCtx, rag.QueryRequest{Message: question, Language: lang})
 	if err != nil {
-		// The visitor got no answer: give the question back to their budget.
+		// The assistant failed to answer: give the question back to their budget.
 		_ = h.store.Decr(context.WithoutCancel(ctx), dayKey)
 		var statusErr *rag.StatusError
 		switch {
@@ -168,6 +174,10 @@ func (h *PublicAskHandler) Ask(c *gin.Context) {
 	observe("ok")
 	c.JSON(http.StatusOK, gin.H{"answer": answer.Answer, "sources": answer.Sources, "remaining": remaining, "cached": false})
 }
+
+// publicAskQueryTimeout bounds a website question that keeps running after
+// the visitor has gone.
+const publicAskQueryTimeout = 90 * time.Second
 
 type redisAskStore struct{ r *redis.Client }
 

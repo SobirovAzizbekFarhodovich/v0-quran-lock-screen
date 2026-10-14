@@ -30,7 +30,17 @@ const (
 	readTimeout         = 70 * time.Second
 	pingInterval        = 25 * time.Second
 	resultPollInterval  = 750 * time.Millisecond
-	maxAudioChunkBytes  = 512 * 1024
+	// The app streams 16 kHz 16-bit mono PCM (32 KB/s) in AudioRecord-buffer
+	// sized frames of a few KB.
+	maxAudioChunkBytes = 64 * 1024
+	// One session may carry at most ~30 minutes of audio, and may not send
+	// faster than twice real time (plus a few seconds of slack), so a single
+	// account cannot pour gigabytes into the Redis stream.
+	maxSessionAudioBytes = 30 * 60 * 32000
+	maxAudioBytesPerSec  = 2 * 32000
+	audioBurstSeconds    = 5
+	// Concurrent recitation sockets per user (the app opens one at a time).
+	maxSocketsPerUser = 2
 	// Approximate cap on the audio stream so a stalled recitation worker
 	// cannot grow Redis memory without bound (MAXLEN ~ lets Redis trim whole
 	// macro-nodes cheaply).
@@ -42,6 +52,32 @@ type Handler struct {
 	redis    *redis.Client
 	db       *pgxpool.Pool
 	upgrader websocket.Upgrader
+
+	socketsMu sync.Mutex
+	sockets   map[string]int // open recitation sockets per user
+}
+
+func (h *Handler) acquireSocket(userID string) bool {
+	h.socketsMu.Lock()
+	defer h.socketsMu.Unlock()
+	if h.sockets == nil {
+		h.sockets = map[string]int{}
+	}
+	if h.sockets[userID] >= maxSocketsPerUser {
+		return false
+	}
+	h.sockets[userID]++
+	return true
+}
+
+func (h *Handler) releaseSocket(userID string) {
+	h.socketsMu.Lock()
+	defer h.socketsMu.Unlock()
+	if h.sockets[userID] <= 1 {
+		delete(h.sockets, userID)
+		return
+	}
+	h.sockets[userID]--
 }
 
 func NewHandler(redisClient *redis.Client, db *pgxpool.Pool, allowedOrigins []string) *Handler {
@@ -57,6 +93,13 @@ func NewHandler(redisClient *redis.Client, db *pgxpool.Pool, allowedOrigins []st
 }
 
 func (h *Handler) Recitation(c *gin.Context) {
+	userID := c.GetString(auth.UserIDKey)
+	if !h.acquireSocket(userID) {
+		c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{"error": "too many open recitation sessions"})
+		return
+	}
+	defer h.releaseSocket(userID)
+
 	conn, err := h.upgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
 		return
@@ -86,7 +129,6 @@ func (h *Handler) Recitation(c *gin.Context) {
 	}
 
 	sessionID := uuid.NewString()
-	userID := c.GetString(auth.UserIDKey)
 	surah, ayah := parseVerseSelection(c)
 	startedAt := time.Now()
 	if err := h.createSession(ctx, sessionID, userID, surah, ayah); err != nil {
@@ -118,6 +160,7 @@ func (h *Handler) Recitation(c *gin.Context) {
 		<-resultDone
 	}()
 
+	audioBytes := 0
 	for {
 		messageType, payload, err := conn.ReadMessage()
 		if err != nil {
@@ -134,6 +177,16 @@ func (h *Handler) Recitation(c *gin.Context) {
 				_ = writeJSON(gin.H{"type": "recording_stopped", "session_id": sessionID})
 			}
 			continue
+		}
+		audioBytes += len(payload)
+		allowed := (time.Since(startedAt).Seconds() + audioBurstSeconds) * maxAudioBytesPerSec
+		if audioBytes > maxSessionAudioBytes || float64(audioBytes) > allowed {
+			_ = writeJSON(gin.H{"type": "error", "session_id": sessionID, "message": "audio limit exceeded"})
+			_ = conn.WriteControl(websocket.CloseMessage,
+				websocket.FormatCloseMessage(websocket.ClosePolicyViolation, "audio limit exceeded"),
+				time.Now().Add(writeTimeout))
+			_ = h.markSessionDisconnected(context.Background(), sessionID)
+			return
 		}
 		streamID, err := h.redis.XAdd(c.Request.Context(), &redis.XAddArgs{
 			Stream: audioStreamName,

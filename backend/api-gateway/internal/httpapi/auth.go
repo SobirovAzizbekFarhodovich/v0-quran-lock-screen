@@ -10,6 +10,8 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
+	"unicode/utf8"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5"
@@ -19,6 +21,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 
 	"islamic-ai/backend/api-gateway/internal/auth"
+	"islamic-ai/backend/api-gateway/internal/ratelimit"
 )
 
 type AuthHandler struct {
@@ -58,11 +61,31 @@ func passwordTooLong(pw string) bool { return len(pw) > maxPasswordBytes }
 // language instead of storing an empty string over it.
 func normalizeLanguage(lang string) string {
 	lang = strings.TrimSpace(lang)
-	if lang == "" {
+	if !allowedLanguage[lang] {
 		return defaultLanguage
 	}
 	return lang
 }
+
+// cleanName trims a display name and caps it like PATCH /profile does (60 runes),
+// so register and the old PUT /profile cannot store megabyte names.
+func cleanName(name string) string {
+	name = strings.TrimSpace(name)
+	if utf8.RuneCountInString(name) > 60 {
+		name = string([]rune(name)[:60])
+	}
+	return name
+}
+
+// dummyHash is compared against when a login email does not exist, so a miss
+// takes as long as a wrong password and response timing does not reveal which
+// emails are registered.
+var dummyHash, _ = bcrypt.GenerateFromPassword([]byte("noorain-timing-equaliser"), 12)
+
+// accountLoginLimit caps password attempts per email (across all IPs) at
+// 10 per 15 minutes; the per-IP limit alone does not stop distributed guessing.
+const accountLoginLimit = 10
+const accountLoginWindow = 15 * time.Minute
 
 // isUniqueViolation reports whether err is a Postgres unique_violation (23505).
 func isUniqueViolation(err error) bool {
@@ -175,7 +198,7 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		`INSERT INTO users (name, email, password_hash, language)
 		 VALUES ($1, lower($2), $3, $4)
 		 RETURNING id::text, name, email, language`,
-		req.Name, req.Email, string(hash), normalizeLanguage(req.Language),
+		cleanName(req.Name), req.Email, string(hash), normalizeLanguage(req.Language),
 	).Scan(&user.ID, &user.Name, &user.Email, &user.Language)
 	if err != nil {
 		if isUniqueViolation(err) {
@@ -195,13 +218,26 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	if h.redis != nil {
+		key := "rate:login-account:" + strings.ToLower(strings.TrimSpace(req.Email))
+		if count, ttl, err := ratelimit.Hit(c, h.redis, key, accountLoginWindow); err == nil && count > accountLoginLimit {
+			c.Header("Retry-After", fmt.Sprintf("%d", int(ttl.Seconds())))
+			c.JSON(http.StatusTooManyRequests, gin.H{"error": "too many login attempts, try again later"})
+			return
+		}
+	}
 	var user userDTO
 	var hash string
 	err := h.db.QueryRow(c.Request.Context(),
 		`SELECT id::text, name, email, language, password_hash FROM users WHERE email = lower($1)`,
 		req.Email,
 	).Scan(&user.ID, &user.Name, &user.Email, &user.Language, &hash)
-	if err != nil || bcrypt.CompareHashAndPassword([]byte(hash), []byte(req.Password)) != nil {
+	if err != nil {
+		_ = bcrypt.CompareHashAndPassword(dummyHash, []byte(req.Password))
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid credentials"})
+		return
+	}
+	if bcrypt.CompareHashAndPassword([]byte(hash), []byte(req.Password)) != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid credentials"})
 		return
 	}

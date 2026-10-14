@@ -213,17 +213,35 @@ func (h *AuthHandler) findOrCreateOAuthUser(c *gin.Context, provider, subject, e
 	if name == "" {
 		name = strings.Split(email, "@")[0]
 	}
-	err = tx.QueryRow(c.Request.Context(), `SELECT id::text, name, email, language FROM users WHERE email = lower($1) FOR UPDATE`, email).Scan(&user.ID, &user.Name, &user.Email, &user.Language)
+	raw := make([]byte, 32)
+	if _, err = rand.Read(raw); err != nil {
+		return user, err
+	}
+	unusableHash, err := bcrypt.GenerateFromPassword([]byte(hex.EncodeToString(raw)), 12)
 	if err != nil {
-		raw := make([]byte, 32)
-		if _, err = rand.Read(raw); err != nil {
+		return user, err
+	}
+	err = tx.QueryRow(c.Request.Context(), `SELECT id::text, name, email, language FROM users WHERE email = lower($1) FOR UPDATE`, email).Scan(&user.ID, &user.Name, &user.Email, &user.Language)
+	if err == nil {
+		// Registering with a password never proved the email belongs to the
+		// registrant. The provider has now verified it, so whoever set that
+		// password may be a squatter waiting for the real owner: retire the
+		// password and every session before handing the account over. The owner
+		// keeps signing in with the provider (or resets the password by email).
+		var linked bool
+		if err = tx.QueryRow(c.Request.Context(), `SELECT EXISTS (SELECT 1 FROM oauth_identities WHERE user_id = $1)`, user.ID).Scan(&linked); err != nil {
 			return user, err
 		}
-		hash, hashErr := bcrypt.GenerateFromPassword([]byte(hex.EncodeToString(raw)), 12)
-		if hashErr != nil {
-			return user, hashErr
+		if !linked {
+			if _, err = tx.Exec(c.Request.Context(), `UPDATE users SET password_hash = $1, updated_at = now() WHERE id = $2`, string(unusableHash), user.ID); err != nil {
+				return user, err
+			}
+			if _, err = tx.Exec(c.Request.Context(), `UPDATE refresh_tokens SET revoked_at = now() WHERE user_id = $1 AND revoked_at IS NULL`, user.ID); err != nil {
+				return user, err
+			}
 		}
-		err = tx.QueryRow(c.Request.Context(), `INSERT INTO users (name, email, password_hash, language) VALUES ($1, lower($2), $3, $4) RETURNING id::text, name, email, language`, name, email, string(hash), defaultLanguage).Scan(&user.ID, &user.Name, &user.Email, &user.Language)
+	} else {
+		err = tx.QueryRow(c.Request.Context(), `INSERT INTO users (name, email, password_hash, language) VALUES ($1, lower($2), $3, $4) RETURNING id::text, name, email, language`, cleanName(name), email, string(unusableHash), defaultLanguage).Scan(&user.ID, &user.Name, &user.Email, &user.Language)
 		if err != nil {
 			return user, err
 		}

@@ -78,10 +78,19 @@ func (c Config) Validate() error {
 	if c.DBMinConns < 0 || c.DBMinConns > c.DBMaxConns {
 		return errors.New("DB_MIN_CONNS must be between 0 and DB_MAX_CONNS")
 	}
-	if c.AppEnv == "production" {
+	// Anything that is not a developer machine (the server runs APP_ENV=staging)
+	// must not fall back to the well-known dev secret or an open CORS policy.
+	if c.AppEnv != "local" {
 		if len(c.JWTSecret) < 32 || c.JWTSecret == "dev-secret-change-me" {
-			return errors.New("production JWT_SECRET must be at least 32 characters and not use the development fallback")
+			return errors.New("JWT_SECRET must be at least 32 characters and not use the development fallback")
 		}
+		for _, origin := range c.CORSOrigins {
+			if strings.TrimSpace(origin) == "*" {
+				return errors.New("CORS_ORIGINS must not contain * outside local development")
+			}
+		}
+	}
+	if c.AppEnv == "production" {
 		if !strings.HasPrefix(c.PublicBaseURL, "https://") {
 			return errors.New("production PUBLIC_BASE_URL must use https")
 		}

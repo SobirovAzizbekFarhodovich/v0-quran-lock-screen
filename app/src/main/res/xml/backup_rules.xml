@@ -7,4 +7,26 @@
     <exclude
         domain="sharedpref"
         path="user_session.xml" />
+    <!-- Personal data stays on the device: the assistant conversation (people
+         describe their worries there), the profile and photo, recitation sync
+         state. Downloaded audio and Quran data are re-downloadable and would push
+         the backup past its 25 MB limit. -->
+    <exclude
+        domain="file"
+        path="tadabbur_chat_history.json" />
+    <exclude
+        domain="file"
+        path="profile/" />
+    <exclude
+        domain="file"
+        path="audio/" />
+    <exclude
+        domain="file"
+        path="quran/" />
+    <exclude
+        domain="sharedpref"
+        path="profile.xml" />
+    <exclude
+        domain="sharedpref"
+        path="recitation_sync.xml" />
 </full-backup-content>

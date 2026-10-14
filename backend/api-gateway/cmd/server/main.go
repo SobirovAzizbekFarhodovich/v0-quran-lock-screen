@@ -85,6 +85,9 @@ func main() {
 	})
 	wsHandler := ws.NewHandler(redisClient, db, cfg.CORSOrigins)
 
+	if cfg.AppEnv != "local" {
+		gin.SetMode(gin.ReleaseMode)
+	}
 	router := gin.New()
 
 	// Only trust X-Forwarded-For / X-Real-IP from the nginx container on the
@@ -134,7 +137,7 @@ func main() {
 	})
 
 	// Global IP-based rate limit
-	router.Use(ratelimit.RedisTokenBucket(redisClient, 120, time.Minute))
+	router.Use(ratelimit.RedisTokenBucket(redisClient, "global", 120, time.Minute))
 
 	// --- Public endpoints ---
 	healthHandler := func(c *gin.Context) { c.JSON(http.StatusOK, gin.H{"status": "ok"}) }
@@ -153,23 +156,23 @@ func main() {
 	router.GET("/metrics", gin.WrapH(promhttp.Handler()))
 
 	v1 := router.Group("/api/v1")
-	v1.POST("/auth/register", authHandler.Register)
+	// Each sign-up costs a bcrypt hash and creates an account that multiplies
+	// every per-user budget, so sign-ups get their own per-IP limits.
+	v1.POST("/auth/register",
+		ratelimit.RedisTokenBucket(redisClient, "register", 5, time.Minute),
+		ratelimit.RedisTokenBucket(redisClient, "register-day", 20, 24*time.Hour),
+		authHandler.Register,
+	)
 	// Brute-force sensitive endpoints get a stricter per-IP budget on top of
 	// the global limiter (the key includes the route path, so each endpoint
-	// has its own bucket).
-	credentialLimit := ratelimit.RedisTokenBucket(redisClient, 10, time.Minute)
+	// has its own bucket). Login also has a per-account limit in the handler.
+	credentialLimit := ratelimit.RedisTokenBucket(redisClient, "credentials", 10, time.Minute)
 	v1.POST("/auth/login", credentialLimit, authHandler.Login)
 	v1.POST("/auth/refresh", authHandler.Refresh)
 	v1.POST("/auth/password-reset/request", credentialLimit, authHandler.RequestPasswordReset)
 	v1.POST("/auth/password-reset/confirm", credentialLimit, authHandler.ConfirmPasswordReset)
-	v1.POST("/auth/oauth/google", authHandler.GoogleOAuth)
-	v1.POST("/auth/oauth/apple", authHandler.AppleOAuth)
-	// Temporary backwards-compatible route for the Kotlin Tadabbur screen.
-	// Keep it strictly rate-limited because it can invoke an external LLM.
-	v1.POST("/chat/completions",
-		ratelimit.RedisTokenBucket(redisClient, 2, 30*time.Second),
-		legacyChatHandler.Complete,
-	)
+	v1.POST("/auth/oauth/google", credentialLimit, authHandler.GoogleOAuth)
+	v1.POST("/auth/oauth/apple", credentialLimit, authHandler.AppleOAuth)
 
 	// The noorain.uz website lets visitors try the AI assistant without an account:
 	// 3 questions a day per IP, 15 s apart; repeated questions come from a cache.
@@ -185,14 +188,25 @@ func main() {
 	protected.GET("/profile", profileDetails.Get)
 	protected.PUT("/profile", profileHandler.Update)
 	protected.PATCH("/profile", profileDetails.Patch)
-	protected.POST("/profile/avatar", ratelimit.RedisTokenBucket(redisClient, 10, time.Hour), profileDetails.UploadAvatar)
+	protected.POST("/profile/avatar", ratelimit.RedisTokenBucket(redisClient, "avatar", 10, time.Hour), profileDetails.UploadAvatar)
 	protected.GET("/profile/avatar", profileDetails.Avatar)
 	protected.DELETE("/profile/avatar", profileDetails.DeleteAvatar)
 	protected.GET("/sessions", profileHandler.Sessions)
 	protected.POST("/sessions", profileHandler.CreateSession)
+	// Both routes below call the paid LLM: one daily budget per user on top
+	// of the per-IP limits.
+	llmQuota := ratelimit.RedisUserQuota(redisClient, "llm-day", 60, 24*time.Hour)
 	protected.POST("/spiritual/query",
-		ratelimit.RedisTokenBucket(redisClient, 20, time.Minute),
+		ratelimit.RedisTokenBucket(redisClient, "spiritual", 20, time.Minute),
+		llmQuota,
 		ragHandler.Query,
+	)
+	// Backwards-compatible route for the Kotlin Tadabbur fallback. It used to be
+	// open to anyone, which made it a free LLM proxy; it now needs a session.
+	protected.POST("/chat/completions",
+		ratelimit.RedisTokenBucket(redisClient, "legacy-chat", 2, 30*time.Second),
+		llmQuota,
+		legacyChatHandler.Complete,
 	)
 	protected.POST("/recitation/results", recitationResultsHandler.Upload)
 	protected.GET("/recitation/results", recitationResultsHandler.List)
@@ -206,6 +220,7 @@ func main() {
 		Addr:              ":" + cfg.Port,
 		Handler:           router,
 		ReadHeaderTimeout: 5 * time.Second,
+		IdleTimeout:       120 * time.Second,
 	}
 
 	go func() {

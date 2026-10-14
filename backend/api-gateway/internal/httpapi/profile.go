@@ -47,7 +47,7 @@ func (h *ProfileHandler) Update(c *gin.Context) {
 	err := h.db.QueryRow(c.Request.Context(),
 		`UPDATE users SET name = $1, language = $2, updated_at = now()
 		 WHERE id = $3 RETURNING id::text, name, email, language`,
-		req.Name, req.Language, c.GetString(auth.UserIDKey),
+		cleanName(req.Name), normalizeLanguage(req.Language), c.GetString(auth.UserIDKey),
 	).Scan(&user.ID, &user.Name, &user.Email, &user.Language)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
