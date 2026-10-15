@@ -139,6 +139,12 @@ MIN_LLM_CALL_SECONDS = 3.0
 # Thinking budget for answer generation on Gemini 2.5 (0 = off; the
 # classifier always runs with thinking off).
 GEMINI_ANSWER_THINKING_BUDGET = int(os.getenv("GEMINI_ANSWER_THINKING_BUDGET", "0"))
+# Token-saving knobs (tunable via .env, no redeploy). The retrieved passages are
+# the biggest input cost; fewer, high-relevance passages keep answer quality while
+# cutting tokens. The LLM is told to ignore irrelevant passages anyway.
+GROUNDED_PASSAGES = int(os.getenv("RAG_GROUNDED_PASSAGES", "4"))      # was 6
+EMOTIONAL_PASSAGES = int(os.getenv("RAG_EMOTIONAL_PASSAGES", "6"))    # was 8
+PROMPT_HISTORY_TURNS = int(os.getenv("RAG_PROMPT_HISTORY_TURNS", "6"))  # was 8
 _request_deadline: contextvars.ContextVar[float | None] = contextvars.ContextVar(
     "rag_request_deadline", default=None
 )
@@ -612,7 +618,7 @@ async def generate_casual_answer(
         CASUAL_RULES,
         LANGUAGE_DIRECTIVES.get(language, LANGUAGE_DIRECTIVES["en"]),
     ])
-    convo = history[-8:] + [{"role": "user", "content": message}]
+    convo = history[-PROMPT_HISTORY_TURNS:] + [{"role": "user", "content": message}]
     answer = await call_llm(
         system, convo, max_tokens=800, temperature=0.6,
         thinking_budget=GEMINI_ANSWER_THINKING_BUDGET,
@@ -639,7 +645,7 @@ async def generate_grounded_answer(
     if not sources:
         return not_found, [], True
 
-    context = build_context(sources, limit=6)
+    context = build_context(sources, limit=GROUNDED_PASSAGES)
     system = "\n\n".join([
         BASE_RULES,
         GROUNDED_RULES.format(not_found=not_found),
@@ -654,7 +660,7 @@ async def generate_grounded_answer(
         f"{level_line(user_level)}"
         f"USER QUESTION: {message}"
     )
-    convo = history[-8:] + [{"role": "user", "content": user_prompt}]
+    convo = history[-PROMPT_HISTORY_TURNS:] + [{"role": "user", "content": user_prompt}]
     answer = await call_llm(
         system, convo, max_tokens=1500, temperature=0.2,
         thinking_budget=GEMINI_ANSWER_THINKING_BUDGET,
@@ -725,14 +731,14 @@ async def generate_emotional_answer(
         LANGUAGE_DIRECTIVES.get(language, LANGUAGE_DIRECTIVES["en"]),
     ])
 
-    context = build_context(sources, limit=8) if sources else "(no passages found)"
+    context = build_context(sources, limit=EMOTIONAL_PASSAGES) if sources else "(no passages found)"
     system += "\n\n" + kb_section(context)
     user_prompt = (
         f"{address_line(user_name, user_gender)}"
         f"{level_line(user_level)}"
         f"USER'S MESSAGE (their emotional state): {message}"
     )
-    convo = history[-8:] + [{"role": "user", "content": user_prompt}]
+    convo = history[-PROMPT_HISTORY_TURNS:] + [{"role": "user", "content": user_prompt}]
     answer = await call_llm(
         system, convo, max_tokens=2000, temperature=0.5,
         thinking_budget=GEMINI_ANSWER_THINKING_BUDGET,
