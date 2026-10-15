@@ -1,7 +1,10 @@
 package httpapi
 
 import (
+	"bytes"
 	"errors"
+	"io"
+	"log"
 	"net/http"
 	"time"
 
@@ -23,7 +26,10 @@ func NewRAGHandler(client *rag.Client) *RAGHandler {
 func (h *RAGHandler) Query(c *gin.Context) {
 	start := time.Now()
 	var req rag.QueryRequest
+	raw, _ := io.ReadAll(io.LimitReader(c.Request.Body, 1<<20))
+	c.Request.Body = io.NopCloser(bytes.NewReader(raw))
 	if err := c.ShouldBindJSON(&req); err != nil {
+		log.Printf("DEBUG spiritual/query bad request: err=%v body=%s", err, string(raw))
 		metrics.RAGQueryDuration.WithLabelValues("bad_request").Observe(time.Since(start).Seconds())
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
