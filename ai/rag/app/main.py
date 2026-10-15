@@ -158,8 +158,8 @@ GROUNDED_PASSAGES = int(os.getenv("RAG_GROUNDED_PASSAGES", "4"))      # was 6
 EMOTIONAL_PASSAGES = int(os.getenv("RAG_EMOTIONAL_PASSAGES", "3"))    # was 8; short answers
 PROMPT_HISTORY_TURNS = int(os.getenv("RAG_PROMPT_HISTORY_TURNS", "6"))  # was 8
 # Output length caps (shorter = fewer tokens AND friendlier, less "wall of text").
-GROUNDED_MAX_TOKENS = int(os.getenv("RAG_GROUNDED_MAX_TOKENS", "900"))    # was 1500
-EMOTIONAL_MAX_TOKENS = int(os.getenv("RAG_EMOTIONAL_MAX_TOKENS", "700"))  # was 2000
+GROUNDED_MAX_TOKENS = int(os.getenv("RAG_GROUNDED_MAX_TOKENS", "600"))    # was 1500; keep answers short
+EMOTIONAL_MAX_TOKENS = int(os.getenv("RAG_EMOTIONAL_MAX_TOKENS", "500"))  # was 2000; keep answers short
 _request_deadline: contextvars.ContextVar[float | None] = contextvars.ContextVar(
     "rag_request_deadline", default=None
 )
@@ -232,6 +232,13 @@ LANGUAGE_DIRECTIVES = {
         "typed in. The Arabic text of Quran verses and duas stays in Arabic; "
         "translations and explanations are in Russian."
     ),
+}
+
+CASUAL_REDIRECT_MESSAGES = {
+    "uz_latin": "Kechirasiz, men asosan Qur'on, hadis, duo va Islomiy mavzularda yordam beraman. Shu bo'yicha savolingiz bo'lsa, bemalol so'rang. 🤲",
+    "uz_cyrillic": "Кечирасиз, мен асосан Қуръон, ҳадис, дуо ва Исломий мавзуларда ёрдам бераман. Шу бўйича саволингиз бўлса, бемалол сўранг. 🤲",
+    "ru": "Извините, я помогаю по Корану, хадисам, дуа и исламским темам. Если есть такой вопрос — спрашивайте. 🤲",
+    "en": "Sorry, I mainly help with the Quran, hadith, duas and Islamic topics. Feel free to ask me about those. 🤲",
 }
 
 NOT_FOUND_MESSAGES = {
@@ -319,7 +326,7 @@ FORMAT: quote each piece of evidence as an indented quotation on its own lines,
 with its reference on a separate line starting with "— ". After each quote, add
 1–2 sentences of simple, warm explanation connecting it to the question.
 
-KEEP IT CONCISE: a short, friendly answer — quote only the 1–3 most relevant pieces of evidence (not all of them), and do not pad. Prefer a few short paragraphs over a long one."""
+KEEP IT CONCISE: a short, friendly answer — quote only the 1–2 most relevant pieces of evidence (not all of them), and do not pad. Keep the WHOLE answer short — a few short paragraphs, like a helpful friend, not an essay."""
 
 EMOTIONAL_RULES = """The user shared an emotional or life difficulty (sadness,
 anxiety, fear, tiredness, loneliness, a bad dream, failing plans, illness, loss...).
@@ -817,10 +824,11 @@ async def query(req: QueryRequest) -> QueryResponse:
 
     # 2a. Oddiy suhbat — bazasiz, tabiiy javob
     if intent["intent"] == "casual":
-        answer, ok = await generate_casual_answer(req.message, lang, history)
-        if ok:
-            await save_turn(req.user_id, req.message, answer)
-        return QueryResponse(answer=answer, sources=[], cached=False)
+        # Worldly / non-Islamic chat: politely say we focus on Islamic topics,
+        # instead of answering it (and without spending an LLM call). Pure
+        # greetings/thanks were already handled above by quick_casual_reply.
+        redirect = CASUAL_REDIRECT_MESSAGES.get(lang, CASUAL_REDIRECT_MESSAGES["en"])
+        return QueryResponse(answer=redirect, sources=[], cached=False)
 
     search_query = intent["search_query"] or req.message
 
