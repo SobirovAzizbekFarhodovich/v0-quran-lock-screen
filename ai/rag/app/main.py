@@ -64,9 +64,9 @@ class QueryRequest(BaseModel):
     # ixtiyoriy: shaxsiy murojaat uchun
     user_name: str | None = Field(default=None, max_length=USER_NAME_MAX_CHARS)
     # From the user's profile; decides masculine/feminine forms of address.
-    user_gender: Literal["male", "female"] | None = None
+    user_gender: str | None = None
     # From the profile: how well the user reads the Quran (shapes how simply to explain).
-    user_level: Literal["beginner", "fluent", "hafiz"] | None = None
+    user_level: str | None = None
 
     @field_validator("message")
     @classmethod
@@ -75,6 +75,18 @@ class QueryRequest(BaseModel):
         if not value:
             raise ValueError("message must not be blank")
         return value
+
+    @field_validator("user_gender")
+    @classmethod
+    def _normalize_gender(cls, v: str | None) -> str | None:
+        # An unrecognised value (older app build, future option) must never break
+        # the request — treat it as "unknown" and address the user neutrally.
+        return v if v in ("male", "female") else None
+
+    @field_validator("user_level")
+    @classmethod
+    def _normalize_level(cls, v: str | None) -> str | None:
+        return v if v in ("beginner", "fluent", "hafiz") else None
 
     @field_validator("user_name")
     @classmethod

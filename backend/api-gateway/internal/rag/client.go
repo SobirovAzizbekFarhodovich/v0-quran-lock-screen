@@ -33,8 +33,8 @@ type QueryRequest struct {
 	UserID   string `json:"user_id,omitempty"`
 	UserName string `json:"user_name,omitempty" binding:"max=64"`
 	// From the profile: lets the assistant use masculine/feminine forms of address.
-	UserGender string `json:"user_gender,omitempty" binding:"omitempty,oneof=male female"`
-	UserLevel  string `json:"user_level,omitempty" binding:"omitempty,oneof=beginner fluent hafiz"`
+	UserGender string `json:"user_gender,omitempty" binding:"omitempty,max=16"`  // ai-rag ignores unknown values
+	UserLevel  string `json:"user_level,omitempty" binding:"omitempty,max=32"`   // ai-rag ignores unknown values
 	Message    string `json:"message" binding:"required,max=2000"`
 	Language   string `json:"language" binding:"max=16"`
 }
