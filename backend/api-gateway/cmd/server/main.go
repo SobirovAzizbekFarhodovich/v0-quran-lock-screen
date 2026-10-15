@@ -179,6 +179,15 @@ func main() {
 	publicAskHandler := httpapi.NewPublicAskHandler(ragClient, redisClient, 3, 15*time.Second)
 	v1.POST("/public/ask", publicAskHandler.Ask)
 
+	// Backwards-compatible route for the installed Kotlin app's on-device Tadabbur
+	// fallback (older builds call it without a token). Kept unauthenticated so those
+	// builds keep working, but tightly rate-limited and length-capped; it routes
+	// through the same source-grounded RAG, not a raw LLM.
+	v1.POST("/chat/completions",
+		ratelimit.RedisTokenBucket(redisClient, "legacy-chat", 3, 20*time.Second),
+		legacyChatHandler.Complete,
+	)
+
 	// --- Protected endpoints ---
 	protected := v1.Group("")
 	protected.Use(auth.Middleware(tokenService))
@@ -201,13 +210,7 @@ func main() {
 		llmQuota,
 		ragHandler.Query,
 	)
-	// Backwards-compatible route for the Kotlin Tadabbur fallback. It used to be
-	// open to anyone, which made it a free LLM proxy; it now needs a session.
-	protected.POST("/chat/completions",
-		ratelimit.RedisTokenBucket(redisClient, "legacy-chat", 2, 30*time.Second),
-		llmQuota,
-		legacyChatHandler.Complete,
-	)
+
 	protected.POST("/recitation/results", recitationResultsHandler.Upload)
 	protected.GET("/recitation/results", recitationResultsHandler.List)
 	protected.DELETE("/recitation/results", recitationResultsHandler.Delete)
