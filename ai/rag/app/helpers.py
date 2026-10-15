@@ -144,6 +144,12 @@ ISLAMIC_TERMS = (
     "namoz", "salah", "ro'za", "roza", "zakot", "zakat", "haj", "umra",
     "duo", "zikr", "tavba", "halol", "harom", "fiqh", "fatvo", "mazhab",
     "islom", "alloh", "rasululloh", "payg'ambar", "paygambar",
+    # values / character / belief topics the assistant also answers from sources
+    "sabr", "shukr", "tavakkul", "iymon", "imon", "taqvo", "gunoh", "savob",
+    "jannat", "do'zax", "dozax", "jahannam", "qiyomat", "nafs", "tavba",
+    "ota-ona", "ota ona", "ota-onaga", "ota-onani", " risq", "rizq", "baraka",
+    "sadaqa", "sadaqah", "qadar", "taqdir", "shukur", "niyat", "ibodat",
+    "farz", "sunnat", "makruh", "mustahab", "gunohi", "halollik", "harомlik",
     # Cyrillic Uzbek / Russian
     "қуръон", "оят", "ҳадис", "намоз", "рўза", "закот", "ҳаж", "дуо",
     "аллоҳ", "ислом", "пайғамбар", "коран", "хадис", "намаз", "молитв",
@@ -163,6 +169,12 @@ EMOTIONAL_TERMS = (
 )
 _ISLAMIC_RE = compile_terms(ISLAMIC_TERMS)
 _EMOTIONAL_RE = compile_terms(EMOTIONAL_TERMS)
+
+
+def has_islamic_terms(message: str) -> bool:
+    """True if the message mentions an Islamic/faith term (safety net so a
+    clearly-Islamic question is never dismissed as casual/worldly)."""
+    return bool(_ISLAMIC_RE.search(normalize_text(message)))
 
 
 def heuristic_intent(message: str) -> dict[str, Any]:

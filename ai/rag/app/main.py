@@ -36,6 +36,7 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field, field_validator
 
 from .helpers import (
+    has_islamic_terms,
     MESSAGE_MAX_CHARS,
     USER_NAME_MAX_CHARS,
     format_reference,
@@ -364,14 +365,22 @@ dream ("yomon tush ko'rdim"), loneliness, illness, grief, failing plans or
 work ("ishlarim yurishmayapti"), hopelessness, family troubles, or asks for
 comfort/motivation. Even one short phrase counts.
 
-intent = "islamic" — a factual Islamic question or request: about prayer,
-fasting, zakat, hajj, aqidah, rulings, manners, Islamic history; a request to
-quote or explain a verse, hadith or dua; follow-ups to such topics ("yana
-bitta ayting").
+intent = "islamic" — ANY message related to Islam, faith or living as a Muslim:
+worship (prayer, fasting, zakat, hajj), aqidah/beliefs, rulings and manners,
+Islamic history; Islamic character and VALUES (sabr/patience, gratitude,
+honesty, kindness to parents, forgiveness, trust in Allah, avoiding sin...);
+a request for advice, a verse, a hadith or a dua on any such topic; and
+follow-ups to them ("yana bitta ayting"). A short topic phrase like "sabr
+haqida" or "ota-onaga yaxshilik" is "islamic".
 
-intent = "casual" — greetings, small talk, thanks, jokes, general knowledge,
-technology, science, translation help, everyday questions with no emotional
-weight and no religious content.
+intent = "casual" — ONLY clearly non-religious messages: greetings, thanks,
+small talk, jokes, and purely worldly questions with no religious angle
+(programming, technology, general science, math, weather, cooking, sports,
+celebrities, translating non-religious text).
+
+IMPORTANT: if a message could relate to Islam, faith, character, values or
+life guidance in ANY way, choose "islamic", never "casual". When unsure
+between islamic and casual, always choose "islamic".
 
 search_query — for "islamic": short standalone keywords for searching
 Quran/hadith/dua collections, in the user's language (resolve pronouns from
@@ -523,10 +532,11 @@ async def classify_intent(message: str, history: list[dict[str, str]]) -> dict[s
             intent = str(data.get("intent") or "").strip().lower()
             if intent not in ("casual", "islamic", "emotional"):
                 intent = "islamic"
-            return {
-                "intent": intent,
-                "search_query": str(data.get("search_query") or "").strip(),
-            }
+            search_query = str(data.get("search_query") or "").strip()
+            # Safety net: never dismiss a clearly-Islamic message as worldly.
+            if intent == "casual" and has_islamic_terms(message):
+                intent, search_query = "islamic", search_query or message
+            return {"intent": intent, "search_query": search_query}
         except Exception as exc:
             logger.warning("classifier returned unparsable output (%s): %r", exc, raw[:200])
     # LLM vaqtincha mavjud bo'lmasa ham oddiy suhbatni RAG/fatvo rejimiga
