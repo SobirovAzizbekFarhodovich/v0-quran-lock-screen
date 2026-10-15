@@ -157,13 +157,20 @@ private const val FALLBACK_TIMEOUT_MS = 45_000L
 private val fallbackScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
 private data class RagRequest(
-    val message: String,
-    val language: String,
+    @com.google.gson.annotations.SerializedName("message") val message: String,
+    @com.google.gson.annotations.SerializedName("language") val language: String,
     @com.google.gson.annotations.SerializedName("user_name") val userName: String = "",
     // From the profile; the assistant uses masculine/feminine address. Null = neutral.
     @com.google.gson.annotations.SerializedName("user_gender") val userGender: String? = null,
     // From the profile; beginners get simpler explanations.
     @com.google.gson.annotations.SerializedName("user_level") val userLevel: String? = null
 )
-private data class RagResponse(val answer: String = "", val sources: List<RagSource> = emptyList())
-private data class RagSource(val text: String = "", val score: Double = 0.0, val metadata: JsonObject = JsonObject())
+private data class RagResponse(
+    @com.google.gson.annotations.SerializedName("answer") val answer: String = "",
+    @com.google.gson.annotations.SerializedName("sources") val sources: List<RagSource> = emptyList()
+)
+private data class RagSource(
+    @com.google.gson.annotations.SerializedName("text") val text: String = "",
+    @com.google.gson.annotations.SerializedName("score") val score: Double = 0.0,
+    @com.google.gson.annotations.SerializedName("metadata") val metadata: JsonObject = JsonObject()
+)

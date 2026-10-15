@@ -28,14 +28,15 @@ import kotlin.math.min
 
 /** What the profile page shows; mirrors GET /api/v1/profile. */
 data class Profile(
-    val id: String = "",
-    val name: String = "",
-    val email: String = "",
-    val language: String = "",
+    // Explicit JSON keys so R8 field-name obfuscation can't break (de)serialization.
+    @SerializedName("id") val id: String = "",
+    @SerializedName("name") val name: String = "",
+    @SerializedName("email") val email: String = "",
+    @SerializedName("language") val language: String = "",
     @SerializedName("birth_year") val birthYear: Int? = null,
-    val gender: String? = null,
+    @SerializedName("gender") val gender: String? = null,
     @SerializedName("quran_level") val quranLevel: String? = null,
-    val goal: String? = null,
+    @SerializedName("goal") val goal: String? = null,
     @SerializedName("avatar_url") val avatarUrl: String? = null
 )
 
