@@ -204,20 +204,21 @@ FILLER_WORDS = frozenset({
     "алайкум", "ва", "раҳматуллоҳи", "баракатуҳ", "тонг", "кун", "кеч",
     "катта", "жуда", "кўп", "сизга", "хайран", "большое", "огромное", "вам",
     "тебе", "доброе", "утро", "добрый", "день", "вечер",
+    # greeting small-talk so "salom qalaysiz" / "assalomu alaykum qalaysiz" is
+    # still just a greeting, not a question that fetches a verse.
+    "qalaysiz", "qalaysan", "qandaysiz", "qandaysan", "qalay", "yaxshimisiz",
+    "yaxshimisan", "yaxshimi", "yaxshi", "ahvolingiz", "ahvol", "tinchmisiz",
+    "ishlaringiz", "how", "are", "doing", "u", "r",
+    "қалайсиз", "қалайсан", "қандайсиз", "яхшимисиз", "яхшимисан", "аҳволингиз",
+    "как", "дела", "поживаете", "ты",
 })
 
 QUICK_CASUAL_REPLIES: dict[str, dict[str, str]] = {
     "greeting": {
-        "uz_latin": (
-            "Assalomu alaykum va rahmatulloohi va barakatuh! Sizga Qur'on oyatlari, "
-            "sahih hadislar va duolar bo'yicha qanday yordam bera olaman?"
-        ),
-        "uz_cyrillic": (
-            "Ассалому алайкум ва раҳматуллоҳи ва баракатуҳ! Сизга Қуръон оятлари, "
-            "саҳиҳ ҳадислар ва дуолар бўйича қандай ёрдам бера оламан?"
-        ),
-        "en": "Wa alaykum assalam! How can I help you with the Quran, hadith or duas today?",
-        "ru": "Ва алейкум ассалам! Чем могу помочь по Корану, хадисам или дуа?",
+        "uz_latin": "Va alaykum assalom va rahmatullohi va barokatuh! 😊",
+        "uz_cyrillic": "Ва алайкум ассалом ва раҳматуллоҳи ва барокатуҳ! 😊",
+        "en": "Wa alaykum assalam wa rahmatullahi wa barakatuh! 😊",
+        "ru": "Ва алейкум ассалам ва рахматуллахи ва баракатух! 😊",
     },
     "thanks": {
         "uz_latin": (

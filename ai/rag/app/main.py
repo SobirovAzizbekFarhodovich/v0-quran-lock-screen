@@ -143,8 +143,11 @@ GEMINI_ANSWER_THINKING_BUDGET = int(os.getenv("GEMINI_ANSWER_THINKING_BUDGET", "
 # the biggest input cost; fewer, high-relevance passages keep answer quality while
 # cutting tokens. The LLM is told to ignore irrelevant passages anyway.
 GROUNDED_PASSAGES = int(os.getenv("RAG_GROUNDED_PASSAGES", "4"))      # was 6
-EMOTIONAL_PASSAGES = int(os.getenv("RAG_EMOTIONAL_PASSAGES", "6"))    # was 8
+EMOTIONAL_PASSAGES = int(os.getenv("RAG_EMOTIONAL_PASSAGES", "3"))    # was 8; short answers
 PROMPT_HISTORY_TURNS = int(os.getenv("RAG_PROMPT_HISTORY_TURNS", "6"))  # was 8
+# Output length caps (shorter = fewer tokens AND friendlier, less "wall of text").
+GROUNDED_MAX_TOKENS = int(os.getenv("RAG_GROUNDED_MAX_TOKENS", "900"))    # was 1500
+EMOTIONAL_MAX_TOKENS = int(os.getenv("RAG_EMOTIONAL_MAX_TOKENS", "700"))  # was 2000
 _request_deadline: contextvars.ContextVar[float | None] = contextvars.ContextVar(
     "rag_request_deadline", default=None
 )
@@ -302,53 +305,33 @@ STRICT SOURCE RULES:
 
 FORMAT: quote each piece of evidence as an indented quotation on its own lines,
 with its reference on a separate line starting with "— ". After each quote, add
-1–2 sentences of simple, warm explanation connecting it to the question."""
+1–2 sentences of simple, warm explanation connecting it to the question.
 
-EMOTIONAL_RULES = """The user is going through an emotional or life difficulty (tiredness,
-sadness, anxiety, fear, a bad dream, failing plans, loneliness, illness, loss...).
-Below you are given passages retrieved from the app's authenticated Islamic
-Knowledge Base. Your task is to comfort the user personally, in the app's
-"Tadabbur" style.
+KEEP IT CONCISE: a short, friendly answer — quote only the 1–3 most relevant pieces of evidence (not all of them), and do not pad. Prefer a few short paragraphs over a long one."""
 
-STRICT SOURCE RULES (unchanged):
-- Quran verses, hadith texts and established duas may be quoted ONLY from the
-  passages below — never from memory, never completed from memory.
-- Silently skip passages that do not fit the user's state. Choose only the
-  MOST fitting 2–4 pieces of evidence; do not dump everything.
-- Every quote gets its reference on its own line starting with "— "
-  (e.g. — Ra'd surasi, 28-oyat / — Sahih Muslim).
+EMOTIONAL_RULES = """The user shared an emotional or life difficulty (sadness,
+anxiety, fear, tiredness, loneliness, a bad dream, failing plans, illness, loss...).
+Comfort them like a kind, close friend — SHORT and warm, never a long lecture
+and never a numbered list of sections.
 
-RESPONSE STRUCTURE (follow this flow, keep it warm and personal):
-1. EMPATHY FIRST: 1–3 sincere sentences acknowledging the user's specific
-   feeling. Speak to them personally (use their name if provided). A short
-   wish like "Alloh qalbingizga xotirjamlik bersin" with 🤲 fits here. Never
-   start with a lecture.
-2. QURAN SECTION: a small heading (e.g. "📖 Qur'ondan taskin" or in the
-   response language). Quote 1–2 verses FROM THE PASSAGES as block quotes with
-   references. After each verse add 1–2 sentences connecting it to the user's
-   exact situation — this personal connection is the heart of the answer.
-3. HADITH SECTION: a small heading (e.g. "🤲 Rasululloh ︒ dan"). Quote the
-   most fitting hadith from the passages with its reference, then 1–2
-   sentences of gentle explanation. Write "Rasululloh ︒" with the honorific.
-4. DUA: if the passages contain a fitting authentic dua, give its Arabic (if
-   present), transliteration/translation and source. If NO dua is in the
-   passages, you may instead suggest a short personal supplication in the
-   user's own language, clearly as their own words to say (this is not a
-   quoted text, so no reference is given and none may be invented).
-5. PRACTICAL STEPS: a short "🌙" section with 2–5 small, gentle, doable
-   suggestions fitting the situation (rest, wudu, two rak'ats, a little
-   Quran, dhikr, istighfar, pick ONE task for today...). Keep them concrete
-   and kind, never demanding.
-6. CLOSING: 1–2 warm sentences of perspective and a short closing prayer for
-   the user, ending with "Omin. 🤲" or similar.
+STRICT SOURCE RULES: Quran verses, hadith texts and established duas may be quoted
+ONLY from the passages below, never from memory. Choose the SINGLE most fitting
+piece of evidence (at most two). Put each quote's reference on its own line
+starting with "— ".
 
-STYLE: warm literary language, short paragraphs, moderate emoji (🤲 📖 🌙), bold
-for small headings. Total length like a caring letter — not a fatwa, not a
-list of raw quotes.
+Write it short, in this natural flow (NO headings, NO numbered sections):
+1. Open with ONE warm, personal sentence that meets their feeling — a gentle
+   du'a fits well, e.g. "Alloh qalbingizga xotirjamlik bersin. 🤍" (use
+   their name/gender if known). Never start with a lecture.
+2. Then ONE most-fitting verse OR hadith from the passages (reference on its own
+   line), with 1–2 short sentences warmly connecting it to their situation.
+3. Optionally end with ONE short, doable suggestion OR a brief du'a/dhikr to say
+   (if it is your own worded supplication, not a quoted text, give no reference
+   and invent none).
 
-If the passages contain NOTHING fitting the user's state, do NOT quote anything
-and do NOT invent: give sincere empathy, gentle practical steps and a personal
-supplication in their own words only."""
+Keep the WHOLE reply to a few short sentences — like a caring message, not an
+essay. Simple, warm language; at most one or two emoji. If no passage fits, skip
+the quote and give only short sincere empathy plus one gentle suggestion."""
 
 CLASSIFIER_PROMPT = """You are an intent classifier for an Islamic AI assistant.
 Classify the user's LATEST message, using the conversation for context.
@@ -662,7 +645,7 @@ async def generate_grounded_answer(
     )
     convo = history[-PROMPT_HISTORY_TURNS:] + [{"role": "user", "content": user_prompt}]
     answer = await call_llm(
-        system, convo, max_tokens=1500, temperature=0.2,
+        system, convo, max_tokens=GROUNDED_MAX_TOKENS, temperature=0.2,
         thinking_budget=GEMINI_ANSWER_THINKING_BUDGET,
     )
     if answer:
@@ -740,7 +723,7 @@ async def generate_emotional_answer(
     )
     convo = history[-PROMPT_HISTORY_TURNS:] + [{"role": "user", "content": user_prompt}]
     answer = await call_llm(
-        system, convo, max_tokens=2000, temperature=0.5,
+        system, convo, max_tokens=EMOTIONAL_MAX_TOKENS, temperature=0.5,
         thinking_budget=GEMINI_ANSWER_THINKING_BUDGET,
     )
     if answer:
