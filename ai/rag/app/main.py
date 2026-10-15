@@ -747,6 +747,15 @@ async def generate_emotional_answer(
     )
     if answer:
         return answer.strip(), sources[:6], True
+    # LLM unavailable (e.g. Gemini quota 429): still give real comforting
+    # evidence from the passages rather than a bare "technical error".
+    if sources:
+        lines = []
+        for idx, s in enumerate(sources[:EMOTIONAL_PASSAGES], 1):
+            meta = s.get("metadata", {})
+            title = meta.get("source") or meta.get("title") or "Manba"
+            lines.append(f"{idx}. **{title}**:\n{s['text']}")
+        return "\n\n".join(lines), sources[:EMOTIONAL_PASSAGES], False
     return ERROR_MESSAGES.get(language, ERROR_MESSAGES["en"]), [], False
 
 
