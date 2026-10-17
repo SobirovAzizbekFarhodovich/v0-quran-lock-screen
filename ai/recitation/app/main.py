@@ -177,6 +177,8 @@ class SessionState:
     # Stream messages not yet absorbed, in arrival order: (message_id, fields).
     pending: deque = field(default_factory=deque)
     worker: asyncio.Task | None = None
+    # Expected ayah text (Uthmani) that biases the ASR for this session.
+    hotwords: str = ""
 
     @property
     def total_bytes(self) -> int:
@@ -232,6 +234,32 @@ settings = Settings()
 client: redis.Redis | None = None
 model = None
 partial_model = None
+
+# Expected ayah text, used to bias the ASR toward what is being recited (the
+# same idea that makes Tarteel reliable): the decoder recognises a correctly
+# read ayah far more accurately, so correct words stop being flagged as
+# mistakes. `hotwords` only *bias* decoding; they never force the output, so a
+# real mistake still surfaces.
+_QURAN_UTHMANI: dict[str, str] = {}
+try:
+    with open(os.path.join(os.path.dirname(__file__), "quran_uthmani.json"), encoding="utf-8") as _qf:
+        _QURAN_UTHMANI = json.load(_qf)
+except Exception as _exc:  # pragma: no cover
+    _QURAN_UTHMANI = {}
+
+
+def hotwords_for(surah: int, ayah: int, window: int = 3) -> str:
+    """Arabic text of the ayah being recited (plus the next couple, in case the
+    reader continues), to bias recognition toward the expected words."""
+    if not surah or not ayah or not _QURAN_UTHMANI:
+        return ""
+    parts = []
+    for a in range(ayah, ayah + max(1, window)):
+        text = _QURAN_UTHMANI.get(f"{surah}:{a}")
+        if not text:
+            break
+        parts.append(text)
+    return " ".join(parts)
 loaded_model_name: str | None = None
 loaded_partial_model_name: str | None = None
 sessions: dict[str, SessionState] = {}
@@ -538,6 +566,10 @@ async def absorb_audio(session_id: str, state: SessionState) -> tuple[dict[str, 
 
 async def process_pending(session_id: str, state: SessionState) -> None:
     latest, stop = await absorb_audio(session_id, state)
+    if not state.hotwords:
+        src = latest or (stop[1] if stop else None)
+        if src:
+            state.hotwords = hotwords_for(int(src.get("surah") or 0), int(src.get("ayah") or 0))
     if stop is None:
         # Partial first (the reader is watching the highlight), then the block
         # commit, which only shortens the wait after Stop.
@@ -597,7 +629,7 @@ async def live_partial(session_id: str, state: SessionState, fields: dict[str, s
             return None
         state.last_partial_total = state.total_bytes
         tail = bytes(state.buffer)
-        tail_text = (await asyncio.to_thread(transcribe, tail, True)).text if tail else ""
+        tail_text = (await asyncio.to_thread(transcribe, tail, True, state.hotwords)).text if tail else ""
     text = " ".join(part for part in (state.committed_text(), tail_text) if part).strip()
     if not text:
         return None
@@ -620,7 +652,7 @@ async def commit_blocks(state: SessionState, priority: int = PRIORITY_BLOCK) -> 
     while (cut := next_block_cut(state.buffer, final=final)) is not None:
         block = bytes(state.buffer[:cut])
         try:
-            transcription = await transcribe_async(block, priority=priority)
+            transcription = await transcribe_async(block, priority=priority, hotwords=state.hotwords)
         except Exception:
             # Never retry a failing block forever: its words are lost, the rest is not.
             logger.exception("block transcription failed; committing it empty")
@@ -631,7 +663,7 @@ async def commit_blocks(state: SessionState, priority: int = PRIORITY_BLOCK) -> 
 
 
 async def final_result(session_id: str, state: SessionState, fields: dict[str, str]) -> dict:
-    tail = await transcribe_async(bytes(state.buffer), priority=PRIORITY_FINAL)
+    tail = await transcribe_async(bytes(state.buffer), priority=PRIORITY_FINAL, hotwords=state.hotwords)
     transcription = merge_transcriptions([*state.committed, tail])
     transcript = transcription.text
     tajweed = check_tajweed(transcript, transcription)
@@ -879,12 +911,12 @@ def trim_buffer(state: SessionState) -> int:
     return 0
 
 
-async def transcribe_async(audio: bytes, fast: bool = False, priority: int = PRIORITY_FINAL) -> Transcription:
+async def transcribe_async(audio: bytes, fast: bool = False, priority: int = PRIORITY_FINAL, hotwords: str = "") -> Transcription:
     """Run the blocking Whisper transcription off the event loop, one CPU slot each."""
     if model is None or not audio or len(audio) < 1600:
         return Transcription("")
     async with gate().slot(PRIORITY_PARTIAL if fast else priority):
-        return await asyncio.to_thread(transcribe, audio, fast)
+        return await asyncio.to_thread(transcribe, audio, fast, hotwords)
 
 
 def token_budget(audio_bytes: int) -> int:
@@ -893,7 +925,7 @@ def token_budget(audio_bytes: int) -> int:
     return max(16, min(400, int(seconds * settings.max_tokens_per_second) + 16))
 
 
-def transcribe(audio: bytes, fast: bool = False) -> Transcription:
+def transcribe(audio: bytes, fast: bool = False, hotwords: str = "") -> Transcription:
     """Transcribe raw PCM 16-bit 16kHz mono audio using faster-whisper.
 
     `fast=True` is the live partial: the partials model (if configured) and a
@@ -916,6 +948,8 @@ def transcribe(audio: bytes, fast: bool = False) -> Transcription:
         vad_filter=settings.vad_filter and not fast,
         vad_parameters=dict(min_silence_duration_ms=500),
         max_new_tokens=token_budget(usable),
+        # Bias toward the expected ayah text (does not force it).
+        hotwords=hotwords or None,
         # A live partial is never retried at higher temperatures: the fallback
         # re-decoded a 9-18 s prefix up to five times (13-31 s). Finals keep it.
         **({"temperature": 0.0} if fast else {}),

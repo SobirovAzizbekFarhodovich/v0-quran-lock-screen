@@ -74,7 +74,7 @@ def fake_env(monkeypatch):
     fake = FakeRedis()
     calls: list[tuple[int, bool]] = []
 
-    def fake_transcribe(audio: bytes, fast: bool = False) -> Transcription:
+    def fake_transcribe(audio: bytes, fast: bool = False, hotwords: str = "") -> Transcription:
         calls.append((len(audio), fast))
         return Transcription(f"{'p' if fast else 'f'}{len(audio) / BYTES_PER_SECOND:.1f}", -0.2, None, 1)
 
@@ -244,7 +244,7 @@ def test_sessions_are_transcribed_in_parallel(fake_env, monkeypatch) -> None:
     lock = threading.Lock()
     release = threading.Event()
 
-    def slow_transcribe(audio: bytes, fast: bool = False) -> Transcription:
+    def slow_transcribe(audio: bytes, fast: bool = False, hotwords: str = "") -> Transcription:
         with lock:
             running.append(1)
             peak.append(len(running))
